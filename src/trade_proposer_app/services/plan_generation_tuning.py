@@ -16,6 +16,7 @@ import sys
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.domain.statuses import TradeOutcome
 from trade_proposer_app.domain.models import (
     PlanGenerationTuningCandidate,
@@ -29,10 +30,14 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.persistence.models import (
     BrokerPositionRecord,
+    HistoricalReplayBatchRecord,
+    HistoricalReplaySliceRecord,
     PlanGenerationTuningEligibleRecordRecord,
     RecommendationDecisionSampleRecord,
     RecommendationOutcomeRecord,
     RecommendationPlanRecord,
+    ReplayEligibilityRecord,
+    ReplayPlanOutcomeRecord,
 )
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import (
@@ -138,7 +143,12 @@ class PlanGenerationTuningService:
     MEMORY_GUARD_FALLBACK_BYTES = 1_500_000_000
     ELIGIBLE_RECORD_BATCH_SIZE = 250
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        historical_replay_service: object | None = None,
+        job_execution_service: object | None = None,
+    ) -> None:
         self.session = session
         self.settings = SettingsRepository(session)
         self.repository = PlanGenerationTuningRepository(session)
@@ -148,6 +158,8 @@ class PlanGenerationTuningService:
         self.reliability_features = PlanReliabilityFeatureBuilder()
         self.settings_domains = SettingsDomainService(repository=self.settings)
         self.settings_mutations = SettingsMutationService(repository=self.settings)
+        self.historical_replay_service = historical_replay_service
+        self.job_execution_service = job_execution_service
 
     def describe(self) -> dict[str, object]:
         baseline = self.ensure_baseline_config_version()
@@ -246,6 +258,8 @@ class PlanGenerationTuningService:
         ticker: str | None = None,
         setup_family: str | None = None,
         limit: int | None = None,
+        execute_replay_candidates: bool = False,
+        replay_candidate_limit: int = 3,
     ) -> PlanGenerationTuningRun:
         started_at = datetime.now(timezone.utc)
         logger.info(
@@ -260,10 +274,13 @@ class PlanGenerationTuningService:
         active_config = normalize_plan_generation_tuning_config(baseline_version.config)
         mode_profile = self._mode_profile(mode)
         explore_mode = bool(mode_profile["explore_like"])
-        wide_mode = mode_profile["name"] == "wide"
+        wide_mode = mode_profile["name"] in {"wide", "wide_point_in_time_replay"}
+        replay_mode = bool(mode_profile.get("replay_like"))
         effective_limit = None if limit is None else max(1, int(limit))
-        records = self._eligible_records(
-            ticker=ticker, setup_family=setup_family, limit=effective_limit
+        records = (
+            self._replay_eligible_records(ticker=ticker, setup_family=setup_family, limit=effective_limit)
+            if replay_mode
+            else self._eligible_records(ticker=ticker, setup_family=setup_family, limit=effective_limit)
         )
         logger.info(
             "plan generation tuning eligibility: mode=%s explore=%s wide=%s eligible_records=%s effective_limit=%s",
@@ -348,6 +365,7 @@ class PlanGenerationTuningService:
                     "promotion_requested": apply,
                     "exploration_mode": explore_mode,
                     "wide_research_mode": wide_mode,
+                    "tuning_source_mode": "point_in_time_replay" if replay_mode else "stored_plan_rescore",
                     "exploration_seed": exploration_seed,
                     "exploration_campaign_plan": exploration_campaigns(),
                     "search_record_count": len(search_records),
@@ -373,6 +391,7 @@ class PlanGenerationTuningService:
                     "mode": mode,
                     "explore_mode": explore_mode,
                     "wide_mode": wide_mode,
+                    "replay_mode": replay_mode,
                 },
                 started_at=started_at,
                 completed_at=datetime.now(timezone.utc),
@@ -386,18 +405,25 @@ class PlanGenerationTuningService:
             min_validation_resolved=min_validation_resolved,
         )
         winner_candidate = stored_candidates[0]
-        (
-            promoted_config_version_id,
-            promotion_applied,
-            promotion_rejection_reasons,
-            edge_gate_report,
-        ) = self._apply_winner_promotion(
-            apply=apply,
-            run=run,
-            winner_candidate=winner_candidate,
-            baseline_version=baseline_version,
-            walk_forward_validation=walk_forward_validation,
-        )
+        defer_replay_promotion = bool(replay_mode and execute_replay_candidates)
+        if replay_mode and apply and not execute_replay_candidates:
+            promoted_config_version_id = None
+            promotion_applied = False
+            promotion_rejection_reasons = ["replay_candidate_execution_required_for_promotion"]
+            edge_gate_report = None
+        else:
+            (
+                promoted_config_version_id,
+                promotion_applied,
+                promotion_rejection_reasons,
+                edge_gate_report,
+            ) = self._apply_winner_promotion(
+                apply=apply and not defer_replay_promotion,
+                run=run,
+                winner_candidate=winner_candidate,
+                baseline_version=baseline_version,
+                walk_forward_validation=walk_forward_validation,
+            )
 
         updated_run = self.repository.get_run(run.id or 0)
         updated_run.winning_candidate_id = winner_candidate.id
@@ -411,6 +437,32 @@ class PlanGenerationTuningService:
             updated_run.summary["edge_validation_gate"] = edge_gate_report
         updated_run.summary["baseline_config_version_id"] = baseline_version.id
         finished_run = self.repository.update_run(run.id or 0, updated_run)
+        if replay_mode and execute_replay_candidates:
+            replay_execution = self.execute_replay_candidate_batches_from_run(
+                finished_run.id or 0,
+                candidate_limit=replay_candidate_limit,
+            )
+            refreshed_run = self.repository.get_run(finished_run.id or 0)
+            refreshed_run.summary["candidate_replay_execution"] = replay_execution
+            refreshed_run.summary["candidate_replay_execution_requested"] = True
+            if apply:
+                replay_promotion = self._apply_replay_reranked_promotion(
+                    run=refreshed_run,
+                    replay_execution=replay_execution,
+                    baseline_version=baseline_version,
+                    walk_forward_validation=walk_forward_validation,
+                    min_validation_resolved=min_validation_resolved,
+                )
+                refreshed_run = self.repository.get_run(finished_run.id or 0)
+                refreshed_run.winning_candidate_id = replay_promotion.get("replay_winner_candidate_id") or refreshed_run.winning_candidate_id
+                refreshed_run.promoted_config_version_id = replay_promotion.get("promoted_config_version_id")
+                refreshed_run.summary["replay_promotion"] = replay_promotion
+                refreshed_run.summary["promotion_applied"] = bool(replay_promotion.get("promotion_applied"))
+                refreshed_run.summary["promotion_rejection_reasons"] = replay_promotion.get("promotion_rejection_reasons", [])
+                refreshed_run.summary["promoted_config_version_id"] = replay_promotion.get("promoted_config_version_id")
+                if replay_promotion.get("edge_validation_gate") is not None:
+                    refreshed_run.summary["edge_validation_gate"] = replay_promotion.get("edge_validation_gate")
+            finished_run = self.repository.update_run(refreshed_run.id or 0, refreshed_run)
         logger.info(
             "plan generation tuning finished: run_id=%s status=%s candidate_count=%s promoted_config_version_id=%s duration_seconds=%.3f",
             finished_run.id,
@@ -420,6 +472,371 @@ class PlanGenerationTuningService:
             (datetime.now(timezone.utc) - started_at).total_seconds(),
         )
         return finished_run
+
+    def _apply_replay_reranked_promotion(
+        self,
+        *,
+        run: PlanGenerationTuningRun,
+        replay_execution: dict[str, object],
+        baseline_version: PlanGenerationTuningConfigVersion,
+        walk_forward_validation: object,
+        min_validation_resolved: int,
+    ) -> dict[str, object]:
+        aggregate = replay_execution.get("aggregate") if isinstance(replay_execution, dict) else None
+        if not isinstance(aggregate, dict):
+            return {
+                "promotion_applied": False,
+                "promoted_config_version_id": None,
+                "promotion_rejection_reasons": ["missing_replay_aggregate"],
+                "replay_winner_candidate_id": None,
+                "edge_validation_gate": None,
+            }
+        rerank = aggregate.get("rerank")
+        if not isinstance(rerank, list) or not rerank:
+            return {
+                "promotion_applied": False,
+                "promoted_config_version_id": None,
+                "promotion_rejection_reasons": ["missing_replay_rerank"],
+                "replay_winner_candidate_id": None,
+                "edge_validation_gate": None,
+            }
+        top = rerank[0] if isinstance(rerank[0], dict) else {}
+        replay_winner_candidate_id = int(top.get("candidate_id") or 0)
+        rejection_reasons: list[str] = []
+        if replay_winner_candidate_id <= 0:
+            rejection_reasons.append("missing_replay_winner_candidate")
+        if int(top.get("tier_a_count") or 0) <= 0:
+            rejection_reasons.append("replay_winner_missing_tier_a_evidence")
+        if int(top.get("eligible_record_count") or 0) < min_validation_resolved:
+            rejection_reasons.append("replay_winner_insufficient_eligible_records")
+        if rejection_reasons:
+            return {
+                "promotion_applied": False,
+                "promoted_config_version_id": None,
+                "promotion_rejection_reasons": rejection_reasons,
+                "replay_winner_candidate_id": replay_winner_candidate_id or None,
+                "replay_rerank_top": top,
+                "edge_validation_gate": None,
+            }
+        replay_winner = self.repository.get_candidate(replay_winner_candidate_id)
+        (
+            promoted_config_version_id,
+            promotion_applied,
+            promotion_rejection_reasons,
+            edge_gate_report,
+        ) = self._apply_winner_promotion(
+            apply=True,
+            run=run,
+            winner_candidate=replay_winner,
+            baseline_version=baseline_version,
+            walk_forward_validation=walk_forward_validation,
+        )
+        return {
+            "promotion_applied": promotion_applied,
+            "promoted_config_version_id": promoted_config_version_id,
+            "promotion_rejection_reasons": promotion_rejection_reasons,
+            "replay_winner_candidate_id": replay_winner_candidate_id,
+            "replay_rerank_top": top,
+            "edge_validation_gate": edge_gate_report,
+        }
+
+    def enqueue_replay_candidate_batches_from_run(
+        self,
+        run_id: int,
+        *,
+        candidate_limit: int = 3,
+        enqueue: bool = True,
+    ) -> dict[str, object]:
+        """Create deterministic historical replay batches for ranked candidate configs.
+
+        This is the first execution bridge for replay tuning: an already-ranked replay tuning run can
+        ask the replay service to regenerate slices for candidate configs instead of relying only on
+        previously materialized replay eligibility artifacts.
+        """
+        if self.historical_replay_service is None:
+            raise PlanGenerationTuningError("historical replay service is not configured")
+        run = self.repository.get_run(run_id)
+        candidates = self.repository.list_candidates_for_run(run_id)[: max(1, int(candidate_limit))]
+        if not candidates:
+            raise PlanGenerationTuningError(f"plan generation tuning run {run_id} has no candidates")
+        slice_plan = self._replay_candidate_slice_plan()
+        if not slice_plan["tickers"] or slice_plan["as_of_start"] is None or slice_plan["as_of_end"] is None:
+            raise PlanGenerationTuningError("no current replay eligibility artifacts available for candidate replay execution")
+        created_batches: list[dict[str, object]] = []
+        for candidate in candidates:
+            config_hash = self._stable_hash(candidate.config)
+            existing = self._existing_replay_candidate_batch(run_id, candidate.id or 0, config_hash)
+            if existing is not None:
+                batch_id = existing.id
+                queued_run_count = 0
+                status = existing.status
+            else:
+                batch = self.historical_replay_service.create_batch(
+                    name=f"tuning-run-{run_id}-candidate-{candidate.id}-{config_hash[:12]}",
+                    mode="research",
+                    tickers=list(slice_plan["tickers"]),
+                    as_of_start=slice_plan["as_of_start"],
+                    as_of_end=slice_plan["as_of_end"],
+                    config={
+                        "source": "plan_generation_tuning_candidate_replay",
+                        "plan_generation_tuning_run_id": run_id,
+                        "plan_generation_tuning_candidate_id": candidate.id,
+                        "plan_generation_tuning_candidate_rank": candidate.rank,
+                        "candidate_config_hash": config_hash,
+                        "plan_generation_tuning_config_override": candidate.config,
+                        "baseline_config_version_id": run.baseline_config_version_id,
+                    },
+                )
+                queued_runs = self.historical_replay_service.enqueue_batch(batch.id or 0) if enqueue else []
+                batch_id = batch.id
+                queued_run_count = len(queued_runs)
+                status = "queued" if enqueue else batch.status
+            created_batches.append(
+                {
+                    "candidate_id": candidate.id,
+                    "candidate_rank": candidate.rank,
+                    "candidate_config_hash": config_hash,
+                    "replay_batch_id": batch_id,
+                    "status": status,
+                    "queued_run_count": queued_run_count,
+                }
+            )
+        return {
+            "status": "created" if created_batches else "skipped",
+            "run_id": run_id,
+            "candidate_count": len(created_batches),
+            "slice_count": slice_plan["slice_count"],
+            "tickers": slice_plan["tickers"],
+            "as_of_start": slice_plan["as_of_start"].isoformat(),
+            "as_of_end": slice_plan["as_of_end"].isoformat(),
+            "batches": created_batches,
+        }
+
+    def execute_replay_candidate_batches_from_run(
+        self,
+        run_id: int,
+        *,
+        candidate_limit: int = 3,
+        worker_id: str = "plan-generation-replay-tuning",
+    ) -> dict[str, object]:
+        """Create/enqueue candidate replay batches, execute their queued slices, then aggregate.
+
+        This is intentionally synchronous and bounded by candidate_limit. It is meant for research
+        workflows/tests first; scheduled production use can keep using the async bridge.
+        """
+        if self.job_execution_service is None:
+            raise PlanGenerationTuningError("job execution service is not configured")
+        from trade_proposer_app.repositories.runs import RunRepository
+
+        bridge = self.enqueue_replay_candidate_batches_from_run(
+            run_id,
+            candidate_limit=candidate_limit,
+            enqueue=True,
+        )
+        batch_ids = [
+            int(item["replay_batch_id"])
+            for item in bridge.get("batches", [])
+            if isinstance(item, dict) and item.get("replay_batch_id") is not None
+        ]
+        run_ids = [
+            int(row.run_id)
+            for row in self.session.scalars(
+                select(HistoricalReplaySliceRecord).where(
+                    HistoricalReplaySliceRecord.replay_batch_id.in_(batch_ids),
+                    HistoricalReplaySliceRecord.run_id.is_not(None),
+                )
+            ).all()
+            if row.run_id is not None
+        ]
+        runs = RunRepository(self.session)
+        executed_run_ids: list[int] = []
+        skipped_run_ids: list[int] = []
+        for replay_run_id in sorted(set(run_ids)):
+            claimed = runs.claim_queued_run(replay_run_id, worker_id=worker_id)
+            if claimed is None:
+                skipped_run_ids.append(replay_run_id)
+                continue
+            self.job_execution_service.execute_claimed_run(claimed, worker_id=worker_id)
+            executed_run_ids.append(replay_run_id)
+        aggregate = self.aggregate_replay_candidate_batch_results(run_id)
+        return {
+            "status": "completed",
+            "run_id": run_id,
+            "bridge": bridge,
+            "executed_run_count": len(executed_run_ids),
+            "executed_run_ids": executed_run_ids,
+            "skipped_run_ids": skipped_run_ids,
+            "aggregate": aggregate,
+        }
+
+    def aggregate_replay_candidate_batch_results(self, run_id: int) -> dict[str, object]:
+        """Aggregate completed candidate replay artifacts back to the tuning candidate level."""
+        candidates = {candidate.id: candidate for candidate in self.repository.list_candidates_for_run(run_id)}
+        batches = self._candidate_replay_batches_for_run(run_id)
+        summaries: list[dict[str, object]] = []
+        for batch in batches:
+            config = loads_json_object(batch.config_json)
+            candidate_id = int(config.get("plan_generation_tuning_candidate_id") or 0)
+            if candidate_id not in candidates:
+                continue
+            eligibility_rows = self.session.scalars(
+                select(ReplayEligibilityRecord).where(ReplayEligibilityRecord.replay_batch_id == batch.id)
+            ).all()
+            tier_counts: dict[str, int] = {}
+            outcome_counts: dict[str, int] = {}
+            resolution_source_counts: dict[str, int] = {}
+            eligible_count = 0
+            for row in eligibility_rows:
+                tier_counts[row.tier] = tier_counts.get(row.tier, 0) + 1
+                outcome_counts[row.outcome] = outcome_counts.get(row.outcome, 0) + 1
+                resolution_source_counts[row.resolution_source] = resolution_source_counts.get(row.resolution_source, 0) + 1
+                if row.eligible_for_tuning:
+                    eligible_count += 1
+            summaries.append(
+                {
+                    "candidate_id": candidate_id,
+                    "candidate_rank": candidates[candidate_id].rank,
+                    "candidate_config_hash": config.get("candidate_config_hash"),
+                    "replay_batch_id": batch.id,
+                    "replay_batch_status": batch.status,
+                    "eligible_record_count": eligible_count,
+                    "total_record_count": len(eligibility_rows),
+                    "tier_counts": tier_counts,
+                    "outcome_counts": outcome_counts,
+                    "resolution_source_counts": resolution_source_counts,
+                }
+            )
+        summaries.sort(key=lambda item: (int(item.get("candidate_rank") or 0), int(item.get("replay_batch_id") or 0)))
+        rerank = self._rerank_replay_candidate_results(summaries)
+        return {
+            "status": "completed" if summaries else "empty",
+            "run_id": run_id,
+            "candidate_result_count": len(summaries),
+            "results": summaries,
+            "rerank": rerank,
+            "replay_winner_candidate_id": rerank[0]["candidate_id"] if rerank else None,
+        }
+
+    @staticmethod
+    def _rerank_replay_candidate_results(results: list[dict[str, object]]) -> list[dict[str, object]]:
+        ranked: list[dict[str, object]] = []
+        for result in results:
+            tier_counts = result.get("tier_counts") if isinstance(result.get("tier_counts"), dict) else {}
+            outcome_counts = result.get("outcome_counts") if isinstance(result.get("outcome_counts"), dict) else {}
+            eligible_count = int(result.get("eligible_record_count") or 0)
+            tier_a_count = int(tier_counts.get("tier_a", 0) or 0)
+            tier_b_count = int(tier_counts.get("tier_b", 0) or 0)
+            win_count = sum(int(outcome_counts.get(key, 0) or 0) for key in ("win", "phantom_win"))
+            loss_count = sum(int(outcome_counts.get(key, 0) or 0) for key in ("loss", "phantom_loss"))
+            resolved_count = win_count + loss_count + int(outcome_counts.get("expired", 0) or 0)
+            replay_score = round(
+                (tier_a_count * 3.0)
+                + (tier_b_count * 1.0)
+                + (win_count * 2.0)
+                - (loss_count * 2.0)
+                + (eligible_count * 0.25),
+                4,
+            )
+            ranked.append(
+                {
+                    "candidate_id": result.get("candidate_id"),
+                    "candidate_rank": result.get("candidate_rank"),
+                    "candidate_config_hash": result.get("candidate_config_hash"),
+                    "replay_batch_id": result.get("replay_batch_id"),
+                    "eligible_record_count": eligible_count,
+                    "tier_a_count": tier_a_count,
+                    "tier_b_count": tier_b_count,
+                    "win_count": win_count,
+                    "loss_count": loss_count,
+                    "resolved_count": resolved_count,
+                    "replay_score": replay_score,
+                }
+            )
+        ranked.sort(
+            key=lambda item: (
+                -float(item["replay_score"]),
+                -int(item["tier_a_count"]),
+                -int(item["eligible_record_count"]),
+                int(item.get("candidate_rank") or 999999),
+            )
+        )
+        return ranked
+
+    def _candidate_replay_batches_for_run(self, run_id: int) -> list[HistoricalReplayBatchRecord]:
+        rows = self.session.scalars(
+            select(HistoricalReplayBatchRecord).where(
+                HistoricalReplayBatchRecord.config_json.contains(
+                    f'"plan_generation_tuning_run_id": {run_id}'
+                )
+            )
+        ).all()
+        return [
+            row
+            for row in rows
+            if int(loads_json_object(row.config_json).get("plan_generation_tuning_run_id") or 0) == run_id
+        ]
+
+    def _replay_candidate_slice_plan(self) -> dict[str, object]:
+        current_versions = self._current_replay_artifact_versions()
+        query = (
+            select(ReplayEligibilityRecord, RecommendationPlanRecord)
+            .join(
+                RecommendationPlanRecord,
+                RecommendationPlanRecord.id == ReplayEligibilityRecord.recommendation_plan_id,
+            )
+            .where(ReplayEligibilityRecord.eligible_for_tuning.is_(True))
+            .where(ReplayEligibilityRecord.tier.in_(["tier_a", "tier_b"]))
+        )
+        tickers: set[str] = set()
+        as_of_values: list[datetime] = []
+        for eligibility_row, plan_row in self.session.execute(query).all():
+            diagnostics = loads_json_object(eligibility_row.diagnostics_json)
+            if not self._replay_artifact_versions_current(diagnostics, current_versions):
+                continue
+            tickers.add(str(eligibility_row.ticker or plan_row.ticker or "").strip().upper())
+            artifact_key = diagnostics.get("artifact_key")
+            as_of = None
+            if isinstance(artifact_key, dict):
+                as_of = self._parse_datetime_value(artifact_key.get("as_of"))
+            as_of_values.append(as_of or self._normalize_datetime(plan_row.computed_at) or datetime.now(timezone.utc))
+        return {
+            "tickers": sorted(item for item in tickers if item),
+            "as_of_start": min(as_of_values) if as_of_values else None,
+            "as_of_end": max(as_of_values) if as_of_values else None,
+            "slice_count": len(set(value.date().isoformat() for value in as_of_values)),
+        }
+
+    def _existing_replay_candidate_batch(
+        self, run_id: int, candidate_id: int, candidate_config_hash: str
+    ) -> HistoricalReplayBatchRecord | None:
+        rows = self.session.scalars(
+            select(HistoricalReplayBatchRecord).where(
+                HistoricalReplayBatchRecord.config_json.contains(
+                    f'"plan_generation_tuning_run_id": {run_id}'
+                )
+            )
+        ).all()
+        for row in rows:
+            config = loads_json_object(row.config_json)
+            if (
+                int(config.get("plan_generation_tuning_run_id") or 0) == run_id
+                and int(config.get("plan_generation_tuning_candidate_id") or 0) == candidate_id
+                and str(config.get("candidate_config_hash") or "") == candidate_config_hash
+            ):
+                return row
+        return None
+
+    @staticmethod
+    def _parse_datetime_value(value: object) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return PlanGenerationTuningService._normalize_datetime(value)
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return PlanGenerationTuningService._normalize_datetime(parsed)
 
     def _store_candidate_evaluations(
         self,
@@ -935,6 +1352,129 @@ class PlanGenerationTuningService:
         row.cache_version = self.ELIGIBLE_RECORD_CACHE_VERSION
         row.source_updated_at = source_updated_at
 
+    def _replay_eligible_records(
+        self, *, ticker: str | None, setup_family: str | None, limit: int | None
+    ) -> list[EligibleTuningRecord]:
+        query = (
+            select(ReplayEligibilityRecord, RecommendationPlanRecord, ReplayPlanOutcomeRecord)
+            .join(
+                RecommendationPlanRecord,
+                RecommendationPlanRecord.id == ReplayEligibilityRecord.recommendation_plan_id,
+            )
+            .join(
+                ReplayPlanOutcomeRecord,
+                ReplayPlanOutcomeRecord.id == ReplayEligibilityRecord.replay_plan_outcome_id,
+            )
+            .where(ReplayEligibilityRecord.eligible_for_tuning.is_(True))
+            .where(ReplayEligibilityRecord.tier.in_(["tier_a", "tier_b"]))
+        )
+        if ticker:
+            query = query.where(ReplayEligibilityRecord.ticker == ticker.upper())
+        query = query.order_by(RecommendationPlanRecord.computed_at.desc())
+        if limit is not None:
+            query = query.limit(max(1, int(limit)))
+        rows = self.session.execute(query).all()
+        records: list[EligibleTuningRecord] = []
+        normalized_setup_family = setup_family.strip().lower() if setup_family else None
+        current_versions = self._current_replay_artifact_versions()
+        for eligibility_row, plan_row, outcome_row in rows:
+            diagnostics = loads_json_object(eligibility_row.diagnostics_json)
+            if not self._replay_artifact_versions_current(diagnostics, current_versions):
+                continue
+            signal_breakdown = loads_json_object(plan_row.signal_breakdown_json)
+            outcome_payload = loads_json_object(outcome_row.outcome_json)
+            row_setup_family = self._setup_family_from_payloads(signal_breakdown, outcome_payload)
+            if normalized_setup_family and row_setup_family.lower() != normalized_setup_family:
+                continue
+            records.append(
+                EligibleTuningRecord(
+                    plan=TuningPlanSnapshot(
+                        id=int(plan_row.id or 0),
+                        computed_at=self._normalize_datetime(plan_row.computed_at),
+                        action=plan_row.action,
+                        confidence_percent=float(plan_row.confidence_percent),
+                        entry_price_low=plan_row.entry_price_low,
+                        entry_price_high=plan_row.entry_price_high,
+                        stop_loss=plan_row.stop_loss,
+                        take_profit=plan_row.take_profit,
+                        signal_breakdown={
+                            key: signal_breakdown[key]
+                            for key in ("intended_action", "cheap_scan_volatility_score")
+                            if key in signal_breakdown
+                        },
+                        ticker=plan_row.ticker,
+                    ),
+                    outcome=TuningOutcomeSnapshot(
+                        max_favorable_excursion=self._float_or_none(
+                            outcome_payload.get("max_favorable_excursion")
+                        ),
+                        max_adverse_excursion=self._float_or_none(
+                            outcome_payload.get("max_adverse_excursion")
+                        ),
+                        horizon_return_5d=self._float_or_none(
+                            outcome_payload.get("horizon_return_5d")
+                        ),
+                    ),
+                    sample=None,
+                    setup_family=row_setup_family,
+                    context_bias=self._context_bias(signal_breakdown),
+                )
+            )
+        records.sort(key=lambda item: item.plan.computed_at or datetime.min.replace(tzinfo=timezone.utc))
+        return records
+
+    @classmethod
+    def _current_replay_artifact_versions(cls) -> dict[str, str]:
+        return {
+            "code_version": os.environ.get("GIT_COMMIT") or os.environ.get("SOURCE_VERSION") or "unknown",
+            "settings_hash": cls._stable_hash({"weights_file_path": settings.weights_file_path}),
+        }
+
+    @staticmethod
+    def _replay_artifact_versions_current(
+        diagnostics: dict[str, object], current_versions: dict[str, str]
+    ) -> bool:
+        versions = diagnostics.get("artifact_versions")
+        if not isinstance(versions, dict):
+            return False
+        for key in ("code_version", "settings_hash"):
+            value = versions.get(key)
+            if value is None or str(value) != str(current_versions.get(key)):
+                return False
+        return True
+
+    @staticmethod
+    def _stable_hash(payload: object) -> str:
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _setup_family_from_payloads(
+        signal_breakdown: dict[str, object], outcome_payload: dict[str, object]
+    ) -> str:
+        for source in (signal_breakdown, outcome_payload):
+            value = source.get("setup_family")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return "uncategorized"
+
+    @staticmethod
+    def _context_bias(signal_breakdown: dict[str, object]) -> str | None:
+        transmission = signal_breakdown.get("transmission_summary")
+        if isinstance(transmission, dict):
+            value = transmission.get("context_bias")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
+    @staticmethod
+    def _float_or_none(value: object) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     def _build_eligible_records_from_sources(
         self, *, ticker: str | None, limit: int | None
     ) -> list[EligibleTuningRecord]:
@@ -1268,10 +1808,29 @@ class PlanGenerationTuningService:
     @staticmethod
     def _mode_profile(mode: str) -> dict[str, object]:
         normalized = mode.strip().lower()
+        if normalized in {"wide_point_in_time_replay", "wide_replay"}:
+            return {
+                "name": "wide_point_in_time_replay",
+                "explore_like": True,
+                "replay_like": True,
+                "step_counts": (-3, -2, -1, 1, 2, 3),
+                "max_candidates": 67,
+                "batch_size": 16,
+            }
+        if normalized in {"point_in_time_replay", "replay"}:
+            return {
+                "name": "point_in_time_replay",
+                "explore_like": True,
+                "replay_like": True,
+                "step_counts": (-2, -1, 1, 2),
+                "max_candidates": 45,
+                "batch_size": 12,
+            }
         if normalized in {"wide", "expensive", "deep", "deep_research"}:
             return {
                 "name": "wide",
                 "explore_like": True,
+                "replay_like": False,
                 "step_counts": (-3, -2, -1, 1, 2, 3),
                 "max_candidates": 67,
                 "batch_size": 16,
@@ -1280,6 +1839,7 @@ class PlanGenerationTuningService:
             return {
                 "name": "explore",
                 "explore_like": True,
+                "replay_like": False,
                 "step_counts": (-2, -1, 1, 2),
                 "max_candidates": 45,
                 "batch_size": 12,
@@ -1287,6 +1847,7 @@ class PlanGenerationTuningService:
         return {
             "name": "manual",
             "explore_like": False,
+            "replay_like": False,
             "step_counts": (-1, 1),
             "max_candidates": 25,
             "batch_size": 10,

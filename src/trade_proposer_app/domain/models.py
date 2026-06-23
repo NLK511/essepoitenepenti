@@ -45,6 +45,8 @@ class NewsArticle(BaseModel):
     publisher: str | None = None
     link: str | None = None
     published_at: datetime | None = None
+    available_at: datetime | None = None
+    availability_metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class NewsBundle(BaseModel):

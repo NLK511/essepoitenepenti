@@ -37,6 +37,7 @@ These are the primary narrative source of truth for the product today:
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
 - `industry-context-improvement-plan.md` — industry-context evidence-quality and post-ontology role review
+- `historical-playback-tuning-plan.md` — point-in-time replay and replay-based tuning implementation tracker
 
 ## Specs directory
 
@@ -54,6 +55,7 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 - `specs/signal-gating-benchmark-spec.md`
 - `signal-gating-tuning-guide.md`
 - `specs/plan-generation-tuning-spec.md`
+- `specs/historical-playback-tuning-spec.md`
 - `specs/large-parameter-search-spec.md`
 - `specs/gating-severity-alert-spec.md`
 

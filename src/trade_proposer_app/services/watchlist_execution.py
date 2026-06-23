@@ -171,6 +171,7 @@ class WatchlistExecutionService:
             shortlist_rank=None,
             shortlist_decision=decision,
         )
+        signal = o._with_replay_provenance_signal(signal)
         stored_signal = o.context_snapshots.create_ticker_signal_snapshot(signal)
         stored_signals.append(stored_signal)
         o._record_non_shortlisted_decision_sample(
@@ -227,6 +228,7 @@ class WatchlistExecutionService:
             shortlist_decision=decision,
             deep_error=deep_error,
         )
+        signal = o._with_replay_provenance_signal(signal)
         stored_signal = o.context_snapshots.create_ticker_signal_snapshot(signal)
         stored_signals.append(stored_signal)
         plan = o._build_plan_from_signal(
@@ -239,6 +241,7 @@ class WatchlistExecutionService:
             job_id=job_id,
             run_id=run_id,
         )
+        plan = o._with_replay_provenance_plan(plan)
         stored_plan = o.recommendation_plans.create_plan(o._with_trade_policy_snapshot(plan))
         o._record_decision_sample(
             stored_plan,

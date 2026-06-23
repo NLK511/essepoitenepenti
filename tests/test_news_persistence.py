@@ -106,6 +106,66 @@ def test_historical_news_link_column_is_text() -> None:
     assert isinstance(HistoricalNewsRecord.__table__.c.link.type, Text)
 
 
+def test_historical_news_replay_filters_by_available_at(session):
+    repo = HistoricalNewsRepository(session)
+    published_at = datetime(2026, 1, 5, 12, tzinfo=timezone.utc)
+    repo.save_news(
+        "AAPL",
+        "fixture",
+        [
+            NewsArticle(
+                title="Known immediately",
+                summary="summary",
+                publisher="Reuters",
+                link="known",
+                published_at=published_at,
+                available_at=published_at + timedelta(minutes=1),
+            ),
+            NewsArticle(
+                title="Late provider availability",
+                summary="summary",
+                publisher="Reuters",
+                link="late",
+                published_at=published_at,
+                available_at=published_at + timedelta(hours=4),
+            ),
+        ],
+    )
+
+    replay_articles = repo.list_news(
+        "AAPL",
+        start_at=published_at - timedelta(hours=1),
+        end_at=published_at + timedelta(hours=1),
+        available_at=published_at + timedelta(minutes=30),
+    )
+
+    assert [article.title for article in replay_articles] == ["Known immediately"]
+    assert replay_articles[0].availability_metadata["available_at_inferred_from"] == "provider"
+
+
+def test_save_news_infers_available_at_from_published_at(session):
+    repo = HistoricalNewsRepository(session)
+    published_at = datetime(2026, 1, 5, 12, tzinfo=timezone.utc)
+    repo.save_news(
+        "AAPL",
+        "fixture",
+        [
+            NewsArticle(
+                title="Inferred availability",
+                summary="summary",
+                publisher="Reuters",
+                link="inferred",
+                published_at=published_at,
+            )
+        ],
+    )
+
+    article = repo.list_news("AAPL", available_at=published_at, limit=1)[0]
+    assert article.available_at == published_at
+    assert article.availability_metadata["available_at_inferred_from"] == "published_at"
+    assert article.availability_metadata["point_in_time_confidence"] == 0.6
+
+
 def test_save_news_rolls_back_on_commit_failure(session, monkeypatch):
     repo = HistoricalNewsRepository(session)
     article = NewsArticle(

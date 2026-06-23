@@ -10,7 +10,10 @@ from datetime import datetime, timezone
 
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -103,6 +106,9 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
                 jobs=JobRepository(session),
                 runs=RunRepository(session),
                 historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
+                historical_news=HistoricalNewsRepository(session),
+                context_snapshots=ContextSnapshotRepository(session),
+                fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
             ),
             bars_refresh=BarsRefreshService(HistoricalMarketDataRepository(session)),
         )

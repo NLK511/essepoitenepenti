@@ -941,11 +941,24 @@ class NewsIngestionService:
     ) -> NewsBundle | None:
         if not self.historical_news or not (start_at or end_at):
             return None
-        local_articles = self.historical_news.list_news(ticker=ticker, start_at=start_at, end_at=end_at, limit=self.max_articles)
+        local_articles = self._list_historical_news(
+            ticker=ticker,
+            start_at=start_at,
+            end_at=end_at,
+            available_at=end_at if request_mode == "replay" else None,
+            limit=self.max_articles,
+        )
         if local_articles:
             self._merge_articles(bundle, local_articles, seen_links)
             bundle.feeds_used.append("database")
-            provider_results.append({"provider": "database", "status": "success", "article_count": len(local_articles), "attempt_count": 1, "error": None})
+            provider_results.append({
+                "provider": "database",
+                "status": "success",
+                "article_count": len(local_articles),
+                "attempt_count": 1,
+                "error": None,
+                "available_at_filter": end_at.isoformat() if request_mode == "replay" and end_at else None,
+            })
         if len(local_articles) < 3:
             return None
         bundle.query_diagnostics = {
@@ -963,12 +976,40 @@ class NewsIngestionService:
             "unsupported_provider_count": 0,
             "article_count": len(bundle.articles),
             "database_article_count": len(local_articles),
+            "database_available_at_filter": end_at.isoformat() if request_mode == "replay" and end_at else None,
             "provider_fetch_skipped": True,
             "provider_fetch_skip_reason": "database coverage satisfied minimum",
         }
         self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
         self._cache_windowed_bundle(cache_key, bundle)
         return bundle
+
+    def _list_historical_news(
+        self,
+        *,
+        ticker: str,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        available_at: datetime | None,
+        limit: int,
+    ) -> list[NewsArticle]:
+        if self.historical_news is None:
+            return []
+        try:
+            return self.historical_news.list_news(
+                ticker=ticker,
+                start_at=start_at,
+                end_at=end_at,
+                available_at=available_at,
+                limit=limit,
+            )
+        except TypeError:
+            return self.historical_news.list_news(
+                ticker=ticker,
+                start_at=start_at,
+                end_at=end_at,
+                limit=limit,
+            )
 
     def _finalize_ticker_no_provider_bundle(
         self,
@@ -1305,11 +1346,24 @@ class NewsIngestionService:
     ) -> NewsBundle | None:
         if not self.historical_news or not (start_at or end_at):
             return None
-        local_articles = self.historical_news.list_news(ticker=topic, start_at=start_at, end_at=end_at, limit=fetch_limit)
+        local_articles = self._list_historical_news(
+            ticker=topic,
+            start_at=start_at,
+            end_at=end_at,
+            available_at=end_at if request_mode == "replay" else None,
+            limit=fetch_limit,
+        )
         if local_articles:
             self._merge_articles(bundle, local_articles, seen_links)
             bundle.feeds_used.append("database")
-            provider_results.append({"provider": "database", "status": "success", "article_count": len(local_articles), "attempt_count": 1, "error": None})
+            provider_results.append({
+                "provider": "database",
+                "status": "success",
+                "article_count": len(local_articles),
+                "attempt_count": 1,
+                "error": None,
+                "available_at_filter": end_at.isoformat() if request_mode == "replay" and end_at else None,
+            })
         if len(local_articles) < 2:
             return None
         bundle.query_diagnostics = self._build_query_diagnostics(
@@ -1320,6 +1374,7 @@ class NewsIngestionService:
             article_count=len(bundle.articles),
         )
         bundle.query_diagnostics["database_article_count"] = len(local_articles)
+        bundle.query_diagnostics["database_available_at_filter"] = end_at.isoformat() if request_mode == "replay" and end_at else None
         bundle.query_diagnostics["provider_fetch_skipped"] = True
         bundle.query_diagnostics["provider_fetch_skip_reason"] = "database coverage satisfied minimum"
         self._record_provider_observability(subject=topic, query_type="topic", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)

@@ -107,6 +107,17 @@ class HistoricalReplayRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(2, detail_payload["summary"]["slice_count"])
             self.assertEqual(20, len(detail_payload["resolved_tickers"]))
 
+            coverage_response = await client.get(
+                f"/api/historical-replay/slices/{detail_payload['slices'][0]['id']}/coverage"
+            )
+            self.assertEqual(200, coverage_response.status_code)
+            coverage_payload = coverage_response.json()
+            self.assertEqual("computed", coverage_payload["source"])
+            self.assertEqual(20, coverage_payload["coverage"]["ticker_count"])
+            self.assertIn("news_coverage", coverage_payload["coverage"])
+            self.assertIn("context_coverage", coverage_payload["coverage"])
+            self.assertIn("fundamental_coverage", coverage_payload["coverage"])
+
             with patch("trade_proposer_app.services.historical_market_data.httpx.get", return_value=response):
                 hydrate_response = await client.post(f"/api/historical-replay/batches/{batch['id']}/hydrate-market-data")
             self.assertEqual(200, hydrate_response.status_code)

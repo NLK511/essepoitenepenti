@@ -20,6 +20,7 @@ from trade_proposer_app.repositories.recommendation_decision_samples import (
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
+    PARAMETER_BY_KEY,
     normalize_plan_generation_tuning_config,
 )
 from trade_proposer_app.services.recommendation_plan_calibration import (
@@ -74,6 +75,7 @@ class WatchlistOrchestrationService:
         self.action_confidence_threshold = trade_decision_policy.action_confidence_threshold() if trade_decision_policy is not None else confidence_threshold
         self.signal_gating_tuning_config = trade_decision_policy.signal_gating.to_dict() if trade_decision_policy is not None else self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
         self.plan_generation_tuning_config = dict(trade_decision_policy.plan_generation_config) if trade_decision_policy is not None else normalize_plan_generation_tuning_config(plan_generation_tuning_config)
+        self._base_plan_generation_tuning_config = dict(self.plan_generation_tuning_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.shortlist_selection = ShortlistSelectionService(
@@ -91,6 +93,7 @@ class WatchlistOrchestrationService:
         self.signal_builder = WatchlistSignalBuilder(self)
         self.plan_framing = WatchlistPlanFramingService(self)
         self.decision_sample_recorder = WatchlistDecisionSampleService(self)
+        self.replay_provenance: dict[str, object] | None = None
 
     @staticmethod
     def _normalize_signal_gating_tuning_config(signal_gating_tuning_config: dict[str, float] | None) -> dict[str, float]:
@@ -134,6 +137,50 @@ class WatchlistOrchestrationService:
         as_of: datetime | None = None,
     ) -> dict[str, object]:
         return self.execution_service.execute(watchlist, tickers, job_id=job_id, run_id=run_id, as_of=as_of)
+
+    def set_replay_provenance(self, provenance: dict[str, object] | None) -> None:
+        self.replay_provenance = dict(provenance) if provenance is not None else None
+
+    def set_plan_generation_tuning_override(self, config: dict[str, object] | None) -> None:
+        if config is None:
+            self.plan_generation_tuning_config = dict(self._base_plan_generation_tuning_config)
+            return
+        unknown_keys = sorted(set(config) - set(PARAMETER_BY_KEY))
+        if unknown_keys:
+            raise ValueError(f"unknown plan-generation tuning override keys: {', '.join(unknown_keys)}")
+        self.plan_generation_tuning_config = normalize_plan_generation_tuning_config(config)
+
+    def _with_replay_provenance_signal(self, signal: TickerSignalSnapshot) -> TickerSignalSnapshot:
+        if not self.replay_provenance:
+            return signal
+        diagnostics = self._payload_dict(signal.diagnostics)
+        diagnostics["replay_provenance"] = dict(self.replay_provenance)
+        return signal.model_copy(update={"diagnostics": diagnostics})
+
+    def _with_replay_provenance_plan(self, plan: RecommendationPlan) -> RecommendationPlan:
+        if not self.replay_provenance:
+            return plan
+        signal_breakdown = self._payload_dict(plan.signal_breakdown)
+        evidence_summary = self._payload_dict(plan.evidence_summary)
+        provenance = dict(self.replay_provenance)
+        signal_breakdown["replay_provenance"] = provenance
+        evidence_summary["replay_provenance"] = provenance
+        return plan.model_copy(
+            update={
+                "signal_breakdown": signal_breakdown,
+                "evidence_summary": evidence_summary,
+            }
+        )
+
+    @staticmethod
+    def _payload_dict(value: object) -> dict[str, object]:
+        if isinstance(value, dict):
+            return dict(value)
+        model_dump = getattr(value, "model_dump", None)
+        if callable(model_dump):
+            dumped = model_dump(mode="json")
+            return dict(dumped) if isinstance(dumped, dict) else {}
+        return {}
 
     def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> _CheapScanCandidate:
         return self.scan_runner.run_cheap_scan(ticker, horizon, as_of=as_of)

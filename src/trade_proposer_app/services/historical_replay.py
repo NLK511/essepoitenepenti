@@ -5,6 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice, Run
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -19,11 +22,17 @@ class HistoricalReplayService:
         jobs: JobRepository,
         runs: RunRepository,
         historical_market_data: HistoricalMarketDataService | None = None,
+        historical_news: HistoricalNewsRepository | None = None,
+        context_snapshots: ContextSnapshotRepository | None = None,
+        fundamental_snapshots: FundamentalAnalysisSnapshotRepository | None = None,
     ) -> None:
         self.historical_replays = historical_replays
         self.jobs = jobs
         self.runs = runs
         self.historical_market_data = historical_market_data
+        self.historical_news = historical_news
+        self.context_snapshots = context_snapshots
+        self.fundamental_snapshots = fundamental_snapshots
 
     def create_batch(
         self,
@@ -179,9 +188,29 @@ class HistoricalReplayService:
         slice_row = self.historical_replays.get_slice(slice_id)
         tickers = self._parse_batch_tickers(batch)
         hydration_summary: dict[str, object] | None = None
+        replay_coverage_report: dict[str, object] | None = None
         if self.historical_market_data is not None:
             hydration_summary = self.hydrate_batch_market_data(batch_id)
             market_input = self.historical_market_data.build_slice_market_input(tickers=tickers, as_of=slice_row.as_of)
+            replay_coverage_report = self.historical_market_data.build_replay_coverage_report(
+                tickers=tickers,
+                as_of=slice_row.as_of,
+            )
+            replay_coverage_report = self._with_news_coverage(
+                replay_coverage_report,
+                tickers=tickers,
+                as_of=slice_row.as_of,
+            )
+            replay_coverage_report = self._with_context_coverage(
+                replay_coverage_report,
+                tickers=tickers,
+                as_of=slice_row.as_of,
+            )
+            replay_coverage_report = self._with_fundamental_coverage(
+                replay_coverage_report,
+                tickers=tickers,
+                as_of=slice_row.as_of,
+            )
         else:
             market_input = {
                 "as_of": slice_row.as_of.isoformat(),
@@ -190,7 +219,16 @@ class HistoricalReplayService:
                 "coverage_ratio": 0.0,
                 "tickers": [],
             }
+            replay_coverage_report = {
+                "as_of": slice_row.as_of.isoformat(),
+                "ticker_count": len(tickers),
+                "tier_counts": {"tier_a": 0, "tier_b": 0, "tier_c": 0, "ineligible": len(tickers)},
+                "tier_a_ratio": 0.0,
+                "tickers": [],
+            }
         input_summary = {
+            "replay_batch_id": batch.id,
+            "replay_slice_id": slice_row.id,
             "as_of": slice_row.as_of.isoformat(),
             "mode": batch.mode,
             "cadence": batch.cadence,
@@ -201,6 +239,8 @@ class HistoricalReplayService:
             "universe_preset": batch.universe_preset,
             "tickers": tickers,
             "market_input": market_input,
+            "replay_coverage_report": replay_coverage_report,
+            "plan_generation_tuning_config_override": self._plan_generation_tuning_config_override(batch),
             "hydration_summary": hydration_summary,
             "pipeline_stage": "market_inputs_prepared",
         }
@@ -211,6 +251,8 @@ class HistoricalReplayService:
             "next_step": "connect market-data replay inputs to recommendation plan generation",
             "coverage_ratio": market_input.get("coverage_ratio", 0.0),
             "covered_ticker_count": market_input.get("covered_ticker_count", 0),
+            "replay_tier_counts": replay_coverage_report.get("tier_counts", {}) if replay_coverage_report else {},
+            "replay_tier_a_ratio": replay_coverage_report.get("tier_a_ratio", 0.0) if replay_coverage_report else 0.0,
             "ticker_count": market_input.get("ticker_count", len(tickers)),
             "pipeline_stage": "market_inputs_prepared",
         }
@@ -224,6 +266,50 @@ class HistoricalReplayService:
             "summary": self.historical_replays.summarize_batch(batch_id),
             "resolved_tickers": self._parse_batch_tickers(batch),
         }
+
+    @staticmethod
+    def _plan_generation_tuning_config_override(batch: HistoricalReplayBatch) -> dict[str, object] | None:
+        try:
+            config = json.loads(batch.config_json or "{}")
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(config, dict):
+            return None
+        override = config.get("plan_generation_tuning_config_override")
+        return override if isinstance(override, dict) else None
+
+    def get_slice_coverage_report(self, slice_id: int) -> dict[str, object]:
+        slice_row = self.historical_replays.get_slice(slice_id)
+        try:
+            input_summary = json.loads(slice_row.input_summary_json or "{}")
+        except json.JSONDecodeError:
+            input_summary = {}
+        stored_report = input_summary.get("replay_coverage_report")
+        if isinstance(stored_report, dict) and stored_report:
+            return {"slice_id": slice_id, "source": "stored_input_summary", "coverage": stored_report}
+
+        batch = self.historical_replays.get_batch(slice_row.replay_batch_id)
+        tickers = self._parse_batch_tickers(batch)
+        if self.historical_market_data is None:
+            return {
+                "slice_id": slice_id,
+                "source": "computed_without_market_service",
+                "coverage": {
+                    "as_of": slice_row.as_of.isoformat(),
+                    "ticker_count": len(tickers),
+                    "tier_counts": {"tier_a": 0, "tier_b": 0, "tier_c": 0, "ineligible": len(tickers)},
+                    "tier_a_ratio": 0.0,
+                    "tickers": [],
+                },
+            }
+        report = self.historical_market_data.build_replay_coverage_report(
+            tickers=tickers,
+            as_of=slice_row.as_of,
+        )
+        report = self._with_news_coverage(report, tickers=tickers, as_of=slice_row.as_of)
+        report = self._with_context_coverage(report, tickers=tickers, as_of=slice_row.as_of)
+        report = self._with_fundamental_coverage(report, tickers=tickers, as_of=slice_row.as_of)
+        return {"slice_id": slice_id, "source": "computed", "coverage": report}
 
     def list_universe_presets(self) -> list[dict[str, object]]:
         return [
@@ -243,6 +329,156 @@ class HistoricalReplayService:
         end = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0)
         start = (end - timedelta(days=max(0, days - 1))).replace(hour=23, minute=59, second=59, microsecond=0)
         return start, end
+
+    def _with_news_coverage(
+        self,
+        report: dict[str, object],
+        *,
+        tickers: list[str],
+        as_of: datetime,
+        lookback_hours: int = 24,
+    ) -> dict[str, object]:
+        if self.historical_news is None:
+            report["news_coverage"] = {"status": "not_configured", "lookback_hours": lookback_hours}
+            return report
+        normalized_as_of = self._normalize(as_of)
+        start_at = normalized_as_of - timedelta(hours=max(1, lookback_hours))
+        counts_by_ticker = {
+            ticker: self.historical_news.count_news(
+                ticker,
+                start_at=start_at,
+                end_at=normalized_as_of,
+                available_at=normalized_as_of,
+            )
+            for ticker in tickers
+        }
+        ticker_rows = report.get("tickers")
+        if isinstance(ticker_rows, list):
+            for row in ticker_rows:
+                if isinstance(row, dict):
+                    ticker = str(row.get("ticker") or "")
+                    row["news"] = {
+                        "lookback_start": start_at.isoformat(),
+                        "as_of": normalized_as_of.isoformat(),
+                        "article_count": counts_by_ticker.get(ticker, 0),
+                        "point_in_time_filter": "published_at <= as_of and available_at <= as_of",
+                    }
+        covered = sum(1 for count in counts_by_ticker.values() if count > 0)
+        report["news_coverage"] = {
+            "status": "available",
+            "lookback_hours": lookback_hours,
+            "covered_ticker_count": covered,
+            "coverage_ratio": round((covered / len(tickers)) if tickers else 0.0, 4),
+            "article_count_by_ticker": counts_by_ticker,
+            "point_in_time_filter": "published_at <= as_of and available_at <= as_of",
+        }
+        return report
+
+    def _with_context_coverage(
+        self,
+        report: dict[str, object],
+        *,
+        tickers: list[str],
+        as_of: datetime,
+    ) -> dict[str, object]:
+        if self.context_snapshots is None:
+            report["context_coverage"] = {"status": "not_configured"}
+            return report
+        normalized_as_of = self._normalize(as_of)
+        macro = self.context_snapshots.get_latest_macro_context_snapshot_before(normalized_as_of)
+        macro_payload = {
+            "available": macro is not None,
+            "computed_at": macro.computed_at.isoformat() if macro and macro.computed_at else None,
+            "status": macro.status if macro else None,
+            "point_in_time_filter": "computed_at <= as_of",
+        }
+        industry_counts = {"available": 0, "missing": 0}
+        industry_by_ticker: dict[str, dict[str, object]] = {}
+        for ticker in tickers:
+            industry_key = self._industry_key_for_ticker(ticker)
+            industry = (
+                self.context_snapshots.get_latest_industry_context_snapshot_before(
+                    industry_key,
+                    normalized_as_of,
+                )
+                if industry_key
+                else None
+            )
+            if industry is None:
+                industry_counts["missing"] += 1
+            else:
+                industry_counts["available"] += 1
+            industry_by_ticker[ticker] = {
+                "industry_key": industry_key,
+                "available": industry is not None,
+                "computed_at": industry.computed_at.isoformat() if industry and industry.computed_at else None,
+                "status": industry.status if industry else None,
+                "point_in_time_filter": "computed_at <= as_of",
+            }
+        ticker_rows = report.get("tickers")
+        if isinstance(ticker_rows, list):
+            for row in ticker_rows:
+                if isinstance(row, dict):
+                    ticker = str(row.get("ticker") or "")
+                    row["context"] = industry_by_ticker.get(ticker, {})
+        report["context_coverage"] = {
+            "status": "available",
+            "macro": macro_payload,
+            "industry_counts": industry_counts,
+            "industry_by_ticker": industry_by_ticker,
+            "industry_coverage_ratio": round((industry_counts["available"] / len(tickers)) if tickers else 0.0, 4),
+        }
+        return report
+
+    def _with_fundamental_coverage(
+        self,
+        report: dict[str, object],
+        *,
+        tickers: list[str],
+        as_of: datetime,
+    ) -> dict[str, object]:
+        if self.fundamental_snapshots is None:
+            report["fundamental_coverage"] = {"status": "not_configured"}
+            return report
+        normalized_as_of = self._normalize(as_of)
+        snapshots = self.fundamental_snapshots.list_latest_by_tickers(tickers, as_of=normalized_as_of)
+        by_ticker: dict[str, dict[str, object]] = {}
+        covered = 0
+        for ticker in tickers:
+            normalized_ticker = ticker.upper()
+            snapshot = snapshots.get(normalized_ticker)
+            if snapshot is not None:
+                covered += 1
+            snapshot_as_of = snapshot.get("as_of") if snapshot else None
+            by_ticker[normalized_ticker] = {
+                "available": snapshot is not None,
+                "as_of": snapshot_as_of.isoformat() if isinstance(snapshot_as_of, datetime) else None,
+                "coverage_status": snapshot.get("coverage_status") if snapshot else None,
+                "freshness_status": snapshot.get("freshness_status") if snapshot else None,
+                "point_in_time_filter": "snapshot.as_of <= replay as_of",
+            }
+        ticker_rows = report.get("tickers")
+        if isinstance(ticker_rows, list):
+            for row in ticker_rows:
+                if isinstance(row, dict):
+                    ticker = str(row.get("ticker") or "").upper()
+                    row["fundamentals"] = by_ticker.get(ticker, {})
+        report["fundamental_coverage"] = {
+            "status": "available",
+            "covered_ticker_count": covered,
+            "coverage_ratio": round((covered / len(tickers)) if tickers else 0.0, 4),
+            "by_ticker": by_ticker,
+        }
+        return report
+
+    def _industry_key_for_ticker(self, ticker: str) -> str:
+        if self.context_snapshots is None:
+            return ""
+        try:
+            profile = self.context_snapshots.taxonomy_service.get_industry_profile(ticker)
+        except Exception:
+            return ""
+        return str(profile.get("subject_key") or "").strip()
 
     @staticmethod
     def _normalize(value: datetime) -> datetime:

@@ -284,6 +284,77 @@ def test_actionable_short_plan_framing_payload_contract_is_stable() -> None:
     assert contract["signal"]["deep_analysis_confidence_percent"] == 74.0
 
 
+def test_replay_override_matches_live_config_for_identical_inputs_and_config() -> None:
+    config = {
+        "global.entry_band_risk_fraction": 0.1,
+        "setup_family.breakout.take_profit_distance_multiplier": 1.3,
+    }
+    live_service = _service(plan_generation_tuning_config=config)
+    replay_service = _service()
+    replay_service.set_plan_generation_tuning_override(config)
+
+    live_plan = live_service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+    replay_plan = replay_service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    assert _plan_contract(replay_plan) == _plan_contract(live_plan)
+
+
+def test_replay_candidate_config_override_changes_plan_levels_through_shared_framing() -> None:
+    service = _service()
+    baseline = service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    service.set_plan_generation_tuning_override(
+        {
+            "global.entry_band_risk_fraction": 0.1,
+            "setup_family.breakout.take_profit_distance_multiplier": 1.3,
+        }
+    )
+    overridden = service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    assert baseline.entry_price_low == 100.0
+    assert baseline.entry_price_high == 100.0
+    assert baseline.take_profit == 113.44
+    assert overridden.entry_price_low == 99.5
+    assert overridden.entry_price_high == 100.5
+    assert overridden.take_profit == 115.6
+
+
 def test_confidence_floor_blocks_actionable_plan_but_preserves_framing() -> None:
     service = _service(confidence_threshold=60.0, plan_generation_tuning_config={"global.actionable_confidence_floor_percent": 80.0})
 

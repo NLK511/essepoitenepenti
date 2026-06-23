@@ -12,6 +12,7 @@ from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService, CheapScanSignal
+from trade_proposer_app.services.proposals import ProposalService
 
 
 def create_session() -> Session:
@@ -163,6 +164,95 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
             self.assertEqual(signal.ticker, "AAPL")
             self.assertEqual(signal.diagnostics["data_source"], "database")
             
+        finally:
+            session.close()
+
+    def test_cheap_scan_replay_excludes_future_available_local_bars(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            service = CheapScanSignalService(repository=repository)
+            as_of = datetime(2026, 4, 1, 15, 30, tzinfo=timezone.utc)
+            start = as_of - timedelta(days=40)
+            for i in range(30):
+                bar_time = start + timedelta(days=i)
+                repository.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1d",
+                        bar_time=bar_time,
+                        available_at=bar_time.replace(hour=23, minute=59, second=59),
+                        open_price=100.0 + i,
+                        high_price=101.0 + i,
+                        low_price=99.0 + i,
+                        close_price=100.0 + i,
+                        volume=1_000_000,
+                        source="fixture",
+                    )
+                )
+            repository.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1d",
+                    bar_time=as_of - timedelta(days=1),
+                    available_at=as_of + timedelta(minutes=1),
+                    open_price=999.0,
+                    high_price=999.0,
+                    low_price=999.0,
+                    close_price=999.0,
+                    volume=1_000_000,
+                    source="future_available_fixture",
+                )
+            )
+
+            signal = service.score("AAPL", StrategyHorizon.ONE_WEEK, as_of=as_of)
+
+            self.assertEqual("database", signal.diagnostics["data_source"])
+            self.assertEqual(129.0, signal.diagnostics["latest_close"])
+        finally:
+            session.close()
+
+    def test_deep_analysis_price_history_replay_excludes_future_available_local_bars(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            as_of = datetime(2026, 4, 1, 15, 30, tzinfo=timezone.utc)
+            valid_bar_time = as_of - timedelta(days=2)
+            repository.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1d",
+                    bar_time=valid_bar_time,
+                    available_at=valid_bar_time.replace(hour=23, minute=59, second=59),
+                    open_price=100.0,
+                    high_price=101.0,
+                    low_price=99.0,
+                    close_price=100.0,
+                    volume=1_000_000,
+                    source="fixture",
+                )
+            )
+            repository.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1d",
+                    bar_time=as_of - timedelta(days=1),
+                    available_at=as_of + timedelta(minutes=1),
+                    open_price=999.0,
+                    high_price=999.0,
+                    low_price=999.0,
+                    close_price=999.0,
+                    volume=1_000_000,
+                    source="future_available_fixture",
+                )
+            )
+            proposal_service = ProposalService(historical_market_data=repository)
+
+            history = proposal_service._fetch_price_history_from_local_store("AAPL", as_of=as_of)
+
+            self.assertEqual(1, len(history))
+            self.assertEqual(100.0, float(history.iloc[-1]["Close"]))
+            self.assertNotIn(999.0, [float(value) for value in history["Close"].tolist()])
         finally:
             session.close()
 

@@ -39,12 +39,16 @@ Live behavior includes:
 - family-aware entry offsets, actionable confidence floor, and volatility-normalized stop controls
 - candidate ranking by win rate, win count, then expected value with explicit tie tolerances
 - batched wide/explore evaluation with memory guardrails
+- current tuning mode is `stored_plan_rescore`: it uses compact eligible records derived from existing stored plans/outcomes instead of regenerating full historical plans per candidate
 - full dry-run tuning must avoid duplicate eligible-record loads; final walk-forward validation should reuse the already loaded eligible record set rather than querying the same large outcome universe again
 
 Not fully autonomous yet:
 - the complete daily evolution workflow
+- replay-driven tuning that regenerates plans for each historical `as_of` slice and candidate config
 - all target diversity/concentration/stability protections as sole unattended promotion policy
 - unattended auto-promotion beyond current validation/baseline/tie checks
+
+Target replay-based tuning is specified in `historical-playback-tuning-spec.md` and planned in `../historical-playback-tuning-plan.md`. Until that mode is implemented, eligible records are a stored-plan rescore quality/cache layer, not proof that full point-in-time playback has been run.
 
 `auto_enabled` and `auto_promote_enabled` are stored readiness/configuration flags. They are not proof that unattended autonomous promotion is fully active.
 
@@ -130,10 +134,16 @@ Anti-leakage rules:
 
 ## Replay and candidate generation
 
-Replay must deterministically answer, for each eligible record:
-- would the candidate produce an actionable plan?
-- what entry/stop/take-profit would it produce?
-- how would that plan resolve under canonical resolution semantics?
+Current stored-plan rescore must deterministically answer, for each compact eligible record:
+- would the candidate keep the stored plan/action intent actionable under the candidate thresholds?
+- what adjusted entry/stop/take-profit would the supported tuning knobs imply from the stored plan geometry?
+- how would the adjusted plan score from the available compact outcome features?
+- what opportunity was filtered out if non-actionable?
+
+Target point-in-time replay must deterministically answer, for each replay-eligible slice/ticker/candidate:
+- would current generation logic produce an actionable plan from inputs available at `as_of`?
+- what entry/stop/take-profit would it produce through shared live plan-framing logic?
+- how would that generated plan resolve under canonical resolution semantics?
 - what opportunity was filtered out if non-actionable?
 
 Use `recommendation-plan-resolution-spec.md` as the outcome authority. Do not invent separate outcome semantics.

@@ -464,11 +464,13 @@ class HistoricalNewsRecord(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ticker: Mapped[str] = mapped_column(String(120), index=True)  # ticker or topic
     published_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    available_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, default="")
     link: Mapped[str] = mapped_column(Text, index=True)
     publisher: Mapped[str] = mapped_column(String(120), default="")
     provider: Mapped[str] = mapped_column(String(64), index=True)
+    availability_metadata_json: Mapped[str] = mapped_column(Text, default="{}")
 
 
 class AppSettingRecord(Base, TimestampMixin):
@@ -614,6 +616,58 @@ class FundamentalAnalysisSnapshotRecord(Base, TimestampMixin):
     missing_inputs_json: Mapped[str] = mapped_column(Text, default="[]")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class ReplayEligibilityRecord(Base, TimestampMixin):
+    __tablename__ = "replay_eligibility_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "replay_slice_id",
+            "recommendation_plan_id",
+            "candidate_config_hash",
+            name="uq_replay_eligibility_slice_plan_candidate",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    replay_batch_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_batches.id"), index=True)
+    replay_slice_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_slices.id"), index=True)
+    replay_plan_outcome_id: Mapped[int | None] = mapped_column(ForeignKey("replay_plan_outcomes.id"), nullable=True, index=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    candidate_config_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
+    eligibility_mode: Mapped[str] = mapped_column(String(64), default="current_code_point_in_time_replay", index=True)
+    tier: Mapped[str] = mapped_column(String(32), default="tier_c", index=True)
+    eligible_for_tuning: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    resolution_source: Mapped[str] = mapped_column(String(64), default="", index=True)
+    outcome: Mapped[str] = mapped_column(String(32), default="", index=True)
+    rejection_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+    diagnostics_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class ReplayPlanOutcomeRecord(Base, TimestampMixin):
+    __tablename__ = "replay_plan_outcomes"
+    __table_args__ = (
+        UniqueConstraint(
+            "replay_slice_id",
+            "recommendation_plan_id",
+            "candidate_config_hash",
+            name="uq_replay_plan_outcomes_slice_plan_candidate",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    replay_batch_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_batches.id"), index=True)
+    replay_slice_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_slices.id"), index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    candidate_config_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
+    resolution_source: Mapped[str] = mapped_column(String(64), default="")
+    outcome: Mapped[str] = mapped_column(String(32), default="open", index=True)
+    status: Mapped[str] = mapped_column(String(32), default="open", index=True)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    outcome_json: Mapped[str] = mapped_column(Text, default="{}")
 
 
 class RecommendationOutcomeRecord(Base, TimestampMixin):

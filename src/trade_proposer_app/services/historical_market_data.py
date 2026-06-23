@@ -177,6 +177,102 @@ class HistoricalMarketDataService:
             "tickers": ticker_inputs,
         }
 
+    def build_replay_coverage_report(
+        self,
+        *,
+        tickers: list[str],
+        as_of: datetime,
+        lookback_days: int = 90,
+        resolution_days: int = 5,
+        minimum_generation_daily_bars: int = 10,
+    ) -> dict[str, object]:
+        """Report point-in-time replay readiness without mixing generation and outcome data."""
+
+        normalized_as_of = self._normalize(as_of)
+        generation_start = normalized_as_of - timedelta(days=max(1, lookback_days))
+        resolution_end = normalized_as_of + timedelta(days=max(1, resolution_days))
+        ticker_reports: list[dict[str, object]] = []
+        tier_counts = {"tier_a": 0, "tier_b": 0, "tier_c": 0, "ineligible": 0}
+        for ticker in tickers:
+            generation_daily_count = self.historical_market_data.count_bars(
+                ticker=ticker,
+                timeframe="1d",
+                start_at=generation_start,
+                end_at=normalized_as_of,
+                available_at=normalized_as_of,
+            )
+            generation_intraday_count = self.historical_market_data.count_bars(
+                ticker=ticker,
+                timeframe="1m",
+                start_at=generation_start,
+                end_at=normalized_as_of,
+                available_at=normalized_as_of,
+            )
+            resolution_intraday_count = self.historical_market_data.count_bars(
+                ticker=ticker,
+                timeframe="1m",
+                start_at=normalized_as_of,
+                end_at=resolution_end,
+                available_at=None,
+            )
+            resolution_daily_count = self.historical_market_data.count_bars(
+                ticker=ticker,
+                timeframe="1d",
+                start_at=normalized_as_of,
+                end_at=resolution_end,
+                available_at=None,
+            )
+            blockers: list[str] = []
+            warnings: list[str] = []
+            if generation_daily_count < minimum_generation_daily_bars:
+                blockers.append("insufficient_generation_daily_bars")
+            if generation_intraday_count <= 0:
+                warnings.append("missing_generation_intraday_bars")
+            if resolution_intraday_count <= 0:
+                warnings.append("missing_resolution_intraday_bars")
+            if resolution_intraday_count > 0 and not blockers:
+                tier = "tier_a"
+            elif resolution_daily_count > 0 and not blockers:
+                tier = "tier_b"
+                warnings.append("resolution_daily_fallback_only")
+            elif generation_daily_count > 0:
+                tier = "tier_c"
+                blockers.append("missing_resolution_bars")
+            else:
+                tier = "ineligible"
+            tier_counts[tier] += 1
+            ticker_reports.append(
+                {
+                    "ticker": ticker,
+                    "tier": tier,
+                    "generation": {
+                        "lookback_start": generation_start.isoformat(),
+                        "as_of": normalized_as_of.isoformat(),
+                        "daily_bar_count": generation_daily_count,
+                        "intraday_1m_bar_count": generation_intraday_count,
+                        "point_in_time_filter": "available_at <= as_of",
+                    },
+                    "resolution": {
+                        "start_at": normalized_as_of.isoformat(),
+                        "end_at": resolution_end.isoformat(),
+                        "intraday_1m_bar_count": resolution_intraday_count,
+                        "daily_bar_count": resolution_daily_count,
+                        "uses_post_as_of_data_for_evaluation_only": True,
+                    },
+                    "blockers": blockers,
+                    "warnings": warnings,
+                }
+            )
+        return {
+            "as_of": normalized_as_of.isoformat(),
+            "lookback_days": lookback_days,
+            "resolution_days": resolution_days,
+            "ticker_count": len(tickers),
+            "tier_counts": tier_counts,
+            "tier_a_ratio": round((tier_counts["tier_a"] / len(tickers)) if tickers else 0.0, 4),
+            "tickers": ticker_reports,
+        }
+
     @staticmethod
     def _normalize(value: datetime) -> datetime:
         if value.tzinfo is None:

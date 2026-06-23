@@ -23,18 +23,24 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.persistence.models import (
     Base,
+    HistoricalReplayBatchRecord,
+    HistoricalReplaySliceRecord,
     PlanGenerationTuningEligibleRecordRecord,
     RecommendationDecisionSampleRecord,
     RecommendationOutcomeRecord,
+    ReplayEligibilityRecord,
+    ReplayPlanOutcomeRecord,
     RunRecord,
     WorkerHeartbeatRecord,
 )
+from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.plan_generation_tuning import (
     CandidateEvaluation,
     PlanGenerationTuningError,
@@ -127,6 +133,101 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             )
         )
 
+    def _seed_replay_record(
+        self,
+        *,
+        created_at: datetime,
+        mfe: float,
+        mae: float,
+        outcome: str = "win",
+        tier: str = "tier_a",
+        resolution_source: str = "intraday",
+    ) -> None:
+        batch = HistoricalReplayBatchRecord(
+            name=f"batch-{created_at.isoformat()}",
+            as_of_start=created_at,
+            as_of_end=created_at,
+            tickers_json='["EOG"]',
+        )
+        self.session.add(batch)
+        self.session.flush()
+        replay_slice = HistoricalReplaySliceRecord(
+            replay_batch_id=batch.id,
+            as_of=created_at,
+            status="completed",
+        )
+        self.session.add(replay_slice)
+        self.session.flush()
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=72.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                signal_breakdown={
+                    "setup_family": "breakout",
+                    "transmission_summary": {"context_bias": "tailwind"},
+                },
+                computed_at=created_at,
+            )
+        )
+        replay_outcome = ReplayPlanOutcomeRecord(
+            replay_batch_id=batch.id,
+            replay_slice_id=replay_slice.id,
+            recommendation_plan_id=plan.id or 0,
+            candidate_config_hash="baseline",
+            resolution_source=resolution_source,
+            outcome=outcome,
+            status="resolved",
+            evaluated_at=created_at + timedelta(days=1),
+            outcome_json=json.dumps(
+                {
+                    "recommendation_plan_id": plan.id,
+                    "outcome": outcome,
+                    "status": "resolved",
+                    "max_favorable_excursion": mfe,
+                    "max_adverse_excursion": mae,
+                    "horizon_return_5d": mfe - abs(mae),
+                    "setup_family": "breakout",
+                }
+            ),
+        )
+        self.session.add(replay_outcome)
+        self.session.flush()
+        artifact_versions = self.service._current_replay_artifact_versions()
+        self.session.add(
+            ReplayEligibilityRecord(
+                replay_batch_id=batch.id,
+                replay_slice_id=replay_slice.id,
+                replay_plan_outcome_id=replay_outcome.id,
+                recommendation_plan_id=plan.id or 0,
+                ticker="EOG",
+                candidate_config_hash="baseline",
+                tier=tier,
+                eligible_for_tuning=tier in {"tier_a", "tier_b"},
+                resolution_source=resolution_source,
+                outcome=outcome,
+                rejection_reasons_json="[]",
+                diagnostics_json=json.dumps(
+                    {
+                        "coverage_tier": "tier_a",
+                        "artifact_versions": artifact_versions,
+                        "artifact_key": {
+                            "as_of": created_at.isoformat(),
+                            "ticker": "EOG",
+                            "candidate_config_hash": "baseline",
+                            "input_coverage_hash": "fixture-input",
+                        },
+                    }
+                ),
+            )
+        )
+        self.session.commit()
+
     def test_broker_resolved_records_without_excursions_are_still_eligible_for_tuning(self) -> None:
         plan = self.plan_repository.create_plan(
             RecommendationPlan(
@@ -160,6 +261,402 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         )
         self.assertIsNotNone(features)
         self.assertEqual(features.setup_family if features is not None else None, "breakout")
+
+    def test_point_in_time_replay_mode_uses_replay_eligibility_records(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+        # Stored-plan eligible records are intentionally absent; replay mode must not require them.
+        self.assertEqual(
+            0,
+            self.session.scalar(select(func.count()).select_from(PlanGenerationTuningEligibleRecordRecord)),
+        )
+
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        candidates = self.tuning_repository.list_candidates_for_run(run.id or 0)
+
+        self.assertEqual("completed", run.status)
+        self.assertEqual("point_in_time_replay", run.mode)
+        self.assertEqual(4, run.eligible_record_count)
+        self.assertEqual("point_in_time_replay", run.summary["tuning_source_mode"])
+        self.assertTrue(run.summary["exploration_mode"])
+        self.assertEqual(4, run.summary["search_record_count"] + run.summary["validation_record_count"])
+        self.assertTrue(any(candidate.is_baseline and candidate.changed_keys == [] for candidate in candidates))
+
+    def test_point_in_time_replay_mode_ignores_stale_replay_artifact_versions(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win",
+            )
+        stale = self.session.scalars(select(ReplayEligibilityRecord)).first()
+        assert stale is not None
+        diagnostics = json.loads(stale.diagnostics_json)
+        diagnostics["artifact_versions"]["settings_hash"] = "stale-settings"
+        stale.diagnostics_json = json.dumps(diagnostics)
+        self.session.commit()
+
+        with self.assertRaisesRegex(PlanGenerationTuningError, "insufficient eligible records"):
+            self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+
+    def test_point_in_time_replay_mode_is_repeatable_for_same_replay_artifacts(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=10.0 if index % 2 == 0 else 2.0,
+                mae=-2.0 if index % 2 == 0 else -8.0,
+                outcome="win" if index % 2 == 0 else "loss",
+            )
+        compact_profile = {
+            "name": "point_in_time_replay",
+            "explore_like": True,
+            "replay_like": True,
+            "step_counts": (-1, 1),
+            "max_candidates": 5,
+            "batch_size": 5,
+        }
+
+        with patch.object(self.service, "_mode_profile", return_value=compact_profile):
+            first = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+            second = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+
+        first_candidates = self.tuning_repository.list_candidates_for_run(first.id or 0)
+        second_candidates = self.tuning_repository.list_candidates_for_run(second.id or 0)
+        self.assertEqual(first.summary["exploration_seed"], second.summary["exploration_seed"])
+        self.assertEqual(first.summary["winner"]["config"], second.summary["winner"]["config"])
+        self.assertEqual(first.summary["winner"]["validation_win_count"], second.summary["winner"]["validation_win_count"])
+        self.assertEqual(
+            [(candidate.rank, candidate.changed_keys, candidate.config) for candidate in first_candidates],
+            [(candidate.rank, candidate.changed_keys, candidate.config) for candidate in second_candidates],
+        )
+
+    def test_replay_tuning_run_can_enqueue_candidate_replay_batches(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        historical_replay = HistoricalReplayService(
+            historical_replays=HistoricalReplayRepository(self.session),
+            jobs=JobRepository(self.session),
+            runs=RunRepository(self.session),
+        )
+        service = PlanGenerationTuningService(
+            self.session,
+            historical_replay_service=historical_replay,
+        )
+
+        payload = service.enqueue_replay_candidate_batches_from_run(
+            run.id or 0,
+            candidate_limit=2,
+            enqueue=True,
+        )
+
+        self.assertEqual("created", payload["status"])
+        self.assertEqual(2, payload["candidate_count"])
+        self.assertEqual(["EOG"], payload["tickers"])
+        self.assertEqual(4, payload["slice_count"])
+        self.assertEqual(2, len(payload["batches"]))
+        first_batch_id = payload["batches"][0]["replay_batch_id"]
+        batch = HistoricalReplayRepository(self.session).get_batch(first_batch_id)
+        self.assertEqual("queued", batch.status)
+        batch_config = json.loads(batch.config_json)
+        self.assertEqual(
+            run.id,
+            batch_config["plan_generation_tuning_run_id"],
+        )
+        self.assertIn("plan_generation_tuning_config_override", batch_config)
+        self.assertGreaterEqual(payload["batches"][0]["queued_run_count"], 1)
+
+    def test_replay_apply_without_candidate_execution_fails_closed(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+
+        run = self.service.run(
+            mode="point_in_time_replay",
+            apply=True,
+            limit=4,
+            execute_replay_candidates=False,
+        )
+
+        self.assertFalse(run.summary["promotion_applied"])
+        self.assertIsNone(run.promoted_config_version_id)
+        self.assertIn(
+            "replay_candidate_execution_required_for_promotion",
+            run.summary["promotion_rejection_reasons"],
+        )
+
+    def test_replay_reranked_promotion_rejects_missing_tier_a_evidence(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win",
+            )
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        candidate = self.tuning_repository.list_candidates_for_run(run.id or 0)[0]
+        replay_execution = {
+            "aggregate": {
+                "rerank": [
+                    {
+                        "candidate_id": candidate.id,
+                        "candidate_rank": candidate.rank,
+                        "tier_a_count": 0,
+                        "eligible_record_count": 4,
+                        "replay_score": 4.0,
+                    }
+                ]
+            }
+        }
+
+        result = self.service._apply_replay_reranked_promotion(
+            run=run,
+            replay_execution=replay_execution,
+            baseline_version=self.service._resolve_active_config_version(),
+            walk_forward_validation=object(),
+            min_validation_resolved=2,
+        )
+
+        self.assertFalse(result["promotion_applied"])
+        self.assertIn(
+            "replay_winner_missing_tier_a_evidence",
+            result["promotion_rejection_reasons"],
+        )
+
+    def test_replay_reranked_winner_is_used_for_promotion_decision(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        candidates = self.tuning_repository.list_candidates_for_run(run.id or 0)
+        replay_winner = candidates[-1]
+        replay_execution = {
+            "aggregate": {
+                "rerank": [
+                    {
+                        "candidate_id": replay_winner.id,
+                        "candidate_rank": replay_winner.rank,
+                        "tier_a_count": 2,
+                        "eligible_record_count": 2,
+                        "replay_score": 10.0,
+                    }
+                ]
+            }
+        }
+
+        with patch.object(
+            self.service,
+            "_apply_winner_promotion",
+            return_value=(123, True, [], {"label": "eligible_for_cautious_expansion"}),
+        ) as apply_mock:
+            result = self.service._apply_replay_reranked_promotion(
+                run=run,
+                replay_execution=replay_execution,
+                baseline_version=self.service._resolve_active_config_version(),
+                walk_forward_validation=object(),
+                min_validation_resolved=2,
+            )
+
+        self.assertTrue(result["promotion_applied"])
+        self.assertEqual(123, result["promoted_config_version_id"])
+        self.assertEqual(replay_winner.id, result["replay_winner_candidate_id"])
+        self.assertEqual(replay_winner.id, apply_mock.call_args.kwargs["winner_candidate"].id)
+
+    def test_replay_tuning_run_can_execute_candidate_replays_inline_when_requested(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+        historical_replay = HistoricalReplayService(
+            historical_replays=HistoricalReplayRepository(self.session),
+            jobs=JobRepository(self.session),
+            runs=RunRepository(self.session),
+        )
+
+        class FakeJobExecution:
+            def __init__(self) -> None:
+                self.executed_run_ids: list[int] = []
+
+            def execute_claimed_run(self, claimed_run, *, worker_id=None):
+                self.executed_run_ids.append(claimed_run.id)
+                return claimed_run, {"worker_id": worker_id}
+
+        fake_execution = FakeJobExecution()
+        service = PlanGenerationTuningService(
+            self.session,
+            historical_replay_service=historical_replay,
+            job_execution_service=fake_execution,
+        )
+
+        run = service.run(
+            mode="point_in_time_replay",
+            apply=False,
+            limit=4,
+            execute_replay_candidates=True,
+            replay_candidate_limit=1,
+        )
+
+        self.assertTrue(run.summary["candidate_replay_execution_requested"])
+        self.assertEqual(1, run.summary["candidate_replay_execution"]["bridge"]["candidate_count"])
+        self.assertEqual(4, run.summary["candidate_replay_execution"]["executed_run_count"])
+        self.assertEqual(
+            run.summary["candidate_replay_execution"]["executed_run_ids"],
+            fake_execution.executed_run_ids,
+        )
+
+    def test_replay_tuning_can_execute_candidate_replay_batches_synchronously(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        historical_replay = HistoricalReplayService(
+            historical_replays=HistoricalReplayRepository(self.session),
+            jobs=JobRepository(self.session),
+            runs=RunRepository(self.session),
+        )
+
+        class FakeJobExecution:
+            def __init__(self) -> None:
+                self.executed_run_ids: list[int] = []
+
+            def execute_claimed_run(self, claimed_run, *, worker_id=None):
+                self.executed_run_ids.append(claimed_run.id)
+                return claimed_run, {"worker_id": worker_id}
+
+        fake_execution = FakeJobExecution()
+        service = PlanGenerationTuningService(
+            self.session,
+            historical_replay_service=historical_replay,
+            job_execution_service=fake_execution,
+        )
+
+        payload = service.execute_replay_candidate_batches_from_run(
+            run.id or 0,
+            candidate_limit=1,
+            worker_id="test-worker",
+        )
+
+        self.assertEqual("completed", payload["status"])
+        self.assertEqual(4, payload["executed_run_count"])
+        self.assertEqual(payload["executed_run_ids"], fake_execution.executed_run_ids)
+        self.assertEqual(1, payload["bridge"]["candidate_count"])
+        self.assertIn("aggregate", payload)
+
+    def test_replay_tuning_can_aggregate_candidate_replay_batch_results(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win" if index != 1 else "loss",
+            )
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        historical_replay_repo = HistoricalReplayRepository(self.session)
+        historical_replay = HistoricalReplayService(
+            historical_replays=historical_replay_repo,
+            jobs=JobRepository(self.session),
+            runs=RunRepository(self.session),
+        )
+        service = PlanGenerationTuningService(
+            self.session,
+            historical_replay_service=historical_replay,
+        )
+        bridge = service.enqueue_replay_candidate_batches_from_run(
+            run.id or 0,
+            candidate_limit=2,
+            enqueue=False,
+        )
+        for index, batch_payload in enumerate(bridge["batches"]):
+            batch_id = int(batch_payload["replay_batch_id"])
+            replay_slice = historical_replay_repo.list_slices(batch_id)[0]
+            plan = self.plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="EOG",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=72.0,
+                    entry_price_low=100.0,
+                    entry_price_high=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    computed_at=start,
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            self.session.add(
+                ReplayEligibilityRecord(
+                    replay_batch_id=batch_id,
+                    replay_slice_id=replay_slice.id or 0,
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="EOG",
+                    candidate_config_hash=str(batch_payload["candidate_config_hash"]),
+                    tier="tier_a" if index == 0 else "tier_b",
+                    eligible_for_tuning=True,
+                    resolution_source="intraday" if index == 0 else "daily_prefilter",
+                    outcome="win" if index == 0 else "expired",
+                    rejection_reasons_json="[]",
+                    diagnostics_json="{}",
+                )
+            )
+        self.session.commit()
+
+        aggregate = service.aggregate_replay_candidate_batch_results(run.id or 0)
+
+        self.assertEqual("completed", aggregate["status"])
+        self.assertEqual(2, aggregate["candidate_result_count"])
+        self.assertEqual({"tier_a": 1}, aggregate["results"][0]["tier_counts"])
+        self.assertEqual({"win": 1}, aggregate["results"][0]["outcome_counts"])
+        self.assertEqual({"tier_b": 1}, aggregate["results"][1]["tier_counts"])
+        self.assertEqual({"daily_prefilter": 1}, aggregate["results"][1]["resolution_source_counts"])
+        self.assertEqual(aggregate["results"][0]["candidate_id"], aggregate["replay_winner_candidate_id"])
+        self.assertGreater(
+            aggregate["rerank"][0]["replay_score"],
+            aggregate["rerank"][1]["replay_score"],
+        )
+
+    def test_wide_point_in_time_replay_mode_profile_is_replay_and_wide(self) -> None:
+        profile = self.service._mode_profile("wide_point_in_time_replay")
+
+        self.assertEqual("wide_point_in_time_replay", profile["name"])
+        self.assertTrue(profile["replay_like"])
+        self.assertTrue(profile["explore_like"])
+        self.assertEqual(67, profile["max_candidates"])
 
     def test_describe_seeds_baseline_config_and_exposes_parameter_schema(self) -> None:
         payload = self.service.describe()

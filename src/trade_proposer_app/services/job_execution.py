@@ -1,9 +1,10 @@
+import hashlib
 import json
 import logging
 import os
 import socket
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
 from scripts.large_plan_generation_parameter_search import run_large_parameter_search
@@ -813,6 +814,22 @@ class JobExecutionService:
             input_summary, output_summary = self.historical_replay.build_slice_execution_payload(
                 batch_id, slice_id
             )
+            plan_generation_summary = self._execute_historical_replay_plan_generation(
+                run,
+                input_summary=input_summary,
+            )
+            if plan_generation_summary is not None:
+                output_summary["plan_generation"] = plan_generation_summary
+                replay_resolution_summary = self._resolve_historical_replay_generated_plans(
+                    run,
+                    input_summary=input_summary,
+                    candidate_config_hash=plan_generation_summary.get("candidate_config_override_hash")
+                    if isinstance(plan_generation_summary, dict)
+                    else None,
+                )
+                output_summary["replay_resolution"] = replay_resolution_summary
+                output_summary["pipeline_stage"] = "plans_resolved"
+                output_summary["next_step"] = "build replay eligibility records from replay-generated plans and outcomes"
             timing["replay_execution_seconds"] = round(perf_counter() - execution_phase_started, 6)
         except Exception as exc:
             timing["replay_execution_seconds"] = round(perf_counter() - execution_phase_started, 6)
@@ -833,6 +850,9 @@ class JobExecutionService:
             "status": "completed",
             "message": output_summary.get("message"),
             "coverage_ratio": output_summary.get("coverage_ratio"),
+            "pipeline_stage": output_summary.get("pipeline_stage"),
+            "plan_generation": output_summary.get("plan_generation"),
+            "replay_resolution": output_summary.get("replay_resolution"),
         }
         replay_artifact = {
             **artifact,
@@ -853,6 +873,336 @@ class JobExecutionService:
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
+
+    def _resolve_historical_replay_generated_plans(
+        self,
+        run: Run,
+        *,
+        input_summary: dict[str, object],
+        candidate_config_hash: object,
+    ) -> dict[str, object]:
+        if getattr(self.runs, "session", None) is None or run.id is None:
+            return {"status": "skipped", "reason": "session_or_run_missing"}
+        from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+        from trade_proposer_app.repositories.replay_eligibility import ReplayEligibilityRepository
+        from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutcomeRepository
+        from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
+
+        plans = RecommendationPlanRepository(self.runs.session).list_plans(run_id=run.id, limit=None)
+        if not plans:
+            return {"status": "skipped", "reason": "no_replay_generated_plans", "plan_count": 0}
+        replay_batch_id = input_summary.get("replay_batch_id")
+        replay_slice_id = input_summary.get("replay_slice_id")
+        if not isinstance(replay_batch_id, int) or not isinstance(replay_slice_id, int):
+            return {"status": "skipped", "reason": "missing_replay_ids", "plan_count": len(plans)}
+        replay_as_of = self._parse_datetime(input_summary.get("as_of"))
+        coverage = input_summary.get("replay_coverage_report")
+        resolution_days = int(coverage.get("resolution_days", 5)) if isinstance(coverage, dict) else 5
+        resolution_as_of = (replay_as_of + timedelta(days=resolution_days)) if replay_as_of else None
+        evaluator = RecommendationPlanEvaluationService(self.runs.session)
+        price_history_cache, price_errors = evaluator._prepare_price_histories(plans, as_of=resolution_as_of)  # noqa: SLF001
+        replay_outcomes = ReplayPlanOutcomeRepository(self.runs.session)
+        replay_eligibility = ReplayEligibilityRepository(self.runs.session)
+        coverage_by_ticker = self._replay_coverage_by_ticker(coverage)
+        stored = []
+        eligibility_records = []
+        source_counts: dict[str, int] = {}
+        outcome_counts: dict[str, int] = {}
+        for plan in plans:
+            ticker = (plan.ticker or "").strip().upper()
+            daily_data = price_history_cache.get((ticker, False))
+            intraday_data = price_history_cache.get((ticker, True))
+            outcome, source_mode = evaluator._resolve_plan_outcome(  # noqa: SLF001
+                plan,
+                daily_data,
+                intraday_data,
+                run_id=run.id,
+                as_of=resolution_as_of,
+            )
+            stored_outcome = replay_outcomes.upsert_outcome(
+                replay_batch_id=replay_batch_id,
+                replay_slice_id=replay_slice_id,
+                run_id=run.id,
+                recommendation_plan_id=plan.id or 0,
+                candidate_config_hash=str(candidate_config_hash or ""),
+                resolution_source=source_mode,
+                outcome=outcome,
+            )
+            stored.append(stored_outcome)
+            candidate_hash = str(candidate_config_hash or "")
+            replay_provenance = plan.signal_breakdown.get("replay_provenance") if isinstance(plan.signal_breakdown, dict) else None
+            eligibility = self._classify_replay_eligibility(
+                ticker=ticker,
+                coverage=coverage_by_ticker.get(ticker),
+                resolution_source=source_mode,
+                outcome=stored_outcome,
+                candidate_config_hash=candidate_hash,
+                replay_provenance=replay_provenance if isinstance(replay_provenance, dict) else {},
+            )
+            eligibility_records.append(
+                replay_eligibility.upsert_record(
+                    replay_batch_id=replay_batch_id,
+                    replay_slice_id=replay_slice_id,
+                    replay_plan_outcome_id=stored_outcome.get("id") if isinstance(stored_outcome.get("id"), int) else None,
+                    recommendation_plan_id=plan.id or 0,
+                    run_id=run.id,
+                    ticker=ticker,
+                    candidate_config_hash=candidate_hash,
+                    tier=eligibility["tier"],
+                    eligible_for_tuning=bool(eligibility["eligible_for_tuning"]),
+                    resolution_source=source_mode,
+                    outcome=outcome.outcome,
+                    rejection_reasons=list(eligibility["rejection_reasons"]),
+                    diagnostics=dict(eligibility["diagnostics"]),
+                )
+            )
+            source_counts[source_mode] = source_counts.get(source_mode, 0) + 1
+            outcome_counts[outcome.outcome] = outcome_counts.get(outcome.outcome, 0) + 1
+        return {
+            "status": "completed",
+            "plan_count": len(plans),
+            "stored_outcome_count": len(stored),
+            "resolution_as_of": resolution_as_of.isoformat() if resolution_as_of else None,
+            "source_counts": source_counts,
+            "outcome_counts": outcome_counts,
+            "price_errors": price_errors,
+            "stored_outcome_ids": [item.get("id") for item in stored],
+            "eligibility_record_count": len(eligibility_records),
+            "eligibility_tier_counts": self._count_values(eligibility_records, "tier"),
+            "eligible_for_tuning_count": sum(1 for item in eligibility_records if item.get("eligible_for_tuning")),
+        }
+
+    @staticmethod
+    def _replay_coverage_by_ticker(coverage: object) -> dict[str, dict[str, object]]:
+        if not isinstance(coverage, dict):
+            return {}
+        tickers = coverage.get("tickers")
+        if not isinstance(tickers, list):
+            return {}
+        result: dict[str, dict[str, object]] = {}
+        for item in tickers:
+            if not isinstance(item, dict):
+                continue
+            ticker = str(item.get("ticker") or "").strip().upper()
+            if ticker:
+                result[ticker] = item
+        return result
+
+    @staticmethod
+    def _classify_replay_eligibility(
+        *,
+        ticker: str,
+        coverage: dict[str, object] | None,
+        resolution_source: str,
+        outcome: dict[str, object],
+        candidate_config_hash: str,
+        replay_provenance: dict[str, object],
+    ) -> dict[str, object]:
+        coverage_tier = str((coverage or {}).get("tier") or "ineligible")
+        blockers = [str(item) for item in ((coverage or {}).get("blockers") or [])]
+        warnings = [str(item) for item in ((coverage or {}).get("warnings") or [])]
+        outcome_label = str(outcome.get("outcome") or "")
+        status = str(outcome.get("status") or "")
+        reasons = list(blockers)
+        if not coverage:
+            reasons.append("missing_coverage_report")
+        if status != "resolved":
+            reasons.append("unresolved_open_outcome")
+        if resolution_source == "intraday" and coverage_tier == "tier_a" and status == "resolved" and not blockers:
+            tier = "tier_a"
+            eligible = True
+        elif coverage_tier in {"tier_a", "tier_b"} and resolution_source in {"daily_prefilter", "none"} and status == "resolved" and not blockers:
+            tier = "tier_b"
+            eligible = True
+            if resolution_source == "daily_prefilter":
+                reasons.append("accepted_daily_prefilter_resolution")
+            if resolution_source == "none":
+                reasons.append("non_trade_replay_outcome")
+        else:
+            tier = "tier_c" if coverage_tier != "ineligible" else "ineligible"
+            eligible = False
+            if resolution_source != "intraday" and resolution_source not in {"daily_prefilter", "none"}:
+                reasons.append(f"unaccepted_resolution_source:{resolution_source or 'missing'}")
+        return {
+            "tier": tier,
+            "eligible_for_tuning": eligible,
+            "rejection_reasons": sorted(set(reasons)),
+            "diagnostics": {
+                "ticker": ticker,
+                "coverage_tier": coverage_tier,
+                "coverage_blockers": blockers,
+                "coverage_warnings": warnings,
+                "resolution_source": resolution_source,
+                "outcome": outcome_label,
+                "status": status,
+                "artifact_key": {
+                    "as_of": replay_provenance.get("as_of"),
+                    "ticker": ticker,
+                    "candidate_config_hash": candidate_config_hash,
+                    "input_coverage_hash": replay_provenance.get("input_coverage_hash"),
+                },
+                "artifact_versions": {
+                    "code_version": replay_provenance.get("code_version"),
+                    "settings_hash": replay_provenance.get("settings_hash"),
+                    "input_coverage_hash": replay_provenance.get("input_coverage_hash"),
+                },
+            },
+        }
+
+    @staticmethod
+    def _count_values(items: list[dict[str, object]], key: str) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for item in items:
+            value = str(item.get(key) or "")
+            if value:
+                counts[value] = counts.get(value, 0) + 1
+        return counts
+
+    def _execute_historical_replay_plan_generation(
+        self,
+        run: Run,
+        *,
+        input_summary: dict[str, object],
+    ) -> dict[str, object] | None:
+        if self.watchlist_orchestration is None:
+            return None
+        raw_tickers = input_summary.get("tickers")
+        if not isinstance(raw_tickers, list):
+            return None
+        tickers = [str(item).strip().upper() for item in raw_tickers if str(item).strip()]
+        if not tickers:
+            return None
+        as_of = self._parse_datetime(input_summary.get("as_of"))
+        watchlist = Watchlist(
+            id=None,
+            name=f"Historical replay slice {input_summary.get('as_of') or ''}".strip(),
+            tickers=tickers,
+            description="Synthetic watchlist for point-in-time historical replay plan generation.",
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=True,
+            optimize_evaluation_timing=False,
+        )
+        provenance = self._build_historical_replay_provenance(run, input_summary=input_summary)
+        set_provenance = getattr(self.watchlist_orchestration, "set_replay_provenance", None)
+        set_config_override = getattr(
+            self.watchlist_orchestration,
+            "set_plan_generation_tuning_override",
+            None,
+        )
+        config_override = input_summary.get("plan_generation_tuning_config_override")
+        if callable(set_provenance):
+            set_provenance(provenance)
+        if callable(set_config_override) and isinstance(config_override, dict):
+            set_config_override(config_override)
+        try:
+            orchestration = self._execute_watchlist_orchestration(
+                run,
+                watchlist,
+                tickers,
+                as_of=as_of,
+            )
+        finally:
+            if callable(set_config_override):
+                set_config_override(None)
+            if callable(set_provenance):
+                set_provenance(None)
+        summary = orchestration.get("summary") if isinstance(orchestration, dict) else None
+        artifact = orchestration.get("artifact") if isinstance(orchestration, dict) else None
+        plan_count = self._safe_nested_int(summary, "plan_count")
+        signal_count = self._safe_nested_int(summary, "signal_count")
+        return {
+            "status": "completed",
+            "as_of": as_of.isoformat() if as_of else None,
+            "ticker_count": len(tickers),
+            "signal_count": signal_count,
+            "plan_count": plan_count,
+            "summary": summary if isinstance(summary, dict) else {},
+            "artifact_keys": sorted(artifact.keys()) if isinstance(artifact, dict) else [],
+            "candidate_config_override_applied": isinstance(config_override, dict),
+            "candidate_config_override_hash": self._stable_hash(config_override) if isinstance(config_override, dict) else None,
+            "replay_provenance": provenance,
+        }
+
+    def _build_historical_replay_provenance(
+        self,
+        run: Run,
+        *,
+        input_summary: dict[str, object],
+    ) -> dict[str, object]:
+        coverage = input_summary.get("replay_coverage_report")
+        coverage_summary = self._compact_replay_coverage_summary(coverage if isinstance(coverage, dict) else {})
+        payload = {
+            "source": "historical_replay",
+            "replay_batch_id": input_summary.get("replay_batch_id"),
+            "replay_slice_id": input_summary.get("replay_slice_id"),
+            "as_of": input_summary.get("as_of"),
+            "run_id": run.id,
+            "job_id": run.job_id,
+            "code_version": os.environ.get("GIT_COMMIT") or os.environ.get("SOURCE_VERSION") or "unknown",
+            "settings_hash": self._stable_hash({"weights_file_path": settings.weights_file_path}),
+            "input_coverage_summary": coverage_summary,
+            "input_coverage_hash": self._stable_hash(coverage),
+            "warnings": self._collect_replay_input_warnings(coverage if isinstance(coverage, dict) else {}),
+        }
+        return payload
+
+    @staticmethod
+    def _compact_replay_coverage_summary(coverage: dict[str, object]) -> dict[str, object]:
+        news = coverage.get("news_coverage") if isinstance(coverage.get("news_coverage"), dict) else {}
+        context = coverage.get("context_coverage") if isinstance(coverage.get("context_coverage"), dict) else {}
+        fundamentals = coverage.get("fundamental_coverage") if isinstance(coverage.get("fundamental_coverage"), dict) else {}
+        return {
+            "ticker_count": coverage.get("ticker_count"),
+            "tier_counts": coverage.get("tier_counts"),
+            "tier_a_ratio": coverage.get("tier_a_ratio"),
+            "news_coverage_ratio": news.get("coverage_ratio") if isinstance(news, dict) else None,
+            "context_industry_coverage_ratio": context.get("industry_coverage_ratio") if isinstance(context, dict) else None,
+            "fundamental_coverage_ratio": fundamentals.get("coverage_ratio") if isinstance(fundamentals, dict) else None,
+        }
+
+    @staticmethod
+    def _collect_replay_input_warnings(coverage: dict[str, object]) -> list[str]:
+        warnings: list[str] = []
+        ticker_rows = coverage.get("tickers")
+        if isinstance(ticker_rows, list):
+            for row in ticker_rows:
+                if not isinstance(row, dict):
+                    continue
+                ticker = row.get("ticker")
+                for warning in row.get("warnings") or []:
+                    warnings.append(f"{ticker}: {warning}")
+                for blocker in row.get("blockers") or []:
+                    warnings.append(f"{ticker}: {blocker}")
+        return warnings[:50]
+
+    @staticmethod
+    def _stable_hash(payload: object) -> str:
+        encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    @staticmethod
+    def _safe_nested_int(payload: object, key: str) -> int | None:
+        if not isinstance(payload, dict):
+            return None
+        value = payload.get(key)
+        if isinstance(value, int):
+            return value
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_datetime(value: object) -> datetime | None:
+        if isinstance(value, datetime):
+            return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        if not isinstance(value, str) or not value.strip():
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
     def _execute_broker_steering_run(
         self, run: Run

@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -21,6 +24,9 @@ def _create_service(session: Session) -> HistoricalReplayService:
         jobs=JobRepository(session),
         runs=RunRepository(session),
         historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
+        historical_news=HistoricalNewsRepository(session),
+        context_snapshots=ContextSnapshotRepository(session),
+        fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
     )
 
 
@@ -117,5 +123,13 @@ async def execute_batch(batch_id: int, session: Session = Depends(get_db_session
 async def get_slice(slice_id: int, session: Session = Depends(get_db_session)) -> HistoricalReplaySlice:
     try:
         return HistoricalReplayRepository(session).get_slice(slice_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/slices/{slice_id}/coverage")
+async def get_slice_coverage(slice_id: int, session: Session = Depends(get_db_session)) -> dict[str, object]:
+    try:
+        return _create_service(session).get_slice_coverage_report(slice_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
