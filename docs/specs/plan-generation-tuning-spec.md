@@ -39,16 +39,15 @@ Live behavior includes:
 - family-aware entry offsets, actionable confidence floor, and volatility-normalized stop controls
 - candidate ranking by win rate, win count, then expected value with explicit tie tolerances
 - batched wide/explore evaluation with memory guardrails
-- current tuning mode is `stored_plan_rescore`: it uses compact eligible records derived from existing stored plans/outcomes instead of regenerating full historical plans per candidate
+- default scheduled/API tuning mode is now `point_in_time_replay`; `stored_plan_rescore` remains available only as a manual diagnostic/regression mode using compact eligible records derived from existing stored plans/outcomes
 - full dry-run tuning must avoid duplicate eligible-record loads; final walk-forward validation should reuse the already loaded eligible record set rather than querying the same large outcome universe again
 
 Not fully autonomous yet:
 - the complete daily evolution workflow
-- replay-driven tuning that regenerates plans for each historical `as_of` slice and candidate config
 - all target diversity/concentration/stability protections as sole unattended promotion policy
-- unattended auto-promotion beyond current validation/baseline/tie checks
+- unattended auto-promotion beyond replay Tier A / execution-required fail-closed gates plus current validation/baseline/tie checks
 
-Target replay-based tuning is specified in `historical-playback-tuning-spec.md` and planned in `../historical-playback-tuning-plan.md`. Until that mode is implemented, eligible records are a stored-plan rescore quality/cache layer, not proof that full point-in-time playback has been run.
+Replay-based tuning is specified in `historical-playback-tuning-spec.md` and planned in `../historical-playback-tuning-plan.md`. Stored compact eligible records are a manual diagnostic/regression layer, not proof that full point-in-time playback has been run.
 
 `auto_enabled` and `auto_promote_enabled` are stored readiness/configuration flags. They are not proof that unattended autonomous promotion is fully active.
 

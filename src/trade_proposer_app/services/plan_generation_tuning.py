@@ -1817,7 +1817,7 @@ class PlanGenerationTuningService:
                 "max_candidates": 67,
                 "batch_size": 16,
             }
-        if normalized in {"point_in_time_replay", "replay"}:
+        if normalized in {"point_in_time_replay", "replay", "scheduled", "auto"}:
             return {
                 "name": "point_in_time_replay",
                 "explore_like": True,
@@ -1845,7 +1845,7 @@ class PlanGenerationTuningService:
                 "batch_size": 12,
             }
         return {
-            "name": "manual",
+            "name": "stored_plan_rescore" if normalized == "stored_plan_rescore" else "manual",
             "explore_like": False,
             "replay_like": False,
             "step_counts": (-1, 1),

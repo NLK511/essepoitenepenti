@@ -116,6 +116,8 @@ Implemented today:
 - ranked replay tuning candidates can be bridged into deterministic historical replay batches carrying scoped candidate config overrides for subsequent plan generation/resolution
 - completed per-candidate replay batches can be aggregated back to tuning candidate summaries with eligible counts, Tier A/B/C counts, outcome counts, resolution-source split, and replay-based reranking
 - bounded synchronous execution can create/enqueue candidate replay batches and execute their queued slices through the job execution service for research workflows, including an opt-in path from the main tuning `run()` workflow
+- operator UI surfaces replay tuning mode, Tier A/B/C evidence, skipped/rejection reasons, intraday-vs-daily resolution split, historical replay slice coverage, and links from tuning candidates to replay batches/slices/plans/outcomes
+- scheduled/API plan-generation tuning defaults to `point_in_time_replay`; `stored_plan_rescore` is labeled as a manual diagnostic/regression mode
 - plan-generation tuning has compact eligible-record cache and deterministic candidate scoring
 - initial replay coverage reporting quantifies readiness before replay-driven tuning
 

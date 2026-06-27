@@ -490,12 +490,15 @@ class JobExecutionService:
             self._plan_generation_tuning_string(request.get("setup_family")),
         )
         try:
+            requested_mode = str(request.get("mode") or "point_in_time_replay")
             tuning_run = self.plan_generation_tuning.run(
-                mode=str(request.get("mode") or "scheduled"),
+                mode=requested_mode,
                 apply=bool(request.get("apply", False)),
                 ticker=self._plan_generation_tuning_string(request.get("ticker")),
                 setup_family=self._plan_generation_tuning_string(request.get("setup_family")),
                 limit=plan_generation_tuning_limit,
+                execute_replay_candidates=bool(request.get("execute_replay_candidates", False)),
+                replay_candidate_limit=self._plan_generation_tuning_int(request.get("replay_candidate_limit"), 3) or 3,
             )
             summary = tuning_run.summary
             summary = dict(summary)

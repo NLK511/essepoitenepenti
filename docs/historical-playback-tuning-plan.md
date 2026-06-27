@@ -42,7 +42,7 @@ Acceptance:
 - [x] Add historical news coverage to the report once news `available_at` exists.
 - [x] Add context snapshot and fundamental snapshot coverage to the report.
 - [x] Surface coverage report in the historical replay API via `GET /api/historical-replay/slices/{slice_id}/coverage`.
-- [ ] Surface coverage report in the historical replay UI once a dedicated replay page exists.
+- [x] Surface coverage report in the historical replay UI once a dedicated replay page exists.
 
 Acceptance:
 - For a replay batch/slice, operators can see why each ticker is or is not usable for full replay tuning.
@@ -138,21 +138,21 @@ Acceptance:
 
 ## Phase 9 — Operator visibility
 
-- [ ] Show tuning mode on tuning run detail.
-- [ ] Show Tier A/B/C counts and skipped-slice reasons.
-- [ ] Show intraday vs daily resolution split.
-- [ ] Show replay data coverage report on historical replay slice detail.
-- [ ] Add links from tuning candidates to replay slices/plans/outcomes.
+- [x] Show tuning mode on tuning run detail.
+- [x] Show Tier A/B/C counts and skipped-slice reasons.
+- [x] Show intraday vs daily resolution split.
+- [x] Show replay data coverage report on historical replay slice detail.
+- [x] Add links from tuning candidates to replay slices/plans/outcomes.
 
 Acceptance:
 - A human operator can audit why a candidate won and whether the evidence is trustworthy.
 
 ## Phase 10 — Default migration
 
-- [ ] Make replay-based tuning the default for scheduled/auto tuning once stable.
-- [ ] Keep `stored_plan_rescore` as a manual diagnostic/regression mode.
-- [ ] Update docs and UI labels so old eligible-record tuning is not mistaken for full replay.
-- [ ] Remove any obsolete promotion path that can auto-promote from compact stored-plan evidence alone.
+- [x] Make replay-based tuning the default for scheduled/auto tuning once stable.
+- [x] Keep `stored_plan_rescore` as a manual diagnostic/regression mode.
+- [x] Update docs and UI labels so old eligible-record tuning is not mistaken for full replay.
+- [x] Remove any obsolete promotion path that can auto-promote from compact stored-plan evidence alone.
 
 Acceptance:
 - The production tuning loop is based on point-in-time replay evidence.

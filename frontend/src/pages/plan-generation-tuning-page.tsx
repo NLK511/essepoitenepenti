@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { deleteJson, getJson, postForm, postJson } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
@@ -97,6 +98,14 @@ function largeCandidateLabel(candidate: LargeSearchCandidate, index: number): st
   return `${s(candidate.phase) || "large"} #${index + 1} · WR ${formatPercent(n(candidate.validation_win_rate_percent))} · EV ${formatNumber(n(candidate.validation_expected_value))}`;
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function arrayValue(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item))) : [];
+}
+
 function performanceLine(performance: PerformanceSummary | null): string {
   if (!performance) return "No records in active period";
   return `${performance.actionable_count} actionable · WR ${formatPercent(performance.win_rate_percent)} · EV ${formatNumber(performance.expected_value)} · ${performance.record_count} records`;
@@ -120,9 +129,10 @@ export function PlanGenerationTuningPage() {
   const [selectedLargeCandidateIndex, setSelectedLargeCandidateIndex] = useState(0);
   const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null);
   const [walkForward, setWalkForward] = useState<WalkForwardResponse | null>(null);
+  const [replayArtifacts, setReplayArtifacts] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [standardMode, setStandardMode] = useState<"manual" | "wide" | "explore">("manual");
+  const [standardMode, setStandardMode] = useState<"point_in_time_replay" | "wide_point_in_time_replay" | "stored_plan_rescore" | "explore">("point_in_time_replay");
   const [largeCoarseCandidates, setLargeCoarseCandidates] = useState(20000);
   const [largeFineCandidates, setLargeFineCandidates] = useState(5000);
   const [lookbackDays, setLookbackDays] = useState(365);
@@ -169,6 +179,16 @@ export function PlanGenerationTuningPage() {
     setSelectedLargeCandidateIndex(0);
   }, [selectedJobId]);
 
+  useEffect(() => {
+    if (!selectedTuningRunId) {
+      setReplayArtifacts(null);
+      return;
+    }
+    getJson<Record<string, unknown>>(`/api/plan-generation-tuning/runs/${selectedTuningRunId}/replay-artifacts`)
+      .then(setReplayArtifacts)
+      .catch(() => setReplayArtifacts(null));
+  }, [selectedTuningRunId]);
+
   const selectedJob = useMemo(() => jobRuns?.find((run) => run.id === selectedJobId) ?? jobRuns?.[0] ?? null, [jobRuns, selectedJobId]);
   const selectedTuningRun = useMemo(() => tuningRuns?.find((run) => run.id === selectedTuningRunId) ?? tuningRuns?.[0] ?? null, [tuningRuns, selectedTuningRunId]);
   const selectedCandidate = useMemo(() => selectedTuningRun?.candidates.find((candidate) => candidate.id === selectedCandidateId) ?? selectedTuningRun?.candidates.find((candidate) => !candidate.is_baseline) ?? null, [selectedTuningRun, selectedCandidateId]);
@@ -177,7 +197,7 @@ export function PlanGenerationTuningPage() {
   const selectedJobLargeCandidates = useMemo(() => largeSearchCandidates(selectedJob), [selectedJob]);
   const selectedLargeCandidate = selectedJobLargeCandidates[selectedLargeCandidateIndex] ?? selectedJobLargeCandidates[0] ?? null;
 
-  async function runTuning(mode: "manual" | "wide" | "explore") {
+  async function runTuning(mode: "point_in_time_replay" | "wide_point_in_time_replay" | "stored_plan_rescore" | "explore") {
     try {
       setSaving(`run-${mode}`);
       setError(null);
@@ -289,12 +309,13 @@ export function PlanGenerationTuningPage() {
           </div>
         </Card>
         <Card>
-          <SectionTitle kicker="Launch" title="Run tuning jobs" subtitle="Standard, wide, exploratory, and large-search jobs are queued as background runs." />
+          <SectionTitle kicker="Launch" title="Run tuning jobs" subtitle="Replay-based tuning is the default. Stored-plan rescore remains a manual diagnostic/regression mode." />
           <div className="cluster top-gap-small">
-            <select className="input" value={standardMode} onChange={(event) => setStandardMode(event.target.value as "manual" | "wide" | "explore")}>
-              <option value="manual">Standard</option>
-              <option value="wide">Wide</option>
-              <option value="explore">Exploratory</option>
+            <select className="input" value={standardMode} onChange={(event) => setStandardMode(event.target.value as "point_in_time_replay" | "wide_point_in_time_replay" | "stored_plan_rescore" | "explore")}>
+              <option value="point_in_time_replay">Replay standard</option>
+              <option value="wide_point_in_time_replay">Replay wide</option>
+              <option value="stored_plan_rescore">Stored-plan diagnostic</option>
+              <option value="explore">Stored-plan exploratory</option>
             </select>
             <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(standardMode)}>{saving === `run-${standardMode}` ? "… Queueing" : "Queue tuning job"}</button>
           </div>
@@ -366,6 +387,32 @@ export function PlanGenerationTuningPage() {
           ) : <EmptyState message="Select a job run." />}
         </Card>
       </section>
+
+      <DisclosureCard kicker="Tuning run detail" title={selectedTuningRun ? `Run #${selectedTuningRun.id}` : "No tuning run selected"} subtitle="Replay-aware visibility for the selected persisted tuning run.">
+        {selectedTuningRun ? (() => {
+          const summary = selectedTuningRun.summary;
+          const replayExecution = objectValue(summary.candidate_replay_execution);
+          const aggregate = objectValue(replayExecution.aggregate);
+          const rerank = arrayValue(aggregate.rerank);
+          const results = arrayValue(aggregate.results);
+          const replayPromotion = objectValue(summary.replay_promotion);
+          const sourceMode = s(summary.tuning_source_mode) || (selectedTuningRun.filters.replay_mode ? "point_in_time_replay" : "stored_plan_rescore");
+          return <div className="stack-page">
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Tuning mode" value={sourceMode} helper={`run mode ${selectedTuningRun.mode}`} />
+              <StatCard label="Tier A evidence" value={selectedTuningRun.eligible_tier_a_count} helper={`${selectedTuningRun.eligible_record_count} eligible records`} />
+              <StatCard label="Replay winner" value={String(aggregate.replay_winner_candidate_id ?? replayPromotion.replay_winner_candidate_id ?? "—")} helper={`promotion ${summary.promotion_applied ? "applied" : "blocked"}`} />
+              <StatCard label="Replay execution" value={String(replayExecution.executed_run_count ?? "—")} helper="candidate replay slice runs" />
+            </section>
+            {results.length > 0 ? <div className="table-wrapper top-gap-small"><table className="data-table"><thead><tr><th>candidate</th><th>tier counts</th><th>outcomes</th><th>resolution split</th><th>replay link</th></tr></thead><tbody>
+              {results.map((result) => <tr key={`${result.candidate_id}-${result.replay_batch_id}`}><td>#{String(result.candidate_rank ?? result.candidate_id ?? "?")}</td><td>{JSON.stringify(result.tier_counts ?? {})}</td><td>{JSON.stringify(result.outcome_counts ?? {})}</td><td>{JSON.stringify(result.resolution_source_counts ?? {})}</td><td>{result.replay_batch_id ? <Link to={`/research/historical-replay?batch=${result.replay_batch_id}`} className="button-link">Batch #{String(result.replay_batch_id)}</Link> : "—"}</td></tr>)}
+            </tbody></table></div> : <div className="helper-text top-gap-small">No per-candidate replay aggregate stored for this run yet.</div>}
+            {rerank.length > 0 ? <div className="data-card top-gap-small"><div className="data-card-header"><div className="data-card-title">Replay rerank</div><Badge>auditable</Badge></div><div className="helper-text">{rerank.map((item) => `#${String(item.candidate_rank ?? item.candidate_id)} score ${String(item.replay_score ?? "—")} · Tier A ${String(item.tier_a_count ?? 0)} · W/L ${String(item.win_count ?? 0)}/${String(item.loss_count ?? 0)}`).join("; ")}</div></div> : null}
+            {replayArtifacts && arrayValue(replayArtifacts.batches).length > 0 ? <details><summary className="helper-text">Replay artifact links: slices, plans, outcomes</summary><pre className="code-block top-gap-small">{JSON.stringify(replayArtifacts, null, 2)}</pre></details> : null}
+            {replayPromotion.promotion_rejection_reasons ? <div className="helper-text top-gap-small">Promotion rejection: {JSON.stringify(replayPromotion.promotion_rejection_reasons)}</div> : null}
+          </div>;
+        })() : <EmptyState message="Select a tuning run." />}
+      </DisclosureCard>
 
       <DisclosureCard kicker="Candidates" title="Custom walk-forward validation" subtitle="Select a persisted tuning candidate or a research-only large-search candidate, then compare it against the promoted baseline.">
         <div className="data-stack top-gap-small">

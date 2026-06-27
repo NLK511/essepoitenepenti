@@ -64,6 +64,7 @@ const navSections: NavSection[] = [
       { to: "/research", label: "Lab launcher", shortLabel: "Lab", icon: "⌂", end: true },
       { to: "/research/signal-gating/gating-job", label: "Signal gating tuning", shortLabel: "Gate", icon: "↯" },
       { to: "/research/plan-generation-tuning", label: "Plan generation tuning", shortLabel: "Plan tune", icon: "↗" },
+      { to: "/research/historical-replay", label: "Historical replay", shortLabel: "Replay", icon: "↺" },
       { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
       { to: "/jobs/ticker-signals", label: "Candidate signals", shortLabel: "Signals", icon: "≈" },
     ],

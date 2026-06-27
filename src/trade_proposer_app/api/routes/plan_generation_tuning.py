@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query
@@ -18,6 +19,7 @@ from trade_proposer_app.persistence.models import PlanGenerationTuningEventRecor
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.persistence.models import HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, ReplayEligibilityRecord
 from trade_proposer_app.services.plan_generation_tuning import (
     PlanGenerationTuningError,
     PlanGenerationTuningService,
@@ -34,6 +36,26 @@ router = APIRouter(prefix="/plan-generation-tuning", tags=["plan-generation-tuni
 
 STANDARD_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-standard-search"
 LARGE_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-large-search"
+def _loads_json_object(value: str | None) -> dict[str, object]:
+    if not value:
+        return {}
+    try:
+        loaded = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _loads_json_list(value: str | None) -> list[object]:
+    if not value:
+        return []
+    try:
+        loaded = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    return loaded if isinstance(loaded, list) else []
+
+
 PROMOTION_EVENT_TYPES = {
     "baseline_seeded",
     "baseline_reseeded",
@@ -144,12 +166,64 @@ async def get_plan_generation_tuning_run(run_id: int, session: Session = Depends
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.get("/runs/{run_id}/replay-artifacts")
+async def get_plan_generation_tuning_replay_artifacts(run_id: int, session: Session = Depends(get_db_session)) -> dict[str, object]:
+    try:
+        run = PlanGenerationTuningService(session).repository.get_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    batches = session.query(HistoricalReplayBatchRecord).all()
+    matched_batches = []
+    for batch in batches:
+        config = _loads_json_object(batch.config_json)
+        if int(config.get("plan_generation_tuning_run_id") or 0) != run_id:
+            continue
+        slices = session.query(HistoricalReplaySliceRecord).filter(HistoricalReplaySliceRecord.replay_batch_id == batch.id).order_by(HistoricalReplaySliceRecord.as_of.asc()).all()
+        eligibility_rows = session.query(ReplayEligibilityRecord).filter(ReplayEligibilityRecord.replay_batch_id == batch.id).order_by(ReplayEligibilityRecord.id.asc()).all()
+        matched_batches.append(
+            {
+                "batch_id": batch.id,
+                "status": batch.status,
+                "candidate_id": config.get("plan_generation_tuning_candidate_id"),
+                "candidate_rank": config.get("plan_generation_tuning_candidate_rank"),
+                "candidate_config_hash": config.get("candidate_config_hash"),
+                "slice_ids": [row.id for row in slices],
+                "slices": [
+                    {
+                        "slice_id": row.id,
+                        "as_of": row.as_of.isoformat(),
+                        "status": row.status,
+                        "run_id": row.run_id,
+                        "coverage_url": f"/api/historical-replay/slices/{row.id}/coverage",
+                    }
+                    for row in slices
+                ],
+                "eligibility_records": [
+                    {
+                        "id": row.id,
+                        "replay_slice_id": row.replay_slice_id,
+                        "replay_plan_outcome_id": row.replay_plan_outcome_id,
+                        "recommendation_plan_id": row.recommendation_plan_id,
+                        "ticker": row.ticker,
+                        "tier": row.tier,
+                        "eligible_for_tuning": row.eligible_for_tuning,
+                        "resolution_source": row.resolution_source,
+                        "outcome": row.outcome,
+                        "rejection_reasons": _loads_json_list(row.rejection_reasons_json),
+                    }
+                    for row in eligibility_rows
+                ],
+            }
+        )
+    return {"run_id": run.id, "mode": run.mode, "batch_count": len(matched_batches), "batches": matched_batches}
+
+
 @router.post("/run")
 async def run_plan_generation_tuning(
     ticker: str | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=5000),
-    mode: str = Query(default="manual"),
+    mode: str = Query(default="point_in_time_replay"),
     apply: bool = Query(default=False),
     session: Session = Depends(get_db_session),
 ):
@@ -169,6 +243,7 @@ async def run_plan_generation_tuning(
             {
                 "plan_generation_tuning_request": {
                     "mode": mode,
+                    "tuning_source_mode": "stored_plan_rescore" if mode.strip().lower() in {"manual", "stored_plan_rescore"} else "point_in_time_replay",
                     "apply": apply,
                     "ticker": ticker.upper() if ticker else None,
                     "setup_family": setup_family.strip() if setup_family else None,

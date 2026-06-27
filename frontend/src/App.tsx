@@ -17,6 +17,7 @@ import { ResearchPage } from "./pages/research-page";
 import { RecommendationQualityPage } from "./pages/recommendation-quality-page";
 import { SignalGatingJobPage } from "./pages/signal-gating-job-page";
 import { PlanGenerationTuningPage } from "./pages/plan-generation-tuning-page";
+import { HistoricalReplayPage } from "./pages/historical-replay-page";
 import { RunDetailPage } from "./pages/run-detail-page";
 import { ContextReviewPage } from "./pages/context-review-page";
 import { DataQualityPage } from "./pages/data-quality-page";
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="research/signal-gating/decision-samples" element={<Navigate to="/research/decision-samples" replace />} />
           <Route path="research/signal-gating/gating-job" element={<SignalGatingJobPage />} />
           <Route path="research/plan-generation-tuning" element={<PlanGenerationTuningPage />} />
+          <Route path="research/historical-replay" element={<HistoricalReplayPage />} />
           <Route path="research/backtesting" element={<Navigate to="/research" replace />} />
           <Route path="data-quality" element={<DataQualityPage />} />
           <Route path="settings" element={<SettingsPage />} />
