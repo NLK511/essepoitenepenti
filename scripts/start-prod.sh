@@ -18,6 +18,8 @@ SKIP_FRONTEND_BUILD="false"
 ALLOW_DEGRADED_PREFLIGHT="false"
 START_HOST=""
 START_PORT=""
+WORKER_RESTART_TIMESTAMPS=""
+SCHEDULER_RESTART_TIMESTAMPS=""
 
 log() {
   printf '[start-prod] %s\n' "$1"
@@ -42,6 +44,33 @@ process_snapshot() {
       log_audit "pid ${pid} is not running"
     fi
   done
+}
+
+restart_budget_allows() {
+  local service_name="$1"
+  local now="$2"
+  local raw_timestamps="$3"
+  local kept=""
+  local count=0
+  local timestamp
+  for timestamp in $raw_timestamps; do
+    if (( now - timestamp <= PROD_SUPERVISOR_RESTART_WINDOW_SECONDS )); then
+      kept="${kept}${timestamp} "
+      count=$((count + 1))
+    fi
+  done
+  kept="${kept}${now} "
+  count=$((count + 1))
+  if [[ "$service_name" == "worker" ]]; then
+    WORKER_RESTART_TIMESTAMPS="$kept"
+  else
+    SCHEDULER_RESTART_TIMESTAMPS="$kept"
+  fi
+  if (( count > PROD_SUPERVISOR_MAX_RESTARTS )); then
+    log_audit "${service_name} restart budget exceeded: count=${count} max=${PROD_SUPERVISOR_MAX_RESTARTS} window_seconds=${PROD_SUPERVISOR_RESTART_WINDOW_SECONDS}"
+    return 1
+  fi
+  return 0
 }
 
 fail() {
@@ -169,6 +198,9 @@ fi
 export APP_ENV="${APP_ENV:-production}"
 START_HOST="${START_HOST:-${APP_HOST:-0.0.0.0}}"
 START_PORT="${START_PORT:-${APP_PORT:-8000}}"
+PROD_SUPERVISOR_MAX_RESTARTS="${PROD_SUPERVISOR_MAX_RESTARTS:-5}"
+PROD_SUPERVISOR_RESTART_WINDOW_SECONDS="${PROD_SUPERVISOR_RESTART_WINDOW_SECONDS:-300}"
+PROD_SUPERVISOR_RESTART_DELAY_SECONDS="${PROD_SUPERVISOR_RESTART_DELAY_SECONDS:-2}"
 
 [[ -d "$VENV_DIR" ]] || fail "missing ${VENV_DIR}; run ./scripts/setup.sh first"
 VENV_PYTHON="${VENV_DIR}/bin/python"
@@ -288,44 +320,12 @@ trap cleanup EXIT
 trap 'mark_signal_shutdown INT' INT
 trap 'mark_signal_shutdown TERM' TERM
 
-log "starting api on ${START_HOST}:${START_PORT}"
-(
-  cd "$ROOT_DIR"
-  exec "$VENV_PYTHON" -m uvicorn trade_proposer_app.app:app --host "$START_HOST" --port "$START_PORT" >> "$API_LOG_FILE" 2>&1
-) &
-API_PID=$!
-echo "$API_PID" > "$API_PID_FILE"
-log_audit "started api pid=${API_PID}"
-
-WORKER_ID="$($VENV_PYTHON - <<'PY'
-import uuid
-import socket
-import os
-print(f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}")
-PY
-)"
 WORKER_LOG_DIR="$STATE_DIR/workers"
-WORKER_LOG_FILE="$WORKER_LOG_DIR/${WORKER_ID}.log"
-mkdir -p "$WORKER_LOG_DIR"
-log "starting worker (${WORKER_ID})"
-(
-  cd "$ROOT_DIR"
-  WORKER_ID="$WORKER_ID" WORKER_LOG_FILE="$WORKER_LOG_FILE" exec "$VENV_PYTHON" -m trade_proposer_app.workers.tasks >> "$WORKER_LOG_FILE" 2>&1
-) &
-WORKER_PID=$!
-echo "$WORKER_PID" > "$WORKER_PID_FILE"
-log_audit "started worker pid=${WORKER_PID} worker_id=${WORKER_ID} log=${WORKER_LOG_FILE}"
+WORKER_ID=""
+WORKER_LOG_FILE=""
 
-log "starting scheduler"
-(
-  cd "$ROOT_DIR"
-  exec "$VENV_PYTHON" -m trade_proposer_app.scheduler >> "$SCHEDULER_LOG_FILE" 2>&1
-) &
-SCHEDULER_PID=$!
-echo "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
-log_audit "started scheduler pid=${SCHEDULER_PID}"
-
-cat > "$META_FILE" <<EOF
+write_meta_file() {
+  cat > "$META_FILE" <<EOF
 HOST=${START_HOST}
 PORT=${START_PORT}
 SKIP_FRONTEND_BUILD=${SKIP_FRONTEND_BUILD}
@@ -336,6 +336,83 @@ WORKER_ID=${WORKER_ID}
 WORKER_LOG_FILE=${WORKER_LOG_FILE}
 SCHEDULER_PID=${SCHEDULER_PID}
 EOF
+}
+
+start_worker() {
+  WORKER_ID="$($VENV_PYTHON - <<'PY'
+import uuid
+import socket
+import os
+print(f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+PY
+)"
+  WORKER_LOG_FILE="$WORKER_LOG_DIR/${WORKER_ID}.log"
+  mkdir -p "$WORKER_LOG_DIR"
+  log "starting worker (${WORKER_ID})"
+  (
+    cd "$ROOT_DIR"
+    WORKER_ID="$WORKER_ID" WORKER_LOG_FILE="$WORKER_LOG_FILE" exec "$VENV_PYTHON" -m trade_proposer_app.workers.tasks >> "$WORKER_LOG_FILE" 2>&1
+  ) &
+  WORKER_PID=$!
+  echo "$WORKER_PID" > "$WORKER_PID_FILE"
+  log_audit "started worker pid=${WORKER_PID} worker_id=${WORKER_ID} log=${WORKER_LOG_FILE}"
+}
+
+start_scheduler() {
+  log "starting scheduler"
+  (
+    cd "$ROOT_DIR"
+    exec "$VENV_PYTHON" -m trade_proposer_app.scheduler >> "$SCHEDULER_LOG_FILE" 2>&1
+  ) &
+  SCHEDULER_PID=$!
+  echo "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
+  log_audit "started scheduler pid=${SCHEDULER_PID}"
+}
+
+restart_worker() {
+  local old_pid="$WORKER_PID"
+  local now
+  now="$(date +%s)"
+  if ! restart_budget_allows "worker" "$now" "$WORKER_RESTART_TIMESTAMPS"; then
+    SHUTDOWN_REASON="worker_restart_budget_exceeded"
+    log "error: worker restart budget exceeded after pid ${old_pid} exited. check ${WORKER_LOG_FILE} for details."
+    exit 1
+  fi
+  log_audit "restarting worker after unexpected exit old_pid=${old_pid}; delay_seconds=${PROD_SUPERVISOR_RESTART_DELAY_SECONDS}"
+  wait "$old_pid" 2>/dev/null || true
+  sleep "$PROD_SUPERVISOR_RESTART_DELAY_SECONDS"
+  start_worker
+  write_meta_file
+}
+
+restart_scheduler() {
+  local old_pid="$SCHEDULER_PID"
+  local now
+  now="$(date +%s)"
+  if ! restart_budget_allows "scheduler" "$now" "$SCHEDULER_RESTART_TIMESTAMPS"; then
+    SHUTDOWN_REASON="scheduler_restart_budget_exceeded"
+    log "error: scheduler restart budget exceeded after pid ${old_pid} exited. check ${SCHEDULER_LOG_FILE} for details."
+    exit 1
+  fi
+  log_audit "restarting scheduler after unexpected exit old_pid=${old_pid}; delay_seconds=${PROD_SUPERVISOR_RESTART_DELAY_SECONDS}"
+  wait "$old_pid" 2>/dev/null || true
+  sleep "$PROD_SUPERVISOR_RESTART_DELAY_SECONDS"
+  start_scheduler
+  write_meta_file
+}
+
+log "starting api on ${START_HOST}:${START_PORT}"
+(
+  cd "$ROOT_DIR"
+  exec "$VENV_PYTHON" -m uvicorn trade_proposer_app.app:app --host "$START_HOST" --port "$START_PORT" >> "$API_LOG_FILE" 2>&1
+) &
+API_PID=$!
+echo "$API_PID" > "$API_PID_FILE"
+log_audit "started api pid=${API_PID}"
+
+start_worker
+start_scheduler
+write_meta_file
 
 log "services started"
 printf '\n'
@@ -358,18 +435,18 @@ while true; do
     exit 1
   fi
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then
-    SHUTDOWN_REASON="worker_exited"
+    SHUTDOWN_REASON="worker_restarting"
     log_audit "worker process exited unexpectedly pid=${WORKER_PID}; check ${WORKER_LOG_FILE}"
     process_snapshot "worker exited" "$API_PID" "$SCHEDULER_PID"
-    log "error: worker process (pid ${WORKER_PID}) exited. check ${WORKER_LOG_FILE} for details."
-    exit 1
+    restart_worker
+    SHUTDOWN_REASON="normal_exit"
   fi
   if ! kill -0 "$SCHEDULER_PID" 2>/dev/null; then
-    SHUTDOWN_REASON="scheduler_exited"
+    SHUTDOWN_REASON="scheduler_restarting"
     log_audit "scheduler process exited unexpectedly pid=${SCHEDULER_PID}; check ${SCHEDULER_LOG_FILE}"
     process_snapshot "scheduler exited" "$API_PID" "$WORKER_PID"
-    log "error: scheduler process (pid ${SCHEDULER_PID}) exited. check ${SCHEDULER_LOG_FILE} for details."
-    exit 1
+    restart_scheduler
+    SHUTDOWN_REASON="normal_exit"
   fi
   sleep 1
 done
