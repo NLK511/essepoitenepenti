@@ -230,6 +230,7 @@ class RecommendationPlanEvaluationService:
         plans: list[RecommendationPlan],
         *,
         as_of: datetime | None = None,
+        allow_remote_fetch: bool = True,
     ) -> tuple[dict[tuple[str, bool], pd.DataFrame | None], list[str]]:
         groups = self._group_by_ticker(plans)
         cache: dict[tuple[str, bool], pd.DataFrame | None] = {}
@@ -269,6 +270,7 @@ class RecommendationPlanEvaluationService:
                         intraday_only=False,
                         require_full_coverage=as_of is not None,
                         plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
+                        allow_remote_fetch=allow_remote_fetch,
                     )
                     cache[(ticker, False)] = (
                         daily_data.sort_index()
@@ -299,6 +301,7 @@ class RecommendationPlanEvaluationService:
                         intraday_only=True,
                         require_full_coverage=as_of is not None,
                         plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
+                        allow_remote_fetch=allow_remote_fetch,
                     )
                     cache[(ticker, True)] = (
                         intraday_data.sort_index()
@@ -935,6 +938,7 @@ class RecommendationPlanEvaluationService:
         intraday_only: bool = False,
         require_full_coverage: bool = False,
         plan_ids: list[int] | None = None,
+        allow_remote_fetch: bool = True,
     ) -> pd.DataFrame:
         logger.debug(
             "load_price_history request: ticker=%s intraday_only=%s start=%s end=%s",
@@ -969,6 +973,13 @@ class RecommendationPlanEvaluationService:
                 self._format_datetime(persisted.index[-1]),
                 self._format_datetime(end_date),
             )
+        if not allow_remote_fetch:
+            logger.debug(
+                "load_price_history source=none remote_fetch_disabled ticker=%s intraday_only=%s",
+                ticker,
+                intraday_only,
+            )
+            return pd.DataFrame()
         logger.debug(
             "load_price_history source=yfinance ticker=%s intraday_only=%s",
             ticker,

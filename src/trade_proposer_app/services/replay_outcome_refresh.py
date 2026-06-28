@@ -4,13 +4,13 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.persistence.models import ReplayPlanOutcomeRecord
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutcomeRepository
+from trade_proposer_app.services.input_access import normalize_input_access_policy
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.replay_eligibility_reclassification import ReplayEligibilityReclassificationService
 
@@ -58,8 +58,8 @@ class ReplayOutcomeRefreshService:
         input_access_policy: str = "cache_only",
     ) -> ReplayOutcomeRefreshSummary:
         resolution_as_of = self._normalize(as_of or datetime.now(timezone.utc))
-        if input_access_policy == "cache_only":
-            self.evaluator._download_price_history = lambda *args, **kwargs: pd.DataFrame()  # type: ignore[method-assign]  # noqa: SLF001
+        policy = normalize_input_access_policy(input_access_policy, default="cache_only")
+        allow_remote_fetch = policy in {"cache_then_remote", "remote_refresh"}
         query = (
             select(ReplayPlanOutcomeRecord)
             .where(ReplayPlanOutcomeRecord.replay_batch_id == replay_batch_id)
@@ -79,7 +79,11 @@ class ReplayOutcomeRefreshService:
                 continue
             plans.append(plan)
             row_by_plan_id[plan.id or 0] = row
-        price_history_cache, price_errors = self.evaluator._prepare_price_histories(plans, as_of=resolution_as_of)  # noqa: SLF001
+        price_history_cache, price_errors = self.evaluator._prepare_price_histories(  # noqa: SLF001
+            plans,
+            as_of=resolution_as_of,
+            allow_remote_fetch=allow_remote_fetch,
+        )
         refreshed = 0
         after_status: Counter[str] = Counter()
         after_outcomes: Counter[str] = Counter()
@@ -113,7 +117,7 @@ class ReplayOutcomeRefreshService:
         if reclassify:
             reclassification = ReplayEligibilityReclassificationService(self.session).reclassify_batch(
                 replay_batch_id,
-                input_access_policy=input_access_policy,
+                input_access_policy=policy,
             ).to_dict()
         return ReplayOutcomeRefreshSummary(
             replay_batch_id=replay_batch_id,

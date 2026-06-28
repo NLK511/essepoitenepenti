@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 import os
@@ -36,7 +35,7 @@ from trade_proposer_app.services.fundamental_analysis_refresh import (
 )
 from trade_proposer_app.services.gating_severity_alerts import GatingSeverityAlertService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
-from trade_proposer_app.services.input_access import ArtifactProvenance
+from trade_proposer_app.services.input_access import ArtifactProvenance, stable_hash
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
 from trade_proposer_app.services.order_execution import OrderExecutionService
@@ -1208,7 +1207,7 @@ class JobExecutionService:
             "summary": summary if isinstance(summary, dict) else {},
             "artifact_keys": sorted(artifact.keys()) if isinstance(artifact, dict) else [],
             "candidate_config_override_applied": isinstance(config_override, dict),
-            "candidate_config_override_hash": self._stable_hash(config_override) if isinstance(config_override, dict) else None,
+            "candidate_config_override_hash": stable_hash(config_override) if isinstance(config_override, dict) else None,
             "replay_provenance": provenance,
         }
 
@@ -1259,10 +1258,10 @@ class JobExecutionService:
             "run_id": run.id,
             "job_id": run.job_id,
             "code_version": os.environ.get("GIT_COMMIT") or os.environ.get("SOURCE_VERSION") or "unknown",
-            "settings_hash": self._stable_hash({"weights_file_path": settings.weights_file_path}),
+            "settings_hash": stable_hash({"weights_file_path": settings.weights_file_path}),
             "input_coverage_summary": coverage_summary,
-            "input_coverage_hash": str(coverage.get("input_coverage_hash") or self._stable_hash(coverage)) if isinstance(coverage, dict) else self._stable_hash(coverage),
-            "plan_generation_config_hash": self._stable_hash(input_summary.get("plan_generation_tuning_config_override") or {}),
+            "input_coverage_hash": str(coverage.get("input_coverage_hash") or stable_hash(coverage)) if isinstance(coverage, dict) else stable_hash(coverage),
+            "plan_generation_config_hash": stable_hash(input_summary.get("plan_generation_tuning_config_override") or {}),
             "warnings": self._collect_replay_input_warnings(coverage if isinstance(coverage, dict) else {}),
         }
         return payload
@@ -1295,11 +1294,6 @@ class JobExecutionService:
                 for blocker in row.get("blockers") or []:
                     warnings.append(f"{ticker}: {blocker}")
         return warnings[:50]
-
-    @staticmethod
-    def _stable_hash(payload: object) -> str:
-        encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()
 
     @staticmethod
     def _safe_nested_int(payload: object, key: str) -> int | None:

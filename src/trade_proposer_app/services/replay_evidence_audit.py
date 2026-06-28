@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -15,6 +14,7 @@ from trade_proposer_app.persistence.models import (
     ReplayPlanOutcomeRecord,
 )
 from trade_proposer_app.services.outcome_population import summarize_outcome_population
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 @dataclass(frozen=True)
@@ -86,9 +86,9 @@ class ReplayEvidenceAuditService:
         run = self.session.get(PlanGenerationTuningRunRecord, run_id)
         if run is None:
             raise ValueError(f"plan generation tuning run {run_id} not found")
-        summary = self._loads(run.summary_json)
+        summary = loads_json_object(run.summary_json)
         population = summary.get("outcome_population") if isinstance(summary.get("outcome_population"), dict) else {}
-        replay_batch_id = summary.get("replay_batch_id") or self._loads(run.filters_json).get("replay_batch_id")
+        replay_batch_id = summary.get("replay_batch_id") or loads_json_object(run.filters_json).get("replay_batch_id")
         checks = self._quality_checks(
             outcome_count=int(population.get("row_count") or run.eligible_record_count or 0),
             eligible_count=int(run.eligible_record_count or 0),
@@ -162,12 +162,3 @@ class ReplayEvidenceAuditService:
             counts[key] = counts.get(key, 0) + 1
         return counts
 
-    @staticmethod
-    def _loads(raw: str | None) -> dict[str, Any]:
-        if not raw:
-            return {}
-        try:
-            loaded = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return loaded if isinstance(loaded, dict) else {}

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
+from unittest.mock import patch
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -108,7 +110,11 @@ def test_replay_outcome_refresh_updates_only_open_rows_by_default() -> None:
             )
         session.commit()
 
-        summary = ReplayOutcomeRefreshService(session).refresh_batch(1, as_of=as_of + timedelta(days=1), reclassify=False)
+        with patch(
+            "trade_proposer_app.services.recommendation_plan_evaluations.RecommendationPlanEvaluationService._download_price_history",
+            side_effect=AssertionError("cache-only refresh must not call remote price history"),
+        ):
+            summary = ReplayOutcomeRefreshService(session).refresh_batch(1, as_of=as_of + timedelta(days=1), reclassify=False)
 
         assert summary.selected_outcome_count == 1
         assert summary.refreshed_outcome_count == 1

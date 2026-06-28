@@ -49,6 +49,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
+from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.outcome_population import summarize_outcome_population
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     PARAMETER_BY_KEY,
@@ -571,7 +572,7 @@ class PlanGenerationTuningService:
             raise PlanGenerationTuningError("no current replay eligibility artifacts available for candidate replay execution")
         created_batches: list[dict[str, object]] = []
         for candidate in candidates:
-            config_hash = self._stable_hash(candidate.config)
+            config_hash = stable_hash(candidate.config)
             existing = self._existing_replay_candidate_batch(run_id, candidate.id or 0, config_hash)
             if existing is not None:
                 batch_id = existing.id
@@ -1600,7 +1601,7 @@ class PlanGenerationTuningService:
     def _current_replay_artifact_versions(cls) -> dict[str, str]:
         return {
             "code_version": os.environ.get("GIT_COMMIT") or os.environ.get("SOURCE_VERSION") or "unknown",
-            "settings_hash": cls._stable_hash({"weights_file_path": settings.weights_file_path}),
+            "settings_hash": stable_hash({"weights_file_path": settings.weights_file_path}),
         }
 
     @staticmethod
@@ -1615,10 +1616,6 @@ class PlanGenerationTuningService:
             if value is None or str(value) != str(current_versions.get(key)):
                 return False
         return True
-
-    @staticmethod
-    def _stable_hash(payload: object) -> str:
-        return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
     @staticmethod
     def _setup_family_from_payloads(

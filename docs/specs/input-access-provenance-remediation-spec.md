@@ -318,6 +318,15 @@ Result: batch `15` audit and tuning run `38` audit both reject promotion readine
 
 Result: batch `15` refresh converted `177` open/unresolved replay outcomes to resolved `expired` outcomes using cache-only persisted bars and reclassified eligibility. Audit after refresh shows unresolved ratio `0.0`, but promotion readiness still fails because eligible evidence remains phantom-dominated (`172/174` eligible rows are phantom outcomes, only `2` execution rows). Another repaired rescore is not warranted until a replay batch produces enough execution-row evidence.
 
+### Phase 13 — Maintainability harmonization pass
+
+- [x] Remove replay refresh monkeypatching/private remote-block hacks and expose explicit cache-only price-history preparation.
+- [x] Replace duplicate stable-hash and JSON object loading helpers with common utilities where touched by remediation code.
+- [x] Keep replay audit/refresh services small and policy-driven; avoid new one-off abstractions unless they are reused.
+- [x] Run focused tests and a broader replay/tuning validation slice after refactor.
+
+Result: replay outcome refresh now uses an explicit `allow_remote_fetch` price-history option instead of monkeypatching the evaluator downloader. Touched remediation code now reuses common `stable_hash` and `loads_json_object` helpers. Focused replay/tuning validation passed (`35 passed`).
+
 ## Testing requirements
 
 Add unit tests for:
