@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -95,6 +95,7 @@ class HistoricalReplayRepository:
 
     def create_daily_slices(self, batch_id: int) -> list[HistoricalReplaySlice]:
         batch = self.get_batch(batch_id)
+        batch_record = self.session.get(HistoricalReplayBatchRecord, batch_id)
         if batch.cadence != "daily":
             raise ValueError("only daily cadence is currently supported")
         existing = self.list_slices(batch_id)
@@ -104,18 +105,98 @@ class HistoricalReplayRepository:
         end_date = batch.as_of_end.date()
         created: list[HistoricalReplaySlice] = []
         while cursor_date <= end_date:
-            slice_as_of = datetime.combine(cursor_date, time(23, 59, 59), tzinfo=timezone.utc)
-            record = HistoricalReplaySliceRecord(
-                replay_batch_id=batch_id,
-                as_of=self._normalize(slice_as_of),
-                status="planned",
-            )
-            self.session.add(record)
-            self.session.flush()
-            created.append(self._to_slice_model(record))
+            if self._is_market_open_date(cursor_date, batch=batch, tickers_json=batch_record.tickers_json if batch_record is not None else "[]"):
+                slice_as_of = datetime.combine(cursor_date, time(23, 59, 59), tzinfo=timezone.utc)
+                record = HistoricalReplaySliceRecord(
+                    replay_batch_id=batch_id,
+                    as_of=self._normalize(slice_as_of),
+                    status="planned",
+                )
+                self.session.add(record)
+                self.session.flush()
+                created.append(self._to_slice_model(record))
             cursor_date = cursor_date + timedelta(days=1)
         self.session.commit()
         return created
+
+    @classmethod
+    def _is_market_open_date(cls, value: date, *, batch: HistoricalReplayBatch | None = None, tickers_json: str = "[]") -> bool:
+        if value.weekday() >= 5:
+            return False
+        if batch is not None and cls._uses_us_market_calendar(batch, tickers_json=tickers_json):
+            return value not in cls._observed_us_market_holidays(value.year)
+        return True
+
+    @staticmethod
+    def _uses_us_market_calendar(batch: HistoricalReplayBatch, *, tickers_json: str) -> bool:
+        if batch.universe_preset and batch.universe_preset.startswith("us_"):
+            return True
+        try:
+            raw_tickers = json.loads(tickers_json or "[]")
+        except json.JSONDecodeError:
+            raw_tickers = []
+        tickers = [str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip()]
+        return bool(tickers) and all("." not in ticker for ticker in tickers)
+
+    @classmethod
+    def _observed_us_market_holidays(cls, year: int) -> set[date]:
+        holidays = {
+            cls._observed_fixed_holiday(year, 1, 1),
+            cls._nth_weekday(year, 1, 0, 3),  # Martin Luther King Jr. Day
+            cls._nth_weekday(year, 2, 0, 3),  # Presidents' Day
+            cls._good_friday(year),
+            cls._last_weekday(year, 5, 0),  # Memorial Day
+            cls._observed_fixed_holiday(year, 6, 19),
+            cls._observed_fixed_holiday(year, 7, 4),
+            cls._nth_weekday(year, 9, 0, 1),  # Labor Day
+            cls._nth_weekday(year, 11, 3, 4),  # Thanksgiving
+            cls._observed_fixed_holiday(year, 12, 25),
+        }
+        return {item for item in holidays if item.year == year}
+
+    @staticmethod
+    def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+        actual = date(year, month, day)
+        if actual.weekday() == 5:
+            return actual - timedelta(days=1)
+        if actual.weekday() == 6:
+            return actual + timedelta(days=1)
+        return actual
+
+    @staticmethod
+    def _nth_weekday(year: int, month: int, weekday: int, nth: int) -> date:
+        cursor = date(year, month, 1)
+        while cursor.weekday() != weekday:
+            cursor += timedelta(days=1)
+        return cursor + timedelta(days=7 * (nth - 1))
+
+    @staticmethod
+    def _last_weekday(year: int, month: int, weekday: int) -> date:
+        if month == 12:
+            cursor = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            cursor = date(year, month + 1, 1) - timedelta(days=1)
+        while cursor.weekday() != weekday:
+            cursor -= timedelta(days=1)
+        return cursor
+
+    @classmethod
+    def _good_friday(cls, year: int) -> date:
+        a = year % 19
+        b = year // 100
+        c = year % 100
+        d = b // 4
+        e = b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i = c // 4
+        k = c % 4
+        left = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * left) // 451
+        easter_month = (h + left - 7 * m + 114) // 31
+        easter_day = ((h + left - 7 * m + 114) % 31) + 1
+        return date(year, easter_month, easter_day) - timedelta(days=2)
 
     def list_slices(self, batch_id: int) -> list[HistoricalReplaySlice]:
         rows = self.session.scalars(

@@ -1052,7 +1052,11 @@ class RecommendationPlanEvaluationService:
         if last_available is None:
             return False
         if intraday_only:
-            return last_available >= normalized_end
+            # Historical intraday caches normally end at the market close, while
+            # replay resolution asks for an end-of-day as_of such as 23:59:59.
+            # Treat a cached session that reaches the requested date as covered
+            # instead of refetching the same bars from Yahoo on every replay.
+            return last_available.date() >= normalized_end.date()
         return last_available.date() >= normalized_end.date()
 
     @staticmethod

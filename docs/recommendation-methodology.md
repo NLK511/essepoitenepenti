@@ -45,10 +45,11 @@ Flow: scan → shortlist → deep analysis → calibration-aware confidence/poli
 ## Research and tuning layers
 
 - **Signal gating tuning:** upstream shortlist/threshold control
-- **Plan-generation tuning:** downstream trade framing and actionable precision
+- **Plan-generation tuning:** downstream trade framing and actionable precision. Default scheduled/API tuning uses point-in-time replay; stored-plan rescore is retained only for manual diagnostics/regression.
+- **Historical replay:** point-in-time batch/slice replay, coverage, replay-generated plans, and replay outcomes used by replay tuning (`specs/historical-playback-tuning-spec.md`, `historical-playback-tuning-plan.md`).
 - **Recommendation quality, calibration, baselines, evidence concentration, walk-forward:** trust and promotion review
 
-Use signal gating when selection is too strict/loose, plan-generation tuning when trade framing is weak, and quality/walk-forward reports before trusting changes.
+Use signal gating when selection is too strict/loose, replay-based plan-generation tuning when trade framing is weak, and quality/walk-forward reports before trusting changes.
 
 ## Market data
 
@@ -125,7 +126,16 @@ Plan confidence aggregates:
 - technical clarity
 - execution clarity
 
-Cheap-scan confidence is shortlist triage. After deep analysis, the recommendation-plan action gate uses deep-analysis confidence as raw plan confidence. If deep analysis is unavailable, it falls back to cheap-scan confidence and records degradation. Paper-account exploration may relax action gating to collect outcomes while preserving raw calibrated confidence.
+Cheap-scan confidence is shortlist triage. After deep analysis, the recommendation-plan action gate uses deep-analysis confidence as raw plan confidence. If deep analysis is unavailable, it falls back to cheap-scan confidence and records degradation. Paper-account exploration may relax the policy action threshold to collect outcomes while preserving raw calibrated confidence.
+
+Threshold names are deliberately separate:
+- `base_confidence_threshold_percent`: persisted strategy setting used by upstream selection policy.
+- `upstream_effective_confidence_threshold_percent`: base threshold plus signal-gating offset; this is not necessarily the downstream action floor.
+- `policy_action_confidence_threshold_percent`: execution-mode policy threshold; paper exploration may set it to `0`.
+- `actionable_confidence_floor_percent`: active plan-generation tuning floor for downstream plan actionability.
+- `effective_action_threshold_percent`: final downstream gate, `max(min(upstream_effective, policy_action), actionable_floor)`.
+
+Plans expose these values in `signal_breakdown.decision_thresholds`; operator UI/stats must label which threshold they are using and must not present the upstream effective threshold as the actionability floor.
 
 Relative strength and volume confirmation can modestly support directional/technical/execution clarity, but they are not dominant drivers. Data-quality caps can reduce final confidence.
 

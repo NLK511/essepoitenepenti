@@ -509,6 +509,9 @@ class PlanGenerationTuningService:
             rejection_reasons.append("replay_winner_missing_tier_a_evidence")
         if int(top.get("eligible_record_count") or 0) < min_validation_resolved:
             rejection_reasons.append("replay_winner_insufficient_eligible_records")
+        replay_walk_forward_validation = aggregate.get("replay_walk_forward_validation") if isinstance(aggregate, dict) else None
+        if not isinstance(replay_walk_forward_validation, dict) or not replay_walk_forward_validation.get("passed"):
+            rejection_reasons.append("replay_winner_failed_rolling_baseline_comparison")
         if rejection_reasons:
             return {
                 "promotion_applied": False,
@@ -517,6 +520,7 @@ class PlanGenerationTuningService:
                 "replay_winner_candidate_id": replay_winner_candidate_id or None,
                 "replay_rerank_top": top,
                 "edge_validation_gate": None,
+                "replay_walk_forward_validation": replay_walk_forward_validation,
             }
         replay_winner = self.repository.get_candidate(replay_winner_candidate_id)
         (
@@ -538,6 +542,7 @@ class PlanGenerationTuningService:
             "replay_winner_candidate_id": replay_winner_candidate_id,
             "replay_rerank_top": top,
             "edge_validation_gate": edge_gate_report,
+            "replay_walk_forward_validation": replay_walk_forward_validation,
         }
 
     def enqueue_replay_candidate_batches_from_run(
@@ -682,6 +687,7 @@ class PlanGenerationTuningService:
             eligibility_rows = self.session.scalars(
                 select(ReplayEligibilityRecord).where(ReplayEligibilityRecord.replay_batch_id == batch.id)
             ).all()
+            window_summary = self._replay_candidate_window_summary(batch.id or 0)
             tier_counts: dict[str, int] = {}
             outcome_counts: dict[str, int] = {}
             resolution_source_counts: dict[str, int] = {}
@@ -704,10 +710,13 @@ class PlanGenerationTuningService:
                     "tier_counts": tier_counts,
                     "outcome_counts": outcome_counts,
                     "resolution_source_counts": resolution_source_counts,
+                    "rolling_windows": window_summary["windows"],
+                    "rolling_window_summary": window_summary["summary"],
                 }
             )
         summaries.sort(key=lambda item: (int(item.get("candidate_rank") or 0), int(item.get("replay_batch_id") or 0)))
         rerank = self._rerank_replay_candidate_results(summaries)
+        replay_walk_forward_validation = self._replay_candidate_vs_baseline_walk_forward(summaries, candidates)
         return {
             "status": "completed" if summaries else "empty",
             "run_id": run_id,
@@ -715,6 +724,113 @@ class PlanGenerationTuningService:
             "results": summaries,
             "rerank": rerank,
             "replay_winner_candidate_id": rerank[0]["candidate_id"] if rerank else None,
+            "replay_walk_forward_validation": replay_walk_forward_validation,
+        }
+
+    def _replay_candidate_window_summary(self, replay_batch_id: int) -> dict[str, object]:
+        rows = self.session.execute(
+            select(ReplayEligibilityRecord, HistoricalReplaySliceRecord)
+            .join(
+                HistoricalReplaySliceRecord,
+                HistoricalReplaySliceRecord.id == ReplayEligibilityRecord.replay_slice_id,
+            )
+            .where(ReplayEligibilityRecord.replay_batch_id == replay_batch_id)
+            .where(ReplayEligibilityRecord.eligible_for_tuning.is_(True))
+            .order_by(HistoricalReplaySliceRecord.as_of.asc(), ReplayEligibilityRecord.id.asc())
+        ).all()
+        by_date: dict[str, dict[str, object]] = {}
+        for eligibility, replay_slice in rows:
+            key = replay_slice.as_of.date().isoformat()
+            bucket = by_date.setdefault(
+                key,
+                {"as_of_date": key, "eligible_count": 0, "win_count": 0, "loss_count": 0, "tier_a_count": 0},
+            )
+            bucket["eligible_count"] = int(bucket["eligible_count"]) + 1
+            if eligibility.tier == "tier_a":
+                bucket["tier_a_count"] = int(bucket["tier_a_count"]) + 1
+            if eligibility.outcome in {"win", "phantom_win"}:
+                bucket["win_count"] = int(bucket["win_count"]) + 1
+            elif eligibility.outcome in {"loss", "phantom_loss"}:
+                bucket["loss_count"] = int(bucket["loss_count"]) + 1
+        windows = list(by_date.values())
+        for window in windows:
+            resolved = int(window["win_count"]) + int(window["loss_count"])
+            window["resolved_count"] = resolved
+            window["win_rate_percent"] = round((int(window["win_count"]) / resolved) * 100.0, 2) if resolved else None
+        qualified = [item for item in windows if int(item.get("resolved_count") or 0) > 0]
+        positive = [item for item in qualified if float(item.get("win_rate_percent") or 0.0) >= 50.0]
+        return {
+            "windows": windows,
+            "summary": {
+                "window_count": len(windows),
+                "qualified_windows": len(qualified),
+                "positive_windows": len(positive),
+                "promotion_recommended": bool(qualified and len(positive) >= max(1, len(qualified) // 2 + len(qualified) % 2)),
+            },
+        }
+
+    @staticmethod
+    def _replay_candidate_vs_baseline_walk_forward(
+        summaries: list[dict[str, object]],
+        candidates: dict[int | None, PlanGenerationTuningCandidate],
+    ) -> dict[str, object]:
+        baseline_ids = {candidate_id for candidate_id, candidate in candidates.items() if candidate.is_baseline or not candidate.changed_keys}
+        baseline = next((item for item in summaries if item.get("candidate_id") in baseline_ids), None)
+        winner = PlanGenerationTuningService._rerank_replay_candidate_results(summaries)[0] if summaries else None
+        if baseline is None or winner is None:
+            return {"passed": False, "promotion_recommended": False, "reason": "baseline_or_winner_missing"}
+        winner_summary = next((item for item in summaries if item.get("candidate_id") == winner.get("candidate_id")), None)
+        if winner_summary is None:
+            return {"passed": False, "promotion_recommended": False, "reason": "winner_summary_missing"}
+
+        def rate(item: dict[str, object]) -> float | None:
+            outcome_counts = item.get("outcome_counts") if isinstance(item.get("outcome_counts"), dict) else {}
+            wins = sum(int(outcome_counts.get(key, 0) or 0) for key in ("win", "phantom_win"))
+            losses = sum(int(outcome_counts.get(key, 0) or 0) for key in ("loss", "phantom_loss"))
+            return (wins / (wins + losses)) * 100.0 if wins + losses else None
+
+        winner_rate = rate(winner_summary)
+        baseline_rate = rate(baseline)
+        window_pairs: list[dict[str, object]] = []
+        baseline_windows = {
+            str(item.get("as_of_date")): item
+            for item in baseline.get("rolling_windows", [])
+            if isinstance(item, dict)
+        }
+        for window in winner_summary.get("rolling_windows", []):
+            if not isinstance(window, dict):
+                continue
+            base_window = baseline_windows.get(str(window.get("as_of_date")))
+            if not isinstance(base_window, dict):
+                continue
+            candidate_rate = window.get("win_rate_percent")
+            base_rate = base_window.get("win_rate_percent")
+            passed = candidate_rate is not None and base_rate is not None and float(candidate_rate) >= float(base_rate)
+            window_pairs.append(
+                {
+                    "as_of_date": window.get("as_of_date"),
+                    "candidate_win_rate_percent": candidate_rate,
+                    "baseline_win_rate_percent": base_rate,
+                    "passed": passed,
+                    "candidate_resolved_count": window.get("resolved_count"),
+                    "baseline_resolved_count": base_window.get("resolved_count"),
+                }
+            )
+        passed_windows = sum(1 for item in window_pairs if item["passed"])
+        rate_delta = None if winner_rate is None or baseline_rate is None else round(winner_rate - baseline_rate, 2)
+        passed = bool(window_pairs) and passed_windows >= max(1, len(window_pairs) // 2 + len(window_pairs) % 2) and rate_delta is not None and rate_delta >= 0.0
+        return {
+            "passed": passed,
+            "promotion_recommended": passed,
+            "reason": None if passed else "replay_candidate_failed_rolling_baseline_comparison",
+            "candidate_id": winner.get("candidate_id"),
+            "baseline_candidate_id": baseline.get("candidate_id"),
+            "qualified_slices": len(window_pairs),
+            "passed_slices": passed_windows,
+            "candidate_win_rate_percent": round(winner_rate, 2) if winner_rate is not None else None,
+            "baseline_win_rate_percent": round(baseline_rate, 2) if baseline_rate is not None else None,
+            "win_rate_delta_percent": rate_delta,
+            "windows": window_pairs,
         }
 
     @staticmethod
@@ -1154,8 +1270,9 @@ class PlanGenerationTuningService:
             raise PlanGenerationTuningError(
                 f"candidate {candidate_id} does not belong to run {run_id}"
             )
-        if not candidate.promotion_eligible:
-            raise PlanGenerationTuningError(f"candidate {candidate_id} is not promotion eligible")
+        manual_replay_check = self._manual_replay_candidate_promotion_check(run, candidate)
+        if not candidate.promotion_eligible and not manual_replay_check.get("allowed"):
+            raise PlanGenerationTuningError(f"candidate {candidate_id} is not promotion eligible: {manual_replay_check.get('reason') or 'candidate checks failed'}")
         version_label = f"run-{run.id}-candidate-{candidate.rank or candidate.id}"
         version = self.repository.create_config_version(
             PlanGenerationTuningConfigVersion(
@@ -1181,10 +1298,39 @@ class PlanGenerationTuningService:
                     "candidate_rank": candidate.rank,
                     "run_id": run.id,
                     "edge_validation_gate": gate_report,
+                    "manual_replay_promotion_check": manual_replay_check,
                 },
             )
         )
         return version
+
+    def _manual_replay_candidate_promotion_check(
+        self, run: PlanGenerationTuningRun, candidate: PlanGenerationTuningCandidate
+    ) -> dict[str, object]:
+        if candidate.promotion_eligible:
+            return {"allowed": True, "reason": "candidate_marked_promotion_eligible"}
+        if run.summary.get("tuning_source_mode") != "point_in_time_replay":
+            return {"allowed": False, "reason": "stored_plan_candidate_not_promotion_eligible"}
+        aggregate = self.aggregate_replay_candidate_batch_results(run.id or 0)
+        validation = aggregate.get("replay_walk_forward_validation") if isinstance(aggregate, dict) else None
+        candidate_id = candidate.id or 0
+        top_candidate_id = aggregate.get("replay_winner_candidate_id") if isinstance(aggregate, dict) else None
+        result = next(
+            (
+                item
+                for item in aggregate.get("results", [])
+                if isinstance(item, dict) and int(item.get("candidate_id") or 0) == candidate_id
+            ),
+            None,
+        ) if isinstance(aggregate, dict) else None
+        tier_counts = result.get("tier_counts") if isinstance(result, dict) and isinstance(result.get("tier_counts"), dict) else {}
+        if candidate_id != int(top_candidate_id or 0):
+            return {"allowed": False, "reason": "candidate_is_not_replay_reranked_winner", "aggregate": aggregate}
+        if int(tier_counts.get("tier_a", 0) or 0) <= 0:
+            return {"allowed": False, "reason": "candidate_missing_tier_a_replay_evidence", "aggregate": aggregate}
+        if not isinstance(validation, dict) or not validation.get("passed"):
+            return {"allowed": False, "reason": "candidate_failed_replay_walk_forward_baseline_check", "aggregate": aggregate}
+        return {"allowed": True, "reason": "replay_candidate_passed_manual_checks", "aggregate": aggregate}
 
     def _edge_validation_gate_report(
         self, *, walk_forward_validation: object | None = None

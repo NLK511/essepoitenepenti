@@ -160,12 +160,32 @@ def _plan_contract(plan) -> dict[str, object]:
             "deep_analysis_confidence_percent": plan.signal_breakdown.get("deep_analysis_confidence_percent"),
             "raw_plan_confidence_percent": plan.signal_breakdown.get("raw_plan_confidence_percent"),
             "calibrated_confidence_percent": plan.signal_breakdown.get("calibrated_confidence_percent"),
+            "decision_thresholds": plan.signal_breakdown.get("decision_thresholds"),
+            "effective_action_threshold_percent": plan.signal_breakdown.get("effective_action_threshold_percent"),
             "transmission_bias": plan.signal_breakdown.get("transmission_summary", {}).get("transmission_bias"),
             "expected_transmission_window": plan.signal_breakdown.get("transmission_summary", {}).get("expected_transmission_window"),
             "primary_drivers": plan.signal_breakdown.get("transmission_summary", {}).get("primary_drivers"),
             "matched_ticker_relationships": plan.signal_breakdown.get("transmission_summary", {}).get("matched_ticker_relationships"),
         },
     }
+
+
+def test_replay_signal_snapshot_uses_slice_as_of_as_computed_at() -> None:
+    service = _service()
+    as_of = datetime(2026, 6, 15, 23, 59, tzinfo=timezone.utc)
+
+    signal = service._build_signal_snapshot(
+        _watchlist(),
+        _candidate(),
+        deep_output=None,
+        job_id=101,
+        run_id=202,
+        shortlisted=False,
+        shortlist_rank=None,
+        computed_at=as_of,
+    )
+
+    assert signal.computed_at == as_of
 
 
 def test_actionable_plan_framing_payload_contract_is_stable() -> None:
@@ -221,6 +241,15 @@ def test_actionable_plan_framing_payload_contract_is_stable() -> None:
             "deep_analysis_confidence_percent": 74.0,
             "raw_plan_confidence_percent": 74.0,
             "calibrated_confidence_percent": 74.0,
+            "decision_thresholds": {
+                "base_confidence_threshold_percent": 60.0,
+                "signal_gating_threshold_offset_percent": 0.0,
+                "upstream_effective_confidence_threshold_percent": 60.0,
+                "policy_action_confidence_threshold_percent": 60.0,
+                "actionable_confidence_floor_percent": 60.0,
+                "effective_action_threshold_percent": 60.0,
+            },
+            "effective_action_threshold_percent": 60.0,
             "transmission_bias": "tailwind",
             "expected_transmission_window": "2d_5d",
             "primary_drivers": ["semiconductor_ai_demand_strength"],
@@ -378,6 +407,15 @@ def test_confidence_floor_blocks_actionable_plan_but_preserves_framing() -> None
     assert contract["stop_loss"] == 95.75
     assert contract["take_profit"] == 113.44
     assert contract["evidence"]["action_reason"] == "below_calibrated_action_threshold"
+    assert contract["signal"]["effective_action_threshold_percent"] == 80.0
+    assert contract["signal"]["decision_thresholds"] == {
+        "base_confidence_threshold_percent": 60.0,
+        "signal_gating_threshold_offset_percent": 0.0,
+        "upstream_effective_confidence_threshold_percent": 60.0,
+        "policy_action_confidence_threshold_percent": 60.0,
+        "actionable_confidence_floor_percent": 80.0,
+        "effective_action_threshold_percent": 80.0,
+    }
 
 
 def test_no_action_plan_from_policy_gate_preserves_intended_trade_framing_for_phantom_evaluation() -> None:

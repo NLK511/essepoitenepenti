@@ -143,6 +143,28 @@ def test_historical_news_replay_filters_by_available_at(session):
     assert replay_articles[0].availability_metadata["available_at_inferred_from"] == "provider"
 
 
+def test_save_news_persists_ingested_at_when_distinct_from_created_at(session):
+    repo = HistoricalNewsRepository(session)
+    published_at = datetime(2024, 1, 5, 14, 0, tzinfo=timezone.utc)
+    ingested_at = published_at + timedelta(hours=2)
+    repo.save_news(
+        "AAPL",
+        "test",
+        [
+            NewsArticle(
+                title="Delayed ingestion",
+                link="https://example.com/delayed-ingestion",
+                published_at=published_at,
+                available_at=published_at + timedelta(minutes=5),
+                ingested_at=ingested_at,
+            )
+        ],
+    )
+
+    article = repo.list_news("AAPL", available_at=published_at + timedelta(hours=1), limit=1)[0]
+    assert article.ingested_at == ingested_at
+
+
 def test_save_news_infers_available_at_from_published_at(session):
     repo = HistoricalNewsRepository(session)
     published_at = datetime(2026, 1, 5, 12, tzinfo=timezone.utc)

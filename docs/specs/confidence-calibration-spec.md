@@ -420,6 +420,17 @@ Signal gating is for **upstream shortlist recall/selectivity**:
 - are near-misses being rejected incorrectly?
 - are degraded inputs being over/under penalized?
 
+Confidence calibration is for **probability honesty**. It is distinct from actionability-floor calibration, which searches the downstream threshold that converts already-framed intended actions into actionable recommendations.
+
+Confidence calibration asks:
+- when the app says confidence is X%, is the observed execution win rate consistent with X%?
+- should live plan framing adjust calibrated confidence up/down because historical reliability is miscalibrated?
+
+Actionability-floor calibration asks:
+- given replay-generated plans and outcomes, which downstream actionable confidence floor in a bounded search range produced the best recent EV/actionability trade-off?
+
+The two jobs must not be merged: confidence calibration changes confidence honesty/adjustment semantics, while actionability-floor calibration proposes one threshold parameter and reuses replay outcomes.
+
 Confidence calibration is for **probability honesty**:
 
 - does 70% confidence actually behave like a 70% win probability?

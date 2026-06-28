@@ -46,6 +46,7 @@ class NewsArticle(BaseModel):
     link: str | None = None
     published_at: datetime | None = None
     available_at: datetime | None = None
+    ingested_at: datetime | None = None
     availability_metadata: dict[str, object] = Field(default_factory=dict)
 
 

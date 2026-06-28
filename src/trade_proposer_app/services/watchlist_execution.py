@@ -86,6 +86,7 @@ class WatchlistExecutionService:
                     warnings_found=warnings_found,
                     job_id=job_id,
                     run_id=run_id,
+                    as_of=as_of,
                 )
                 continue
 
@@ -159,6 +160,7 @@ class WatchlistExecutionService:
         warnings_found: bool,
         job_id: int | None,
         run_id: int | None,
+        as_of: datetime | None,
     ) -> bool:
         decision = o._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
         signal = o._build_signal_snapshot(
@@ -170,6 +172,7 @@ class WatchlistExecutionService:
             shortlisted=False,
             shortlist_rank=None,
             shortlist_decision=decision,
+            computed_at=as_of,
         )
         signal = o._with_replay_provenance_signal(signal)
         stored_signal = o.context_snapshots.create_ticker_signal_snapshot(signal)
@@ -227,6 +230,7 @@ class WatchlistExecutionService:
             shortlist_rank=shortlist_rank,
             shortlist_decision=decision,
             deep_error=deep_error,
+            computed_at=as_of,
         )
         signal = o._with_replay_provenance_signal(signal)
         stored_signal = o.context_snapshots.create_ticker_signal_snapshot(signal)

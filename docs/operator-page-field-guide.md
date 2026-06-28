@@ -80,7 +80,7 @@ Use for primary plan/trade review. This page is a queue and plan-inspection surf
 
 Filters: ticker, action, run id, setup family, resolved/unresolved, outcome, stats window.
 
-Important fields: action, confidence, entry/stop/take-profit, horizon, thesis, action reason, setup family, raw/calibrated confidence and threshold, context bias/alignment/window, latest outcome, run/plan links.
+Important fields: action, confidence, entry/stop/take-profit, horizon, thesis, action reason, setup family, raw/calibrated confidence, decision thresholds, context bias/alignment/window, latest outcome, run/plan links.
 
 Nuances:
 - non-shortlisted names usually remain cheap-scan decision samples without full plan rows
@@ -88,6 +88,7 @@ Nuances:
 - only deep-analysis rejected plans with intended direction/levels can later produce phantom outcomes
 - `expired` is horizon elapsed without terminal win/loss and is excluded from default win-rate denominators
 - phantom outcomes are tuning/actionability evidence, not realized broker P&L
+- threshold labels must stay precise: upstream effective confidence controls selection evidence, while `effective_action_threshold_percent` is the downstream actionability gate shown in plan `decision_thresholds`
 
 ### 3. Quality & Edge
 
@@ -162,7 +163,8 @@ Use as a launcher for advanced tools, not as a second performance workbench.
 
 Open tuning only when Quality & Edge points to a justified action:
 - Signal gating tuning = upstream recall/selection threshold work
-- Plan generation tuning = downstream plan construction/entry/risk/reward work
+- Plan generation tuning = downstream plan construction/entry/risk/reward work; default mode is point-in-time replay, while stored-plan rescore is only a diagnostic/regression mode (`specs/plan-generation-tuning-spec.md`, `specs/historical-playback-tuning-spec.md`)
+- Historical replay = replay batch/slice coverage and replay-generated plan/outcome audit surface for replay tuning (`historical-playback-tuning-plan.md`)
 - Decision samples = sample-level review for discarded/borderline signals
 - Candidate signals = shortlist/pre-plan diagnostic artifact
 

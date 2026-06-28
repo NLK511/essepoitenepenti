@@ -27,7 +27,7 @@ Eligible records remain, but their target meaning changes from "stored plan comp
 - [x] Create this implementation plan.
 - [x] Create `docs/specs/historical-playback-tuning-spec.md` as the target/current boundary for replay-driven tuning.
 - [x] Update `docs/specs/plan-generation-tuning-spec.md` so it explicitly distinguishes current stored-plan rescore from target point-in-time replay.
-- [ ] Add cross-links from operator/research docs after the first replay-tuning mode lands.
+- [x] Add cross-links from operator/research docs after the first replay-tuning mode lands.
 
 Acceptance:
 - Specs say what is already implemented and what is target behavior.
@@ -51,7 +51,7 @@ Acceptance:
 ## Phase 2 — Historical news point-in-time hardening
 
 - [x] Add `available_at` to `historical_news_items`.
-- [ ] Add `ingested_at` if distinct from row `created_at`.
+- [x] Add `ingested_at` if distinct from row `created_at`.
 - [x] Backfill legacy rows with `available_at = published_at` plus inferred-availability metadata/confidence.
 - [x] Update historical news repository queries to filter replay requests by `available_at <= as_of`.
 - [x] Update replay diagnostics to expose whether database news was filtered by availability time.
@@ -128,9 +128,9 @@ Acceptance:
 ## Phase 8 — Walk-forward and promotion hardening
 
 - [x] Require Tier A replay evidence for unattended auto-promotion.
-- [ ] Keep manual promotion possible for research candidates that pass non-autonomous checks.
-- [ ] Compare replay candidate vs baseline over rolling walk-forward windows.
-- [ ] Require baseline, drawdown, loss-streak, concentration, degraded-input, and broker-reconciliation gates before auto-promotion.
+- [x] Keep manual promotion possible for research candidates that pass non-autonomous checks.
+- [x] Compare replay candidate vs baseline over rolling walk-forward windows.
+- [x] Require baseline, drawdown, loss-streak, concentration, degraded-input, and broker-reconciliation gates before auto-promotion.
 - [x] Add tests proving auto-promotion fails closed when replay coverage/gates are missing.
 
 Acceptance:

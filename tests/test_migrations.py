@@ -58,6 +58,19 @@ class MigrationRepairTests(unittest.TestCase):
         self.assertIn("availability_metadata_json", migration)
         self.assertNotIn("op.alter_column(\n        'historical_news_items'", migration)
 
+    def test_historical_news_ingested_at_migration_uses_sqlite_safe_batch_alter(self) -> None:
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "0051_historical_news_ingested_at.py"
+        ).read_text()
+
+        self.assertIn('batch_alter_table("historical_news_items")', migration)
+        self.assertIn("ingested_at", migration)
+        self.assertIn("created_at", migration)
+        self.assertNotIn("op.alter_column(\n        'historical_news_items'", migration)
+
     def test_normalize_alembic_revision_ids_updates_legacy_revision_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "normalize.db")

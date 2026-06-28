@@ -43,6 +43,12 @@ DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC = {
     "schedule_rationale": "Runs once per week on Saturday at 06:30 UTC to refresh the persisted execution-only confidence calibration snapshot used by live plan framing.",
 }
 
+DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC = {
+    "name": "Auto: Actionability Floor Calibration Weekly",
+    "cron": "00 07 * * SAT",
+    "schedule_rationale": "Runs once per week on Saturday at 07:00 UTC to rescore the latest completed last-month replay batch across 40%-60% downstream actionability floors. It proposes paper-only tuning evidence and does not mutate live settings.",
+}
+
 DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC = {
     "name": "Auto: Performance Assessment",
     "cron": "0 0 * * *",
@@ -151,6 +157,18 @@ def ensure_default_recommendation_calibration_refresh_job(session) -> dict[str, 
         JobType.RECOMMENDATION_CALIBRATION_REFRESH,
     )
     return DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC
+
+
+def ensure_default_actionability_floor_calibration_job(session) -> dict[str, str]:
+    job_repo = JobRepository(session)
+    _ensure_job(
+        job_repo,
+        session,
+        DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC["name"],
+        DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC["cron"],
+        JobType.PLAN_GENERATION_TUNING,
+    )
+    return DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC
 
 
 def ensure_default_performance_assessment_job(session) -> dict[str, str]:

@@ -23,6 +23,7 @@ from trade_proposer_app.repositories.observability_events import ObservabilityEv
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.broker_position_steering_workflow import BrokerSteeringService
+from trade_proposer_app.services.actionability_floor_calibration import ActionabilityFloorCalibrationService
 from trade_proposer_app.services.confidence_calibration_snapshots import (
     ConfidenceCalibrationSnapshotService,
 )
@@ -478,6 +479,8 @@ class JobExecutionService:
         plan_generation_tuning_limit = self._plan_generation_tuning_int(request.get("limit"), None)
         if str(request.get("search_kind") or "").strip().lower() == "large":
             return self._execute_large_plan_generation_tuning_search(run, request)
+        if str(request.get("mode") or "").strip().lower() == "actionability_floor_calibration":
+            return self._execute_actionability_floor_calibration_run(run, request)
         logger.info(
             "job execution plan generation tuning started: run_id=%s job_id=%s worker=%s mode=%s apply=%s limit=%s ticker=%s setup_family=%s",
             run.id,
@@ -540,6 +543,47 @@ class JobExecutionService:
             tuning_run.promoted_config_version_id,
             timing["plan_generation_tuning_seconds"],
         )
+        return [], timing
+
+    def _execute_actionability_floor_calibration_run(
+        self, run: Run, request: dict[str, object]
+    ) -> tuple[list[Recommendation], dict[str, object]]:
+        execution_started = perf_counter()
+        floors = request.get("floors")
+        if isinstance(floors, list):
+            floor_values = [float(value) for value in floors if isinstance(value, (int, float))]
+        else:
+            floor_values = list(ActionabilityFloorCalibrationService.DEFAULT_FLOORS)
+        report = ActionabilityFloorCalibrationService(self.runs.session).run(
+            replay_batch_id=self._plan_generation_tuning_int(request.get("replay_batch_id"), None),
+            floors=floor_values,
+            min_resolved_trades=self._plan_generation_tuning_int(request.get("min_resolved_trades"), 10) or 10,
+        )
+        summary = {
+            "mode": "actionability_floor_calibration",
+            "status": report.get("status"),
+            "replay_batch": report.get("replay_batch"),
+            "active_floor": report.get("active_floor"),
+            "best_floor": report.get("best_floor"),
+            "recommendation": report.get("recommendation"),
+            "plan_count": report.get("plan_count", 0),
+        }
+        artifact = {
+            "plan_generation_tuning_request": request,
+            "actionability_floor_calibration": report,
+        }
+        timing = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "actionability_floor_calibration_seconds": round(perf_counter() - execution_started, 6),
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+        persistence_started = perf_counter()
+        self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, artifact)
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
     def _execute_large_plan_generation_tuning_search(
@@ -1614,6 +1658,12 @@ class JobExecutionService:
         request = artifact.get("plan_generation_tuning_request")
         if isinstance(request, dict):
             return request
+        if (run.job_name or "").strip() == "Auto: Actionability Floor Calibration Weekly":
+            return {
+                "mode": "actionability_floor_calibration",
+                "floors": [float(value) for value in range(40, 61)],
+                "min_resolved_trades": 10,
+            }
         return {}
 
     @staticmethod

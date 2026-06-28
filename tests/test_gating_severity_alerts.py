@@ -152,3 +152,19 @@ def test_default_weekly_confidence_calibration_job_is_scheduled_for_weekend() ->
     assert job.job_type == JobType.RECOMMENDATION_CALIBRATION_REFRESH.value
     assert job.schedule == "30 06 * * SAT"
     assert job.enabled is True
+
+
+def test_default_weekly_actionability_floor_calibration_job_is_scheduled_after_confidence_calibration() -> None:
+    from trade_proposer_app.services.default_jobs import ensure_default_actionability_floor_calibration_job
+
+    session = create_session()
+
+    spec = ensure_default_actionability_floor_calibration_job(session)
+
+    assert spec["cron"] == "00 07 * * SAT"
+    job = session.scalars(
+        select(JobRecord).where(JobRecord.name == "Auto: Actionability Floor Calibration Weekly")
+    ).one()
+    assert job.job_type == JobType.PLAN_GENERATION_TUNING.value
+    assert job.schedule == "00 07 * * SAT"
+    assert job.enabled is True

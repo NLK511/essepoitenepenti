@@ -73,6 +73,30 @@ class WatchlistTransmissionService:
         raw_plan_confidence = calibration.get("raw_confidence_percent") if isinstance(calibration.get("raw_confidence_percent"), (int, float)) else signal.confidence_percent
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else raw_plan_confidence
         cheap_scan_component_scores = signal.diagnostics.get("cheap_scan_component_scores") if isinstance(signal.diagnostics.get("cheap_scan_component_scores"), dict) else {}
+        base_confidence_threshold = float(getattr(self._orchestration, "confidence_threshold", 60.0) or 60.0)
+        signal_gating = getattr(self._orchestration, "signal_gating_tuning_config", {})
+        threshold_offset = float(signal_gating.get("threshold_offset", 0.0) or 0.0) if isinstance(signal_gating, dict) else 0.0
+        upstream_effective_threshold = (
+            float(calibration.get("effective_confidence_threshold"))
+            if isinstance(calibration.get("effective_confidence_threshold"), (int, float))
+            else max(0.0, min(100.0, base_confidence_threshold + threshold_offset))
+        )
+        policy_action_threshold = float(getattr(self._orchestration, "action_confidence_threshold", upstream_effective_threshold) or 0.0)
+        try:
+            actionable_floor = float(
+                self._orchestration._plan_generation_tuning_value("global.actionable_confidence_floor_percent", 60.0)
+            )
+        except AttributeError:
+            actionable_floor = 60.0
+        effective_action_threshold = max(min(upstream_effective_threshold, policy_action_threshold), actionable_floor)
+        decision_thresholds = {
+            "base_confidence_threshold_percent": round(base_confidence_threshold, 2),
+            "signal_gating_threshold_offset_percent": round(threshold_offset, 2),
+            "upstream_effective_confidence_threshold_percent": round(upstream_effective_threshold, 2),
+            "policy_action_confidence_threshold_percent": round(policy_action_threshold, 2),
+            "actionable_confidence_floor_percent": round(actionable_floor, 2),
+            "effective_action_threshold_percent": round(effective_action_threshold, 2),
+        }
         payload = {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
@@ -91,6 +115,8 @@ class WatchlistTransmissionService:
             "deep_analysis_confidence_percent": round(float(deep_analysis_confidence_percent), 2) if deep_analysis_confidence_percent is not None else None,
             "calibrated_confidence_percent": round(float(calibrated_confidence), 2),
             "confidence_bucket": self._confidence_bucket(float(calibrated_confidence)),
+            "decision_thresholds": decision_thresholds,
+            "effective_action_threshold_percent": decision_thresholds["effective_action_threshold_percent"],
             "calibration_review": calibration,
             "transmission_summary": transmission_summary or {},
             "fundamental_snapshot": signal.diagnostics.get("fundamental_snapshot", {}),

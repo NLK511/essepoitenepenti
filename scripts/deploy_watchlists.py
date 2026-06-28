@@ -27,12 +27,14 @@ try:
     from trade_proposer_app.repositories.jobs import JobRepository
     from trade_proposer_app.repositories.watchlists import WatchlistRepository
     from trade_proposer_app.services.default_jobs import (
+        DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC,
         DEFAULT_BROKER_STEERING_JOB_SPEC,
         DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS,
         DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC,
         DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC,
         DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC,
         DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS,
+        ensure_default_actionability_floor_calibration_job,
         ensure_default_broker_steering_job,
         ensure_default_fundamental_analysis_job,
         ensure_default_gating_severity_check_job,
@@ -202,7 +204,7 @@ WATCHLIST_SPECS = [
             "AAPL", "MSFT", "GOOGL", "META", "AMZN", "NFLX", "CRM", "ORCL", "ADBE", "NOW",
             "INTU", "PANW", "CRWD", "SNOW", "DDOG", "MDB", "TEAM", "ZS", "UBER", "ABNB",
             "NVDA", "AVGO", "AMD", "QCOM", "TXN", "MU", "ADI", "AMAT", "LRCX", "KLAC",
-            "CDNS", "SNPS", "SHOP", "SQ", "PYPL", "DASH", "V", "MA", "ADP", "IBM",
+            "CDNS", "SNPS", "SHOP", "OKTA", "PYPL", "DASH", "V", "MA", "ADP", "IBM",
             "CSCO", "INTC", "HPE", "DELL", "NET", "FTNT", "ANET", "ARM", "RBLX", "PLTR"
         ],
     },
@@ -214,7 +216,7 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "U.S. financials follow tech so rate-sensitive and credit-sensitive names can be scored once premarket yields and opening futures direction are more visible.",
         "tickers": [
             "JPM", "BAC", "WFC", "C", "GS", "MS", "BLK", "SCHW", "PNC", "USB",
-            "COF", "AXP", "BK", "TFC", "CME", "ICE", "SPGI", "CB", "AIG", "MMC",
+            "COF", "AXP", "UBS", "TFC", "CME", "ICE", "SPGI", "CB", "AIG", "ING",
             "MCO", "MSCI", "MKTX", "BRK-B", "KRE", "KBE", "XLF", "TRV", "PGR", "ALL",
             "MET", "PRU", "AFL", "AJG", "BRO", "AON", "WTW", "AMP", "TROW", "BEN",
             "STT", "NTRS", "FITB", "MTB", "HBAN", "RF", "KEY", "CFG", "SYF", "ALLY"
@@ -243,7 +245,7 @@ WATCHLIST_SPECS = [
         "tickers": [
             "WMT", "COST", "PG", "KO", "PEP", "MCD", "NKE", "HD", "LOW", "SBUX",
             "DIS", "CMCSA", "TMUS", "T", "VZ", "PM", "MO", "CL", "KMB", "GIS",
-            "EL", "STZ", "MDLZ", "HSY", "K", "TSN", "ADM", "SYY", "KR", "TGT",
+            "EL", "STZ", "MDLZ", "HSY", "GM", "TSN", "ADM", "SYY", "KR", "TGT",
             "TJX", "ROST", "LULU", "EBAY", "ETSY", "BKNG", "EXPE", "MAR", "HLT", "MGM",
             "WYNN", "LVS", "RCL", "CCL", "NCLH", "YUM", "DPZ", "DRI", "TSLA", "F"
         ],
@@ -414,6 +416,7 @@ def main() -> None:
         ensure_default_fundamental_analysis_job(session)
         ensure_default_gating_severity_check_job(session)
         ensure_default_recommendation_calibration_refresh_job(session)
+        ensure_default_actionability_floor_calibration_job(session)
         ensure_default_performance_assessment_job(session)
 
     logging.info("Deployment complete")
@@ -452,6 +455,7 @@ def _current_default_job_names() -> set[str]:
     names.add(str(DEFAULT_BROKER_STEERING_JOB_SPEC["name"]))
     names.add(str(DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC["name"]))
     names.add(str(DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["name"]))
+    names.add(str(DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC["name"]))
     names.add(str(DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["name"]))
     return names
 

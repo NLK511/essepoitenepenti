@@ -217,6 +217,7 @@ class WatchlistOrchestrationService:
         shortlist_rank: int | None,
         shortlist_decision: dict[str, object] | None = None,
         deep_error: str | None = None,
+        computed_at: datetime | None = None,
     ) -> TickerSignalSnapshot:
         return self.signal_builder.build_signal_snapshot(
             watchlist,
@@ -228,6 +229,7 @@ class WatchlistOrchestrationService:
             shortlist_rank=shortlist_rank,
             shortlist_decision=shortlist_decision,
             deep_error=deep_error,
+            computed_at=computed_at,
         )
 
     def _with_trade_policy_snapshot(self, plan: RecommendationPlan) -> RecommendationPlan:

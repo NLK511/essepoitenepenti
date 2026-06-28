@@ -32,19 +32,21 @@ Start with these fields on each sample:
 ## How to read the main signals
 
 ### `confidence_gap_percent`
-This is usually the most useful tuning field.
+This is usually the most useful tuning field, but its threshold semantics depend on where the sample stopped.
 
 Interpretation:
 - near `0` = borderline
-- positive = it cleared the gate
-- negative = it missed the gate
+- positive = it cleared the relevant gate
+- negative = it missed the relevant gate
 
-Use it to detect whether the system is too strict or too loose.
+For non-shortlisted samples, `effective_threshold_percent` is the upstream effective confidence threshold and the gap describes shortlist/selection recall. For plan-linked samples, `effective_threshold_percent` is the downstream `effective_action_threshold_percent` from `signal_breakdown.decision_thresholds` and the gap describes actionability. `decision_context.threshold_semantics` records this distinction.
+
+Use it to detect whether the system is too strict or too loose, but do not mix upstream near-misses with downstream actionability misses in the same statistic.
 
 ### `decision_type`
 Typical meanings:
 - `actionable` — the system committed to `long` or `short`
-- `near_miss` — close to becoming actionable
+- `near_miss` — close to the relevant gate; inspect `shortlisted` and `decision_context.threshold_semantics` before deciding whether this is an upstream shortlist miss or a downstream actionability miss
 - `rejected` — shortlisted but not strong enough
 - `no_action` — did not reach actionability
 - `degraded` — input quality or availability was poor

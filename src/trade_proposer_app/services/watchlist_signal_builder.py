@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from trade_proposer_app.domain.models import RunOutput, TickerSignalSnapshot, Watchlist
@@ -23,6 +24,7 @@ class WatchlistSignalBuilder:
         shortlist_rank: int | None,
         shortlist_decision: dict[str, object] | None = None,
         deep_error: str | None = None,
+        computed_at: datetime | None = None,
     ) -> TickerSignalSnapshot:
         o = self._orchestration
         analysis = o._analysis_payload(deep_output or candidate.raw_output)
@@ -68,6 +70,7 @@ class WatchlistSignalBuilder:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=[],
             source_breakdown=self._source_breakdown(candidate, analysis, deep_output=deep_output, transmission=transmission, base_confidence=base_confidence),
+            computed_at=computed_at,
             diagnostics=self._diagnostics_payload(
                 candidate,
                 analysis,

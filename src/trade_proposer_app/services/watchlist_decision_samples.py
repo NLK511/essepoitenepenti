@@ -99,6 +99,8 @@ class WatchlistDecisionSampleService:
                     "calibrated_confidence_percent": calibrated_confidence,
                     "effective_threshold_percent": effective_threshold,
                     "confidence_gap_percent": confidence_gap,
+                    "threshold_semantics": "upstream_effective_confidence_threshold",
+                    "decision_thresholds": signal_breakdown.get("decision_thresholds", {}),
                     "action_reason": "not_shortlisted",
                     "review_priority": review_priority,
                 },
@@ -127,7 +129,10 @@ class WatchlistDecisionSampleService:
         signal_breakdown = self.mapping(plan.signal_breakdown)
         evidence_summary = self.mapping(plan.evidence_summary)
         calibration_review = self.mapping(signal_breakdown.get("calibration_review"))
-        effective_threshold = self.float_from_mapping(calibration_review, "effective_confidence_threshold")
+        decision_thresholds = self.mapping(signal_breakdown.get("decision_thresholds"))
+        effective_threshold = self.float_from_mapping(decision_thresholds, "effective_action_threshold_percent")
+        if effective_threshold is None:
+            effective_threshold = self.float_from_mapping(calibration_review, "effective_confidence_threshold")
         calibrated_confidence = self.float_from_mapping(calibration_review, "calibrated_confidence_percent")
         confidence_gap = None
         if calibrated_confidence is not None and effective_threshold is not None:
@@ -176,6 +181,8 @@ class WatchlistDecisionSampleService:
                     "calibrated_confidence_percent": calibrated_confidence,
                     "effective_threshold_percent": effective_threshold,
                     "confidence_gap_percent": confidence_gap,
+                    "threshold_semantics": "downstream_effective_action_threshold",
+                    "decision_thresholds": decision_thresholds,
                     "action_reason": action_reason,
                     "review_priority": review_priority,
                 },

@@ -141,6 +141,7 @@ Safety, quality, and research jobs:
 | `Auto: Performance Assessment` | quality/performance summary | `00:00` daily |
 | `Auto: Gating Severity Check Weekly` | shortlist severity monitor | `05:00` Saturday |
 | `Auto: Recommendation Calibration Refresh Weekly` | live confidence calibration snapshot | `06:30` Saturday |
+| `Auto: Actionability Floor Calibration Weekly` | downstream actionability-floor replay rescore | `07:00` Saturday |
 | `Auto: Fundamental Analysis Weekend Batch 1` | fundamentals refresh | `06:15` Saturday |
 | `Auto: Fundamental Analysis Weekend Batch 2` | fundamentals refresh | `09:15` Saturday |
 | `Auto: Fundamental Analysis Weekend Batch 3` | fundamentals refresh | `12:15` Saturday |
@@ -154,7 +155,7 @@ Safety, quality, and research jobs:
 
 The default script seeds:
 - **15 watchlists**
-- **41 scheduled jobs**
+- **42 scheduled jobs**
   - 20 proposal jobs: 15 regional open-pass jobs plus 5 U.S. midday-pass jobs
   - 2 macro refresh jobs
   - 1 industry refresh job
@@ -164,6 +165,7 @@ The default script seeds:
   - 1 daily performance assessment job
   - 1 weekly gating severity check job
   - 1 weekly confidence calibration refresh job
+  - 1 weekly actionability-floor calibration check
   - 8 weekend fundamental-analysis refresh jobs
 - **750 unique equities total**
 

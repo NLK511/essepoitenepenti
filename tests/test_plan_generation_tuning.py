@@ -466,7 +466,8 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                         "eligible_record_count": 2,
                         "replay_score": 10.0,
                     }
-                ]
+                ],
+                "replay_walk_forward_validation": {"passed": True, "promotion_recommended": True, "qualified_slices": 3},
             }
         }
 

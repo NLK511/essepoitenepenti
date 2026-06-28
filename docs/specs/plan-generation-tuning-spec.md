@@ -23,8 +23,12 @@ It must not tune:
 
 Related division of labor:
 - **signal gating tuning** = upstream recall/shortlist control
-- **plan-generation tuning** = downstream trade framing/precision
+- **plan-generation tuning** = downstream trade framing/precision across multiple parameters
+- **actionability-floor calibration** = narrow weekly replay rescore for only `global.actionable_confidence_floor_percent`
+- **confidence calibration refresh** = probability-honesty calibration for displayed/used confidence, not threshold search
 - **quality, calibration, baseline, and walk-forward reports** = trust and promotion evidence
+
+To avoid tuning-system complexity explosion, parameter-specific checks must be reused only when they replace broader reruns. Do not add a new full replay workflow for a single downstream threshold when existing replay artifacts can be rescored safely.
 
 The legacy weight optimizer is retired. Do not revive its workflow, job type, active settings, or rollback path. `weights.json` may remain only as a normal scoring input where still needed.
 
@@ -40,6 +44,7 @@ Live behavior includes:
 - candidate ranking by win rate, win count, then expected value with explicit tie tolerances
 - batched wide/explore evaluation with memory guardrails
 - default scheduled/API tuning mode is now `point_in_time_replay`; `stored_plan_rescore` remains available only as a manual diagnostic/regression mode using compact eligible records derived from existing stored plans/outcomes
+- weekly actionability-floor calibration runs as a `plan_generation_tuning` job mode, rescoring the latest completed replay batch across 40%-60% floors without executing new replay slices or promoting settings
 - full dry-run tuning must avoid duplicate eligible-record loads; final walk-forward validation should reuse the already loaded eligible record set rather than querying the same large outcome universe again
 
 Not fully autonomous yet:
@@ -55,9 +60,24 @@ Replay-based tuning is specified in `historical-playback-tuning-spec.md` and pla
 
 The system supports:
 1. **Manual research** — inspect runs, compare candidates, manually promote or reject.
-2. **Automatic evolution** — scheduled dry-run/evaluation and conservative auto-promotion only when every safety rule passes.
+2. **Automatic monitoring/proposal** — scheduled jobs produce reports and proposed paper configs without changing live settings.
+3. **Automatic evolution** — conservative auto-promotion only when every safety rule passes. This remains target behavior for most tuning paths.
 
 Automatic mode must default conservative and improve gradually, not chase noise.
+
+## Automatic tuning flow and job purposes
+
+The intended weekly/monthly flow is:
+
+1. **Replay evidence creation** (`historical_replay`, manual or orchestrated research): generate point-in-time plans over a representative recent window, typically the latest fully resolvable month. This is the expensive phase and should be reused by later checks.
+2. **Outcome/evidence resolution** (`historical_replay` slice completion plus recommendation evaluation): resolve replay-generated plans into `replay_plan_outcomes` and eligibility records. This phase owns win/loss/no-entry/expired/open labels.
+3. **Actionability-floor calibration** (`Auto: Actionability Floor Calibration Weekly`, `plan_generation_tuning` mode `actionability_floor_calibration`): once per week, rescore the latest completed replay batch across floors 40%-60%. It only proposes a paper candidate for `global.actionable_confidence_floor_percent`; it must not rerun replay or mutate active config.
+4. **Broad plan-generation tuning** (`plan_generation_tuning` modes such as `point_in_time_replay`): evaluate multi-parameter candidates when there is enough replay evidence and a broader framing problem is being investigated. This is heavier and should not duplicate the narrow actionability-floor check.
+5. **Confidence calibration refresh** (`recommendation_calibration_refresh`): refresh execution-only confidence calibration snapshots for confidence honesty. It is not a threshold optimizer and must not be interpreted as an actionability-floor search.
+6. **Gating severity check** (`gating_severity_check`): monitor upstream shortlist/signal-gating strictness. It is separate because downstream actionability floors cannot fix non-shortlisted near misses.
+7. **Performance assessment** (`performance_assessment`): summarize realized quality, concentration, stale data, and operational health across the system.
+
+Removal/redundancy rule: if a new tuning job can be implemented as a replay-artifact rescore, it should replace repeated full replay candidate execution for that parameter. Full replay candidate execution remains reserved for changes that alter generation inputs, shortlist/deep-analysis behavior, trade-level construction, or context/framing semantics.
 
 ## Canonical objective and ranking
 
@@ -95,6 +115,8 @@ Current live knob classes include:
 - family-aware entry band multiplier
 - actionable confidence floor
 - volatility-normalized stop multiplier
+
+The actionable confidence floor is a downstream plan-generation threshold. It is not the same as the upstream shortlist/effective confidence threshold. Live plans must expose a threshold diagnostic payload containing base confidence threshold, signal-gating offset, upstream effective threshold, policy action threshold, actionable confidence floor, and final effective action threshold so operators and statistics do not mix these semantics.
 
 Keep knobs bounded, deterministic, replayable, and covered by live-framing/tuning parity tests before widening the surface.
 

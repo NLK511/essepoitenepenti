@@ -465,6 +465,7 @@ class HistoricalNewsRecord(Base, TimestampMixin):
     ticker: Mapped[str] = mapped_column(String(120), index=True)  # ticker or topic
     published_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     available_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    ingested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, default="")
     link: Mapped[str] = mapped_column(Text, index=True)

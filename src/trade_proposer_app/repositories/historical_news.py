@@ -18,6 +18,7 @@ class HistoricalNewsRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
         self._supports_available_at: bool | None = None
+        self._supports_ingested_at: bool | None = None
         self._supports_availability_metadata: bool | None = None
 
     def list_news(
@@ -96,6 +97,8 @@ class HistoricalNewsRepository:
                 }
                 if self._has_available_at_column():
                     values["available_at"] = available_at
+                if self._has_ingested_at_column():
+                    values["ingested_at"] = self._normalize_datetime(article.ingested_at) or datetime.now(timezone.utc)
                 if self._has_availability_metadata_column():
                     values["availability_metadata_json"] = json.dumps(availability_metadata, sort_keys=True)
                 record = HistoricalNewsRecord(**values)
@@ -123,6 +126,7 @@ class HistoricalNewsRepository:
             link=record.link,
             published_at=self._normalize_datetime(record.published_at),
             available_at=self._normalize_datetime(available_at),
+            ingested_at=self._normalize_datetime(record.ingested_at) if self._has_ingested_at_column() else self._normalize_datetime(record.created_at),
             availability_metadata=metadata,
         )
 
@@ -142,6 +146,12 @@ class HistoricalNewsRepository:
             return self._supports_available_at
         self._supports_available_at = self._has_column("available_at")
         return self._supports_available_at
+
+    def _has_ingested_at_column(self) -> bool:
+        if self._supports_ingested_at is not None:
+            return self._supports_ingested_at
+        self._supports_ingested_at = self._has_column("ingested_at")
+        return self._supports_ingested_at
 
     def _has_availability_metadata_column(self) -> bool:
         if self._supports_availability_metadata is not None:
