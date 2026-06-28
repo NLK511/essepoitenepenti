@@ -201,7 +201,7 @@ Acceptance:
 - [x] Attach replay provenance to generated recommendation plans, including compatibility backfill for orchestration implementations that persist plans directly.
 - [x] Include replay batch ID, slice ID, as-of timestamp, code version, settings hash, input coverage hash, and tuning config hash.
 - [x] Block replay tuning eligibility when mandatory provenance fields are missing.
-- [ ] Fail or degrade replay slices when mandatory provenance cannot be built.
+- [x] Fail or degrade replay slices when mandatory provenance cannot be built.
 - [x] Update replay eligibility classification to use typed provenance.
 
 Acceptance:
@@ -225,18 +225,18 @@ Acceptance:
 - [x] Add a canonical builder for historical replay execution.
 - [x] Replace route/worker ad-hoc replay construction with the canonical builder.
 - [x] Update the actionability-floor replay experiment helper to use a market data service in `cache_only` mode instead of `historical_market_data=None`.
-- [ ] Ban `historical_market_data=None` outside explicit test fixtures.
-- [ ] Add tests that core scripts/builders create replay services with required dependencies.
+- [x] Ban `historical_market_data=None` outside explicit test fixtures.
+- [x] Add tests that core scripts/builders create replay services with required dependencies.
 
 Acceptance:
 - Replay execution always has an input-access service and explicit input policy.
 
 ### Phase 6 — Standardize news/context/fundamental access
 
-- [ ] Add `HistoricalNewsAccessService` returning news plus coverage/provenance.
-- [ ] Add `ContextSnapshotAccessService` returning macro/industry snapshots plus coverage/provenance.
-- [ ] Add `FundamentalSnapshotAccessService` returning fundamental snapshots plus coverage/provenance.
-- [ ] Update replay coverage to merge market/news/context/fundamental coverage using common fields.
+- [x] Add `HistoricalNewsAccessService` returning news plus coverage/provenance.
+- [x] Add `ContextSnapshotAccessService` returning macro/industry snapshots plus coverage/provenance.
+- [x] Add `FundamentalSnapshotAccessService` returning fundamental snapshots plus coverage/provenance.
+- [x] Update replay coverage to merge market/news/context/fundamental coverage using common fields.
 - [ ] Update context refresh/reconstruction scripts to emit coverage and primary-evidence provenance.
 
 Acceptance:

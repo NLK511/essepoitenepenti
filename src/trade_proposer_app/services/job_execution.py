@@ -1158,6 +1158,19 @@ class JobExecutionService:
             optimize_evaluation_timing=False,
         )
         provenance = self._build_historical_replay_provenance(run, input_summary=input_summary)
+        missing_provenance = ArtifactProvenance.from_dict(provenance).missing_replay_mandatory_fields()
+        if missing_provenance:
+            return {
+                "status": "degraded",
+                "as_of": as_of.isoformat() if as_of else None,
+                "ticker_count": len(tickers),
+                "signal_count": 0,
+                "plan_count": 0,
+                "summary": {},
+                "artifact_keys": [],
+                "replay_provenance": provenance,
+                "blockers": [f"missing_replay_provenance:{field}" for field in missing_provenance],
+            }
         set_provenance = getattr(self.watchlist_orchestration, "set_replay_provenance", None)
         set_config_override = getattr(
             self.watchlist_orchestration,

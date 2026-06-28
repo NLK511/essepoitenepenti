@@ -19,6 +19,7 @@ from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutco
 from trade_proposer_app.repositories.replay_eligibility import ReplayEligibilityRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.builders import create_historical_replay_service
 from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService, YahooHistoricalBarProvider
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
@@ -764,6 +765,40 @@ class HistoricalReplayTests(unittest.TestCase):
             self.assertEqual("ineligible", msft["tier"])
             self.assertEqual(0, msft["generation"]["daily_bar_count"])
             self.assertIn("insufficient_generation_daily_bars", msft["blockers"])
+        finally:
+            session.close()
+
+    def test_canonical_replay_builder_configures_required_input_services(self) -> None:
+        session = create_session()
+        try:
+            service = create_historical_replay_service(session, input_access_policy="cache_only")
+            self.assertIsNotNone(service.historical_market_data)
+            self.assertIsNotNone(service.historical_bars_access)
+            self.assertIsNotNone(service.historical_news_access)
+            self.assertIsNotNone(service.context_snapshot_access)
+            self.assertIsNotNone(service.fundamental_snapshot_access)
+            self.assertEqual("cache_only", service.input_access_policy)
+        finally:
+            session.close()
+
+    def test_replay_execution_requires_bars_access_service(self) -> None:
+        session = create_session()
+        try:
+            service = HistoricalReplayService(
+                historical_replays=HistoricalReplayRepository(session),
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+            )
+            batch = service.create_batch(
+                name="Replay fixture without bars",
+                mode="research",
+                tickers=["AAPL"],
+                as_of_start=datetime(2024, 1, 2, tzinfo=timezone.utc),
+                as_of_end=datetime(2024, 1, 2, 23, 59, 59, tzinfo=timezone.utc),
+            )
+            slice_row = HistoricalReplayRepository(session).list_slices(batch.id or 0)[0]
+            with self.assertRaisesRegex(RuntimeError, "historical bars access service is required"):
+                service.build_slice_execution_payload(batch.id or 0, slice_row.id or 0)
         finally:
             session.close()
 

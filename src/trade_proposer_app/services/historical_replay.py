@@ -11,6 +11,11 @@ from trade_proposer_app.repositories.historical_news import HistoricalNewsReposi
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.context_input_access import (
+    ContextSnapshotAccessService,
+    FundamentalSnapshotAccessService,
+    HistoricalNewsAccessService,
+)
 from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.input_access import normalize_input_access_policy
@@ -38,6 +43,9 @@ class HistoricalReplayService:
         self.historical_news = historical_news
         self.context_snapshots = context_snapshots
         self.fundamental_snapshots = fundamental_snapshots
+        self.historical_news_access = HistoricalNewsAccessService(historical_news)
+        self.context_snapshot_access = ContextSnapshotAccessService(context_snapshots)
+        self.fundamental_snapshot_access = FundamentalSnapshotAccessService(fundamental_snapshots)
         self.input_access_policy = normalize_input_access_policy(input_access_policy)
 
     def create_batch(
@@ -195,6 +203,8 @@ class HistoricalReplayService:
         tickers = self._parse_batch_tickers(batch)
         hydration_summary: dict[str, object] | None = None
         replay_coverage_report: dict[str, object] | None = None
+        if self.historical_bars_access is None:
+            raise RuntimeError("historical bars access service is required for replay execution")
         if self.historical_bars_access is not None:
             access_result = self.historical_bars_access.replay_market_inputs(
                 tickers=tickers,
@@ -221,25 +231,6 @@ class HistoricalReplayService:
                 tickers=tickers,
                 as_of=slice_row.as_of,
             )
-        else:
-            market_input = {
-                "as_of": slice_row.as_of.isoformat(),
-                "ticker_count": len(tickers),
-                "covered_ticker_count": 0,
-                "coverage_ratio": 0.0,
-                "tickers": [],
-            }
-            replay_coverage_report = {
-                "as_of": slice_row.as_of.isoformat(),
-                "policy": self.input_access_policy,
-                "source": "unconfigured",
-                "ticker_count": len(tickers),
-                "tier_counts": {"tier_a": 0, "tier_b": 0, "tier_c": 0, "ineligible": len(tickers)},
-                "tier_a_ratio": 0.0,
-                "tickers": [],
-                "blockers": ["historical_market_data_service_not_configured"],
-                "warnings": [],
-            }
         input_summary = {
             "replay_batch_id": batch.id,
             "replay_slice_id": slice_row.id,
@@ -304,18 +295,8 @@ class HistoricalReplayService:
 
         batch = self.historical_replays.get_batch(slice_row.replay_batch_id)
         tickers = self._parse_batch_tickers(batch)
-        if self.historical_market_data is None:
-            return {
-                "slice_id": slice_id,
-                "source": "computed_without_market_service",
-                "coverage": {
-                    "as_of": slice_row.as_of.isoformat(),
-                    "ticker_count": len(tickers),
-                    "tier_counts": {"tier_a": 0, "tier_b": 0, "tier_c": 0, "ineligible": len(tickers)},
-                    "tier_a_ratio": 0.0,
-                    "tickers": [],
-                },
-            }
+        if self.historical_bars_access is None:
+            raise RuntimeError("historical bars access service is required for replay coverage")
         report = self.historical_market_data.build_replay_coverage_report(
             tickers=tickers,
             as_of=slice_row.as_of,
@@ -354,40 +335,23 @@ class HistoricalReplayService:
         as_of: datetime,
         lookback_hours: int = 24,
     ) -> dict[str, object]:
-        if self.historical_news is None:
-            report["news_coverage"] = {"status": "not_configured", "lookback_hours": lookback_hours}
-            return report
         normalized_as_of = self._normalize(as_of)
-        start_at = normalized_as_of - timedelta(hours=max(1, lookback_hours))
-        counts_by_ticker = {
-            ticker: self.historical_news.count_news(
-                ticker,
-                start_at=start_at,
-                end_at=normalized_as_of,
-                available_at=normalized_as_of,
-            )
-            for ticker in tickers
-        }
+        result = self.historical_news_access.replay_coverage(tickers=tickers, as_of=normalized_as_of, lookback_hours=lookback_hours)
+        coverage = result.coverage
+        counts_by_ticker = coverage.get("article_count_by_ticker") if isinstance(coverage.get("article_count_by_ticker"), dict) else {}
         ticker_rows = report.get("tickers")
         if isinstance(ticker_rows, list):
             for row in ticker_rows:
                 if isinstance(row, dict):
                     ticker = str(row.get("ticker") or "")
                     row["news"] = {
-                        "lookback_start": start_at.isoformat(),
+                        "lookback_start": coverage.get("lookback_start"),
                         "as_of": normalized_as_of.isoformat(),
                         "article_count": counts_by_ticker.get(ticker, 0),
-                        "point_in_time_filter": "published_at <= as_of and available_at <= as_of",
+                        "point_in_time_filter": coverage.get("point_in_time_filter"),
                     }
-        covered = sum(1 for count in counts_by_ticker.values() if count > 0)
-        report["news_coverage"] = {
-            "status": "available",
-            "lookback_hours": lookback_hours,
-            "covered_ticker_count": covered,
-            "coverage_ratio": round((covered / len(tickers)) if tickers else 0.0, 4),
-            "article_count_by_ticker": counts_by_ticker,
-            "point_in_time_filter": "published_at <= as_of and available_at <= as_of",
-        }
+        report["news_coverage"] = coverage
+        report.setdefault("input_access_provenance", {})["news"] = result.provenance
         return report
 
     def _with_context_coverage(
@@ -397,53 +361,17 @@ class HistoricalReplayService:
         tickers: list[str],
         as_of: datetime,
     ) -> dict[str, object]:
-        if self.context_snapshots is None:
-            report["context_coverage"] = {"status": "not_configured"}
-            return report
-        normalized_as_of = self._normalize(as_of)
-        macro = self.context_snapshots.get_latest_macro_context_snapshot_before(normalized_as_of)
-        macro_payload = {
-            "available": macro is not None,
-            "computed_at": macro.computed_at.isoformat() if macro and macro.computed_at else None,
-            "status": macro.status if macro else None,
-            "point_in_time_filter": "computed_at <= as_of",
-        }
-        industry_counts = {"available": 0, "missing": 0}
-        industry_by_ticker: dict[str, dict[str, object]] = {}
-        for ticker in tickers:
-            industry_key = self._industry_key_for_ticker(ticker)
-            industry = (
-                self.context_snapshots.get_latest_industry_context_snapshot_before(
-                    industry_key,
-                    normalized_as_of,
-                )
-                if industry_key
-                else None
-            )
-            if industry is None:
-                industry_counts["missing"] += 1
-            else:
-                industry_counts["available"] += 1
-            industry_by_ticker[ticker] = {
-                "industry_key": industry_key,
-                "available": industry is not None,
-                "computed_at": industry.computed_at.isoformat() if industry and industry.computed_at else None,
-                "status": industry.status if industry else None,
-                "point_in_time_filter": "computed_at <= as_of",
-            }
+        result = self.context_snapshot_access.replay_coverage(tickers=tickers, as_of=self._normalize(as_of))
+        coverage = result.coverage
+        industry_by_ticker = coverage.get("industry_by_ticker") if isinstance(coverage.get("industry_by_ticker"), dict) else {}
         ticker_rows = report.get("tickers")
         if isinstance(ticker_rows, list):
             for row in ticker_rows:
                 if isinstance(row, dict):
                     ticker = str(row.get("ticker") or "")
                     row["context"] = industry_by_ticker.get(ticker, {})
-        report["context_coverage"] = {
-            "status": "available",
-            "macro": macro_payload,
-            "industry_counts": industry_counts,
-            "industry_by_ticker": industry_by_ticker,
-            "industry_coverage_ratio": round((industry_counts["available"] / len(tickers)) if tickers else 0.0, 4),
-        }
+        report["context_coverage"] = coverage
+        report.setdefault("input_access_provenance", {})["context"] = result.provenance
         return report
 
     def _with_fundamental_coverage(
@@ -453,38 +381,17 @@ class HistoricalReplayService:
         tickers: list[str],
         as_of: datetime,
     ) -> dict[str, object]:
-        if self.fundamental_snapshots is None:
-            report["fundamental_coverage"] = {"status": "not_configured"}
-            return report
-        normalized_as_of = self._normalize(as_of)
-        snapshots = self.fundamental_snapshots.list_latest_by_tickers(tickers, as_of=normalized_as_of)
-        by_ticker: dict[str, dict[str, object]] = {}
-        covered = 0
-        for ticker in tickers:
-            normalized_ticker = ticker.upper()
-            snapshot = snapshots.get(normalized_ticker)
-            if snapshot is not None:
-                covered += 1
-            snapshot_as_of = snapshot.get("as_of") if snapshot else None
-            by_ticker[normalized_ticker] = {
-                "available": snapshot is not None,
-                "as_of": snapshot_as_of.isoformat() if isinstance(snapshot_as_of, datetime) else None,
-                "coverage_status": snapshot.get("coverage_status") if snapshot else None,
-                "freshness_status": snapshot.get("freshness_status") if snapshot else None,
-                "point_in_time_filter": "snapshot.as_of <= replay as_of",
-            }
+        result = self.fundamental_snapshot_access.replay_coverage(tickers=tickers, as_of=self._normalize(as_of))
+        coverage = result.coverage
+        by_ticker = coverage.get("by_ticker") if isinstance(coverage.get("by_ticker"), dict) else {}
         ticker_rows = report.get("tickers")
         if isinstance(ticker_rows, list):
             for row in ticker_rows:
                 if isinstance(row, dict):
                     ticker = str(row.get("ticker") or "").upper()
                     row["fundamentals"] = by_ticker.get(ticker, {})
-        report["fundamental_coverage"] = {
-            "status": "available",
-            "covered_ticker_count": covered,
-            "coverage_ratio": round((covered / len(tickers)) if tickers else 0.0, 4),
-            "by_ticker": by_ticker,
-        }
+        report["fundamental_coverage"] = coverage
+        report.setdefault("input_access_provenance", {})["fundamentals"] = result.provenance
         return report
 
     def _industry_key_for_ticker(self, ticker: str) -> str:
