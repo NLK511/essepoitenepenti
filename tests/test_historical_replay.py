@@ -768,6 +768,41 @@ class HistoricalReplayTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_complete_slice_marks_invalid_json_envelopes_degraded(self) -> None:
+        session = create_session()
+        try:
+            service = HistoricalReplayService(
+                historical_replays=HistoricalReplayRepository(session),
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+                historical_market_data=HistoricalMarketDataService(
+                    HistoricalMarketDataRepository(session),
+                    provider=StubHistoricalBarProvider(),
+                ),
+            )
+            batch = service.create_batch(
+                name="Replay invalid envelope",
+                mode="research",
+                tickers=["AAPL"],
+                as_of_start=datetime(2024, 1, 2, tzinfo=timezone.utc),
+                as_of_end=datetime(2024, 1, 2, 23, 59, 59, tzinfo=timezone.utc),
+            )
+            slice_row = HistoricalReplayRepository(session).list_slices(batch.id or 0)[0]
+
+            completed = service.complete_slice(
+                slice_row.id or 0,
+                input_summary={"replay_batch_id": batch.id},
+                output_summary={"batch_id": batch.id},
+                timing={},
+            )
+
+            self.assertEqual("degraded", completed.status)
+            payload = json.loads(completed.input_summary_json)
+            self.assertTrue(payload["degraded"])
+            self.assertIn("missing_replay_input_summary:as_of", payload["validation_blockers"])
+        finally:
+            session.close()
+
     def test_canonical_replay_builder_configures_required_input_services(self) -> None:
         session = create_session()
         try:

@@ -49,6 +49,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
+from trade_proposer_app.services.outcome_population import summarize_outcome_population
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     PARAMETER_BY_KEY,
     exploration_campaigns,
@@ -707,6 +708,12 @@ class PlanGenerationTuningService:
                     "replay_batch_status": batch.status,
                     "eligible_record_count": eligible_count,
                     "total_record_count": len(eligibility_rows),
+                    "outcome_population": summarize_outcome_population(
+                        eligibility_rows,
+                        population="replay_tier_a_b_eligible",
+                        outcome_attr="outcome",
+                        tier_attr="tier",
+                    ),
                     "tier_counts": tier_counts,
                     "outcome_counts": outcome_counts,
                     "resolution_source_counts": resolution_source_counts,

@@ -264,6 +264,7 @@ class HistoricalReplayRepository:
             "running_count": counts.get("running", 0),
             "completed_count": counts.get("completed", 0),
             "failed_count": counts.get("failed", 0),
+            "degraded_count": counts.get("degraded", 0),
             "planned_count": counts.get("planned", 0),
         }
 
@@ -274,6 +275,7 @@ class HistoricalReplayRepository:
         total = int(summary.get("slice_count", 0) or 0)
         completed = int(counts.get("completed", 0) or 0)
         failed = int(counts.get("failed", 0) or 0)
+        degraded = int(counts.get("degraded", 0) or 0)
         running = int(counts.get("running", 0) or 0)
         queued = int(counts.get("queued", 0) or 0)
 
@@ -284,8 +286,8 @@ class HistoricalReplayRepository:
             status = "running"
         elif queued > 0:
             status = "queued"
-        elif completed + failed == total:
-            status = "failed" if failed == total else ("completed_with_warnings" if failed > 0 else "completed")
+        elif completed + failed + degraded == total:
+            status = "failed" if failed == total else ("completed_with_warnings" if failed > 0 or degraded > 0 else "completed")
 
         return self.update_batch_status(batch_id, status=status, summary=summary)
 

@@ -19,6 +19,7 @@ from trade_proposer_app.services.context_input_access import (
 from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.input_access import normalize_input_access_policy
+from trade_proposer_app.services.json_artifact_validation import JsonArtifactValidationService
 from trade_proposer_app.services.replay_universes import list_replay_universe_presets, resolve_replay_universe
 
 
@@ -176,13 +177,16 @@ class HistoricalReplayService:
         output_summary: dict[str, object],
         timing: dict[str, object],
     ) -> HistoricalReplaySlice:
+        validated_input = JsonArtifactValidationService.validate_replay_input_summary(input_summary)
+        validated_output = JsonArtifactValidationService.validate_replay_output_summary(output_summary)
+        slice_status = "degraded" if validated_input.degraded or validated_output.degraded else "completed"
         slice_row = self.historical_replays.update_slice_status(
             slice_id,
-            status="completed",
-            input_summary=input_summary,
-            output_summary=output_summary,
+            status=slice_status,
+            input_summary=validated_input.payload,
+            output_summary=validated_output.payload,
             timing=timing,
-            error_message="",
+            error_message="; ".join(validated_input.missing_fields + validated_output.missing_fields),
         )
         self.historical_replays.refresh_batch_status(slice_row.replay_batch_id)
         return slice_row

@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.services.outcome_population import summarize_outcome_population
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 
 
@@ -73,6 +74,7 @@ class ActionabilityFloorCalibrationService:
             "replay_batch": selected_batch,
             "plan_count": len(rows),
             "replay_eligibility_guardrail": eligibility_guardrail,
+            "outcome_population": summarize_outcome_population(rows, population="execution_plus_phantom", outcome_attr="outcome"),
             "floors": floor_values,
             "active_floor": active_floor,
             "min_resolved_trades": min_resolved_trades,

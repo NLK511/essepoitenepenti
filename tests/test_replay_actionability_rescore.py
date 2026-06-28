@@ -6,6 +6,7 @@ from trade_proposer_app.services.actionability_floor_calibration import (
     ActionabilityFloorCalibrationService,
     ReplayActionabilityPlanRow,
 )
+from trade_proposer_app.services.outcome_population import summarize_outcome_population
 
 
 def _row(*, confidence: float, action: str, outcome: str, reason: str = "below_calibrated_action_threshold") -> ReplayActionabilityPlanRow:
@@ -23,6 +24,28 @@ def _row(*, confidence: float, action: str, outcome: str, reason: str = "below_c
         outcome=outcome,
         outcome_status="resolved",
     )
+
+
+def test_outcome_population_summary_separates_execution_and_phantom_rows() -> None:
+    rows = [
+        {"outcome": "win", "tier": "tier_a"},
+        {"outcome": "phantom_loss", "tier": "tier_b"},
+        {"outcome": "phantom_no_entry", "tier": "tier_c"},
+    ]
+
+    summary = summarize_outcome_population(
+        rows,
+        population="replay_tier_a_b",
+        outcome_attr="outcome",
+        tier_attr="tier",
+    )
+
+    assert summary["population"] == "replay_tier_a_b"
+    assert summary["row_count"] == 3
+    assert summary["resolved_win_loss_count"] == 2
+    assert summary["execution_count"] == 1
+    assert summary["phantom_count"] == 2
+    assert summary["tier_counts"] == {"tier_a": 1, "tier_b": 1, "tier_c": 1}
 
 
 def test_rescore_promotes_only_threshold_blocked_intended_actions() -> None:

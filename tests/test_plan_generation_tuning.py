@@ -643,6 +643,8 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(2, aggregate["candidate_result_count"])
         self.assertEqual({"tier_a": 1}, aggregate["results"][0]["tier_counts"])
         self.assertEqual({"win": 1}, aggregate["results"][0]["outcome_counts"])
+        self.assertEqual("replay_tier_a_b_eligible", aggregate["results"][0]["outcome_population"]["population"])
+        self.assertEqual(1, aggregate["results"][0]["outcome_population"]["resolved_win_loss_count"])
         self.assertEqual({"tier_b": 1}, aggregate["results"][1]["tier_counts"])
         self.assertEqual({"daily_prefilter": 1}, aggregate["results"][1]["resolution_source_counts"])
         self.assertEqual(aggregate["results"][0]["candidate_id"], aggregate["replay_winner_candidate_id"])

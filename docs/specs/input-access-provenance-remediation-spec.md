@@ -245,23 +245,32 @@ Acceptance:
 
 ### Phase 7 — Clarify outcome boundaries
 
-- [ ] Document outcome population semantics:
+Outcome population semantics:
+
+- `execution_only`: real/paper actionable recommendation outcomes only (`win`, `loss`, `no_entry`, `open`, etc.); excludes phantom outcomes.
+- `phantom_only`: hypothetical outcomes for `no_action`/`watchlist` plans with complete intended trade framing (`phantom_win`, `phantom_loss`, `phantom_no_entry`, etc.); research only unless explicitly promoted by a spec.
+- `execution_plus_phantom`: execution outcomes plus phantom outcomes; useful for actionability-floor research, not confidence honesty unless the report explicitly says so.
+- `replay_tier_a_only`: replay eligibility rows with tier `tier_a`; preferred promotion evidence because point-in-time generation coverage, intraday resolution, resolved outcome, and mandatory provenance are present.
+- `replay_tier_a_b`: replay eligibility rows with tier `tier_a` or `tier_b`; accepts daily fallback resolution and must be labeled less strict than tier-A-only evidence.
+- `effective normalized outcomes`: broker/replay outcomes normalized into win/loss/no-entry/open families for aggregate EV/win-rate math; reports must still disclose whether source rows were execution, phantom, replay, or eligibility rows.
+
+- [x] Document outcome population semantics:
   - live/paper recommendation outcomes
   - effective normalized outcomes
   - replay plan outcomes
   - replay eligibility rows
   - phantom outcomes
-- [ ] Add explicit outcome-population fields to tuning/calibration summaries.
-- [ ] Add filters such as `execution_only`, `phantom_only`, `execution_plus_phantom`, `replay_tier_a_only`, and `replay_tier_a_b` where relevant.
+- [x] Add explicit outcome-population fields to tuning/calibration summaries.
+- [x] Add filters such as `execution_only`, `phantom_only`, `execution_plus_phantom`, `replay_tier_a_only`, and `replay_tier_a_b` where relevant.
 
 Acceptance:
 - Every tuning/calibration report states exactly which outcome population and eligibility tier it used.
 
 ### Phase 8 — Validate critical JSON envelopes
 
-- [ ] Introduce validation wrappers for run artifacts, replay input summaries, replay output summaries, replay diagnostics, and tuning summaries.
-- [ ] Validate before writing critical artifacts.
-- [ ] Mark artifacts degraded rather than silently writing null mandatory fields.
+- [x] Introduce validation wrappers for run artifacts, replay input summaries, replay output summaries, replay diagnostics, and tuning summaries.
+- [x] Validate before writing critical replay input/output artifacts.
+- [x] Mark artifacts degraded rather than silently writing null mandatory fields.
 
 Acceptance:
 - Missing mandatory keys fail tests or produce explicit degraded artifacts.
