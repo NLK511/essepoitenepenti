@@ -36,6 +36,7 @@ from trade_proposer_app.services.fundamental_analysis_refresh import (
 )
 from trade_proposer_app.services.gating_severity_alerts import GatingSeverityAlertService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
+from trade_proposer_app.services.input_access import ArtifactProvenance
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
 from trade_proposer_app.services.order_execution import OrderExecutionService
@@ -1075,8 +1076,8 @@ class JobExecutionService:
         reasons = list(blockers)
         if not coverage:
             reasons.append("missing_coverage_report")
-        mandatory_provenance_keys = ("as_of", "code_version", "settings_hash", "input_coverage_hash")
-        missing_provenance = [key for key in mandatory_provenance_keys if not replay_provenance.get(key)]
+        provenance = ArtifactProvenance.from_dict(replay_provenance)
+        missing_provenance = provenance.missing_replay_mandatory_fields()
         if missing_provenance:
             reasons.extend(f"missing_replay_provenance:{key}" for key in missing_provenance)
         if status != "resolved":

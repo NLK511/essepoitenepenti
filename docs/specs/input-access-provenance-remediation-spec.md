@@ -133,6 +133,13 @@ Every coverage report should include:
 }
 ```
 
+### Replay eligibility tier semantics
+
+- `tier_a`: point-in-time generation coverage is sufficient, intraday resolution bars exist, the outcome is resolved from intraday evidence, and mandatory replay provenance is present. This is the preferred tuning evidence tier.
+- `tier_b`: point-in-time generation coverage is sufficient and the outcome is resolved, but resolution uses daily fallback evidence rather than intraday evidence. This may be used only by workflows that explicitly accept daily-resolution replay evidence.
+- `tier_c`: the replay row has some usable artifacts but is not valid promotion evidence, commonly because the outcome is still open/unresolved or resolution bars are missing.
+- `ineligible`: generation coverage, resolution evidence, or mandatory provenance is missing enough that the row must not be consumed as tuning evidence.
+
 ### Replay provenance fields
 
 Every replay-generated signal/plan must include non-null replay provenance:
@@ -167,7 +174,7 @@ Acceptance:
 - [x] Add typed models/dataclasses for `InputAccessPolicy`, `InputCoverageReport`, `TickerCoverageReport`, and `ArtifactProvenance`.
 - [x] Add schema helpers for stable coverage/provenance hashing.
 - [x] Add first validation guard for mandatory replay provenance fields in replay eligibility classification.
-- [ ] Document tier semantics once and reuse them.
+- [x] Document tier semantics once and reuse them.
 
 Acceptance:
 - New replay/tuning code does not accept raw unvalidated coverage/provenance dicts.
@@ -176,13 +183,13 @@ Acceptance:
 
 - [x] Add `HistoricalBarsAccessService`.
 - [x] Implement first replay-oriented cache read, optional Yahoo hydration, persistence, reload-from-cache, and coverage report generation behind one method.
-- [ ] Add explicit gap-window detection before remote hydration to avoid broad refetches.
-- [ ] Support at least daily and 1-minute bars through typed access methods beyond the replay wrapper.
+- [x] Add explicit gap-window detection before remote hydration to avoid broad refetches.
+- [x] Support at least daily and 1-minute bars through typed access methods beyond the replay wrapper.
 - [x] Add explicit replay input access policy so replay can build coverage from cache without remote hydration.
 - [x] Add stable `input_coverage_hash` to replay market coverage reports.
 - [x] Return data plus coverage/provenance for replay generation/resolution windows through a single bar-access method.
 - [x] Replace direct market-bar access in replay coverage generation.
-- [ ] Replace replay outcome resolution price-history preparation with the unified access path or with a compatibility wrapper around it.
+- [x] Replace replay outcome resolution price-history preparation with the unified access path or with a compatibility wrapper around it.
 - [ ] Update bars refresh/recovery scripts to call the unified service.
 
 Acceptance:
@@ -195,7 +202,7 @@ Acceptance:
 - [x] Include replay batch ID, slice ID, as-of timestamp, code version, settings hash, input coverage hash, and tuning config hash.
 - [x] Block replay tuning eligibility when mandatory provenance fields are missing.
 - [ ] Fail or degrade replay slices when mandatory provenance cannot be built.
-- [ ] Update replay eligibility classification to use typed provenance.
+- [x] Update replay eligibility classification to use typed provenance.
 
 Acceptance:
 - No replay-generated plan has null replay provenance.

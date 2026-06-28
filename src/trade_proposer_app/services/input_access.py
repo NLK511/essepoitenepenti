@@ -21,6 +21,29 @@ class ArtifactProvenance:
     replay_slice_id: int | None = None
     plan_generation_config_hash: str | None = None
 
+    MANDATORY_REPLAY_FIELDS = ("as_of", "code_version", "settings_hash", "input_coverage_hash")
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "ArtifactProvenance":
+        return cls(
+            as_of=str(payload.get("as_of")) if payload.get("as_of") is not None else None,
+            source=str(payload.get("source") or "unknown"),
+            input_coverage_hash=str(payload.get("input_coverage_hash") or ""),
+            code_version=str(payload.get("code_version")) if payload.get("code_version") is not None else None,
+            settings_hash=str(payload.get("settings_hash")) if payload.get("settings_hash") is not None else None,
+            replay_batch_id=cls._int_or_none(payload.get("replay_batch_id")),
+            replay_slice_id=cls._int_or_none(payload.get("replay_slice_id")),
+            plan_generation_config_hash=(
+                str(payload.get("plan_generation_config_hash"))
+                if payload.get("plan_generation_config_hash") is not None
+                else None
+            ),
+        )
+
+    def missing_replay_mandatory_fields(self) -> list[str]:
+        values = self.to_dict()
+        return [field for field in self.MANDATORY_REPLAY_FIELDS if not values.get(field)]
+
     def to_dict(self) -> dict[str, object]:
         return {
             "as_of": self.as_of,
@@ -32,6 +55,15 @@ class ArtifactProvenance:
             "replay_slice_id": self.replay_slice_id,
             "plan_generation_config_hash": self.plan_generation_config_hash,
         }
+
+    @staticmethod
+    def _int_or_none(value: object) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
 
 @dataclass(frozen=True)

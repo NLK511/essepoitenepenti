@@ -256,6 +256,95 @@ class HistoricalReplayTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_historical_bars_access_cache_then_remote_hydrates_only_missing_daily_tickers(self) -> None:
+        session = create_session()
+        try:
+            class CountingProvider(StubHistoricalBarProvider):
+                def __init__(self) -> None:
+                    self.tickers: list[str] = []
+
+                def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+                    self.tickers.append(ticker)
+                    return super().fetch_daily_bars(ticker, start_at, end_at)
+
+            provider = CountingProvider()
+            market_repository = HistoricalMarketDataRepository(session)
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            market_repository.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1d",
+                    bar_time=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                    available_at=replay_as_of,
+                    open_price=100.0,
+                    high_price=102.0,
+                    low_price=99.0,
+                    close_price=101.0,
+                    volume=1000,
+                    source="fixture",
+                )
+            )
+            service = HistoricalBarsAccessService(HistoricalMarketDataService(market_repository, provider=provider))
+
+            result = service.replay_market_inputs(
+                tickers=["AAPL", "MSFT"],
+                batch_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                batch_end=replay_as_of,
+                as_of=replay_as_of,
+                policy="cache_then_remote",
+            )
+
+            self.assertEqual(["MSFT"], provider.tickers)
+            self.assertEqual("hydrated", result.hydration_summary["status"])
+            self.assertEqual(["MSFT"], result.hydration_summary["gap_report"]["missing_tickers"])
+            self.assertEqual(2, result.market_input["covered_ticker_count"])
+        finally:
+            session.close()
+
+    def test_historical_bars_access_typed_daily_and_intraday_methods_return_coverage(self) -> None:
+        session = create_session()
+        try:
+            market_repository = HistoricalMarketDataRepository(session)
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            market_repository.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1m",
+                    bar_time=datetime(2024, 2, 5, 15, 30, tzinfo=timezone.utc),
+                    available_at=datetime(2024, 2, 5, 15, 31, tzinfo=timezone.utc),
+                    open_price=100.0,
+                    high_price=101.0,
+                    low_price=99.0,
+                    close_price=100.5,
+                    volume=1000,
+                    source="fixture",
+                )
+            )
+            service = HistoricalBarsAccessService(HistoricalMarketDataService(market_repository, provider=StubHistoricalBarProvider()))
+
+            daily = service.daily_bars(
+                ticker="AAPL",
+                start_at=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                end_at=replay_as_of,
+                policy="cache_then_remote",
+            )
+            intraday = service.intraday_1m_bars(
+                ticker="AAPL",
+                start_at=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                end_at=replay_as_of,
+                available_at=replay_as_of,
+                policy="cache_then_remote",
+            )
+
+            self.assertEqual("1d", daily.timeframe)
+            self.assertEqual(1, len(daily.bars))
+            self.assertTrue(daily.coverage["covered"])
+            self.assertEqual("1m", intraday.timeframe)
+            self.assertEqual(1, len(intraday.bars))
+            self.assertEqual("remote_hydration_not_supported_for_1m", intraday.hydration_summary["reason"])
+        finally:
+            session.close()
+
     def test_replay_eligibility_reclassification_repairs_corrupted_rows_from_stored_artifacts(self) -> None:
         session = create_session()
         try:

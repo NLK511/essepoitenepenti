@@ -26,6 +26,8 @@ from trade_proposer_app.repositories.historical_market_data import HistoricalMar
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
+from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.plan_resolution_engine import (
     PlanResolutionConfig,
     PlanResolutionEngine,
@@ -66,6 +68,7 @@ class RecommendationPlanEvaluationService:
         self.plans = RecommendationPlanRepository(session)
         self.outcomes = RecommendationOutcomeRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
+        self.historical_bars_access = HistoricalBarsAccessService(HistoricalMarketDataService(self.market_data))
         self.settings = SettingsRepository(session)
         self.settings_domains = SettingsDomainService(repository=self.settings)
         self.taxonomy = TickerTaxonomyService()
@@ -1020,14 +1023,33 @@ class RecommendationPlanEvaluationService:
     ) -> pd.DataFrame | None:
         timeframes = self._intraday_timeframes if intraday_only else self._preferred_timeframes
         for timeframe in timeframes:
-            bars = self.market_data.list_bars(
-                ticker=ticker,
-                timeframe=timeframe,
-                start_at=start_date,
-                end_at=end_date,
-                available_at=end_date,
-                limit=2000,
-            )
+            if timeframe == "1d":
+                bars = self.historical_bars_access.daily_bars(
+                    ticker=ticker,
+                    start_at=start_date,
+                    end_at=end_date,
+                    available_at=end_date,
+                    limit=2000,
+                    policy="cache_only",
+                ).bars
+            elif timeframe == "1m":
+                bars = self.historical_bars_access.intraday_1m_bars(
+                    ticker=ticker,
+                    start_at=start_date,
+                    end_at=end_date,
+                    available_at=end_date,
+                    limit=2000,
+                    policy="cache_only",
+                ).bars
+            else:
+                bars = self.market_data.list_bars(
+                    ticker=ticker,
+                    timeframe=timeframe,
+                    start_at=start_date,
+                    end_at=end_date,
+                    available_at=end_date,
+                    limit=2000,
+                )
             if not bars:
                 continue
             frame = self._bars_to_frame(bars, start_date=start_date)
