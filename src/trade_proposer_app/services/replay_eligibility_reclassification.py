@@ -18,8 +18,9 @@ from trade_proposer_app.persistence.models import (
 )
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.replay_eligibility import ReplayEligibilityRepository
+from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
-from trade_proposer_app.services.input_access import stable_hash
+from trade_proposer_app.services.input_access import normalize_input_access_policy, stable_hash
 from trade_proposer_app.services.job_execution import JobExecutionService
 
 
@@ -53,7 +54,8 @@ class ReplayEligibilityReclassificationService:
         self.eligibility = ReplayEligibilityRepository(session)
         self.market_data = HistoricalMarketDataService(HistoricalMarketDataRepository(session))
 
-    def reclassify_batch(self, replay_batch_id: int) -> ReplayEligibilityReclassificationSummary:
+    def reclassify_batch(self, replay_batch_id: int, *, input_access_policy: str = "cache_only") -> ReplayEligibilityReclassificationSummary:
+        policy = normalize_input_access_policy(input_access_policy, default="cache_only")
         before_rows = self.session.scalars(
             select(ReplayEligibilityRecord).where(ReplayEligibilityRecord.replay_batch_id == replay_batch_id)
         ).all()
@@ -74,7 +76,7 @@ class ReplayEligibilityReclassificationService:
                 continue
             input_summary = self._loads(slice_row.input_summary_json)
             ticker = str(plan_row.ticker or "").strip().upper()
-            coverage_report = self._coverage_report_for_slice(input_summary, slice_row)
+            coverage_report = self._coverage_report_for_slice(input_summary, slice_row, input_access_policy=policy)
             coverage = self._coverage_for_ticker(coverage_report, ticker)
             signal_breakdown = self._loads(plan_row.signal_breakdown_json)
             replay_provenance = signal_breakdown.get("replay_provenance")
@@ -140,6 +142,8 @@ class ReplayEligibilityReclassificationService:
         self,
         input_summary: dict[str, object],
         slice_row: HistoricalReplaySliceRecord,
+        *,
+        input_access_policy: str,
     ) -> dict[str, object] | None:
         stored = input_summary.get("replay_coverage_report")
         if isinstance(stored, dict) and isinstance(stored.get("tickers"), list) and stored.get("tickers"):
@@ -150,12 +154,15 @@ class ReplayEligibilityReclassificationService:
         tickers = self._loads_list(batch.tickers_json)
         if not tickers:
             return stored if isinstance(stored, dict) else None
-        return self.market_data.build_replay_coverage_report(
+        access = HistoricalBarsAccessService(self.market_data).replay_market_inputs(
             tickers=tickers,
+            batch_start=batch.as_of_start,
+            batch_end=batch.as_of_end,
             as_of=slice_row.as_of,
-            input_policy="cache_only",
-            source="cache_reclassification",
+            policy=input_access_policy,
         )
+        access.coverage_report["source"] = "cache_reclassification" if input_access_policy == "cache_only" else "reclassification_with_remote"
+        return access.coverage_report
 
     @staticmethod
     def _fallback_replay_provenance(

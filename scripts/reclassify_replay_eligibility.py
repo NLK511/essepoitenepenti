@@ -15,10 +15,19 @@ from trade_proposer_app.services.replay_eligibility_reclassification import Repl
 def main() -> None:
     parser = argparse.ArgumentParser(description="Recompute replay eligibility rows for an existing replay batch.")
     parser.add_argument("--batch-id", type=int, required=True)
+    parser.add_argument(
+        "--policy",
+        choices=["cache_only", "cache_then_remote", "remote_refresh", "fail_if_missing"],
+        default="cache_only",
+        help="Input access policy for rebuilding missing coverage reports. Defaults to cache_only.",
+    )
     args = parser.parse_args()
     session = SessionLocal()
     try:
-        summary = ReplayEligibilityReclassificationService(session).reclassify_batch(args.batch_id)
+        summary = ReplayEligibilityReclassificationService(session).reclassify_batch(
+            args.batch_id,
+            input_access_policy=args.policy,
+        )
         session.commit()
         print(json.dumps(summary.to_dict(), indent=2, sort_keys=True))
     except Exception:

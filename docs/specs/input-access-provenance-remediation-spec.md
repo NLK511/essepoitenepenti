@@ -155,9 +155,9 @@ If mandatory provenance is missing, the replay slice must fail or be marked degr
 
 ### Phase 0 — Freeze risky evidence
 
-- [ ] Mark replay batch 15 as warning/degraded in its batch artifact or summary.
-- [ ] Mark salvage tuning run 37 as research-only and not promotion evidence.
-- [ ] Add a guardrail summary when replay outcomes exist but eligible tuning rows are zero.
+- [x] Mark replay batch 15 as warning/degraded in its batch artifact or summary.
+- [x] Mark salvage tuning run 37 as research-only and not promotion evidence.
+- [x] Add a guardrail summary when replay outcomes exist but eligible tuning rows are zero.
 
 Acceptance:
 - Operators cannot mistake batch 15 or run 37 for valid tuning evidence.
@@ -208,7 +208,7 @@ Acceptance:
 - [x] Rebuild market coverage from stored bars using `cache_only` when stored replay coverage is missing/empty.
 - [x] Recompute fallback provenance hashes and eligibility tiers.
 - [x] Report before/after tier counts and blocker counts.
-- [ ] Optionally allow `--policy cache-then-remote` for explicit hydration repair.
+- [x] Optionally allow `--policy cache-then-remote` for explicit hydration repair.
 
 Acceptance:
 - Existing replay batches can be repaired or definitively marked unusable without rerunning full replay.

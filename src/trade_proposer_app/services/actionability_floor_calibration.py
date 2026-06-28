@@ -56,7 +56,9 @@ class ActionabilityFloorCalibrationService:
                 "reason": "no_completed_replay_batch",
                 "floors": list(floors or self.DEFAULT_FLOORS),
             }
-        rows = self._load_rows(int(selected_batch["id"]))
+        batch_id = int(selected_batch["id"])
+        rows = self._load_rows(batch_id)
+        eligibility_guardrail = self._eligibility_guardrail(batch_id)
         floor_values = [float(value) for value in (floors or self.DEFAULT_FLOORS)]
         summaries = [self._summarize(rows, floor) for floor in floor_values]
         active_floor = self._active_actionability_floor()
@@ -70,6 +72,7 @@ class ActionabilityFloorCalibrationService:
             "purpose": "weekly diagnostic/proposal check for downstream actionability confidence floor only",
             "replay_batch": selected_batch,
             "plan_count": len(rows),
+            "replay_eligibility_guardrail": eligibility_guardrail,
             "floors": floor_values,
             "active_floor": active_floor,
             "min_resolved_trades": min_resolved_trades,
@@ -78,6 +81,37 @@ class ActionabilityFloorCalibrationService:
             "best_floor_summary": best,
             "recommendation": recommendation,
             "summaries": summaries,
+        }
+
+    def _eligibility_guardrail(self, batch_id: int) -> dict[str, Any]:
+        row = self.session.execute(
+            text(
+                """
+                select
+                    (select count(*) from replay_plan_outcomes where replay_batch_id = :batch_id) as outcome_count,
+                    (select count(*) from replay_eligibility_records where replay_batch_id = :batch_id) as eligibility_count,
+                    (select count(*) from replay_eligibility_records where replay_batch_id = :batch_id and eligible_for_tuning = true) as eligible_count
+                """
+            ),
+            {"batch_id": batch_id},
+        ).mappings().first()
+        outcome_count = int(row["outcome_count"] or 0) if row else 0
+        eligibility_count = int(row["eligibility_count"] or 0) if row else 0
+        eligible_count = int(row["eligible_count"] or 0) if row else 0
+        status = "ok"
+        warning = None
+        if outcome_count > 0 and eligibility_count == 0:
+            status = "missing_eligibility_rows"
+            warning = "replay outcomes exist but no replay eligibility rows exist; run reclassify_replay_eligibility before using this as tuning evidence"
+        elif outcome_count > 0 and eligible_count == 0:
+            status = "zero_eligible_rows"
+            warning = "replay outcomes exist but zero rows are eligible for tuning; inspect coverage/provenance blockers before trusting this batch"
+        return {
+            "status": status,
+            "outcome_count": outcome_count,
+            "eligibility_count": eligibility_count,
+            "eligible_count": eligible_count,
+            "warning": warning,
         }
 
     def _resolve_replay_batch(self, replay_batch_id: int | None) -> dict[str, Any] | None:
