@@ -301,6 +301,14 @@ Result: run `38` completed from repaired replay eligibility rows for batch `15`,
 - [x] Surface the evidence-quality rejection reason in automatic replay promotion and manual replay candidate promotion checks.
 - [x] Preserve dry-run/research reporting for phantom-heavy evidence; only block promotion.
 
+### Phase 11 — Replay evidence audit report
+
+- [x] Add a reusable replay evidence audit service/script for completed replay batches and tuning runs.
+- [x] Flag zero-eligible, unresolved-heavy, and phantom-dominated evidence with machine-readable promotion readiness.
+- [x] Write audit artifacts under `artifacts/` so future tuning decisions can cite the evidence-quality state directly.
+
+Result: batch `15` audit and tuning run `38` audit both reject promotion readiness. Batch `15` is unresolved-heavy (`177/351` open or unresolved outcomes) and phantom-dominated (`172/174` eligible rows are phantom outcomes). Run `38` is also phantom-dominated without enough execution rows (`2` execution rows vs minimum `8`).
+
 ## Testing requirements
 
 Add unit tests for:
