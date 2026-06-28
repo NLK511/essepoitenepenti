@@ -279,12 +279,21 @@ Acceptance:
 
 Start with the path that unblocks replay/tuning:
 
-1. common coverage/provenance contracts
-2. unified market bars access
-3. replay provenance enforcement
-4. replay eligibility reclassification
-5. reclassify batch 15
-6. rerun/rescore US top 50 fixed-floor tuning
+1. common coverage/provenance contracts — done
+2. unified market bars access — done
+3. replay provenance enforcement — done
+4. replay eligibility reclassification — done
+5. reclassify batch 15 — done
+6. rerun/rescore US top 50 fixed-floor tuning — in progress
+
+### Phase 9 — Rerun validated batch 15 tuning rescore
+
+- [x] Add a reusable replay plan-generation rescore script that consumes only `replay_eligibility_records.eligible_for_tuning = true` rows by default.
+- [x] Include explicit outcome-population and replay-tier labels in the generated tuning run/artifact.
+- [x] Run the script for batch 15, fixed floor 48, 20 candidates.
+- [x] Save artifact under `artifacts/` and mark the run as validated replay evidence only if it uses repaired eligibility rows, not salvage phantom-only rows.
+
+Result: run `38` completed from repaired replay eligibility rows for batch `15`, fixed floor `48`, 20 candidates. It is valid as repaired replay evidence, but not promotion evidence: the winning candidate was the baseline/current config, search actionable count was `1`, validation actionable count was `0`, and the outcome population was dominated by phantom rows (`172` phantom vs `2` execution rows).
 
 ## Testing requirements
 
