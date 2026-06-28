@@ -11,6 +11,7 @@ from trade_proposer_app.repositories.historical_news import HistoricalNewsReposi
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.input_access import normalize_input_access_policy
 from trade_proposer_app.services.replay_universes import list_replay_universe_presets, resolve_replay_universe
@@ -27,11 +28,13 @@ class HistoricalReplayService:
         context_snapshots: ContextSnapshotRepository | None = None,
         fundamental_snapshots: FundamentalAnalysisSnapshotRepository | None = None,
         input_access_policy: str = "cache_then_remote",
+        historical_bars_access: HistoricalBarsAccessService | None = None,
     ) -> None:
         self.historical_replays = historical_replays
         self.jobs = jobs
         self.runs = runs
         self.historical_market_data = historical_market_data
+        self.historical_bars_access = historical_bars_access or (HistoricalBarsAccessService(historical_market_data) if historical_market_data is not None else None)
         self.historical_news = historical_news
         self.context_snapshots = context_snapshots
         self.fundamental_snapshots = fundamental_snapshots
@@ -192,25 +195,17 @@ class HistoricalReplayService:
         tickers = self._parse_batch_tickers(batch)
         hydration_summary: dict[str, object] | None = None
         replay_coverage_report: dict[str, object] | None = None
-        if self.historical_market_data is not None:
-            if self.input_access_policy in {"cache_then_remote", "remote_refresh"}:
-                hydration_summary = self.hydrate_batch_market_data(batch_id)
-            else:
-                hydration_summary = {
-                    "provider": getattr(self.historical_market_data.provider, "provider_name", "unknown"),
-                    "source_tier": getattr(self.historical_market_data.provider, "source_tier", "unknown"),
-                    "policy": self.input_access_policy,
-                    "status": "skipped_remote_hydration",
-                    "reason": "input_access_policy_disallows_remote_fetch",
-                    "ticker_count": len(tickers),
-                }
-            market_input = self.historical_market_data.build_slice_market_input(tickers=tickers, as_of=slice_row.as_of)
-            replay_coverage_report = self.historical_market_data.build_replay_coverage_report(
+        if self.historical_bars_access is not None:
+            access_result = self.historical_bars_access.replay_market_inputs(
                 tickers=tickers,
+                batch_start=batch.as_of_start,
+                batch_end=batch.as_of_end,
                 as_of=slice_row.as_of,
-                input_policy=self.input_access_policy,
-                source="cache" if self.input_access_policy in {"cache_only", "fail_if_missing"} else "cache_plus_remote",
+                policy=self.input_access_policy,
             )
+            hydration_summary = access_result.hydration_summary
+            market_input = access_result.market_input
+            replay_coverage_report = access_result.coverage_report
             replay_coverage_report = self._with_news_coverage(
                 replay_coverage_report,
                 tickers=tickers,

@@ -174,13 +174,14 @@ Acceptance:
 
 ### Phase 2 — Build unified market bars access
 
-- [ ] Add `HistoricalBarsAccessService`.
-- [ ] Implement cache read, gap detection, optional Yahoo hydration, persistence, reload-from-cache, and coverage report generation behind one method.
-- [ ] Support at least daily and 1-minute bars.
+- [x] Add `HistoricalBarsAccessService`.
+- [x] Implement first replay-oriented cache read, optional Yahoo hydration, persistence, reload-from-cache, and coverage report generation behind one method.
+- [ ] Add explicit gap-window detection before remote hydration to avoid broad refetches.
+- [ ] Support at least daily and 1-minute bars through typed access methods beyond the replay wrapper.
 - [x] Add explicit replay input access policy so replay can build coverage from cache without remote hydration.
 - [x] Add stable `input_coverage_hash` to replay market coverage reports.
-- [ ] Return data plus coverage/provenance for generation and resolution windows through a single bar-access method.
-- [ ] Replace direct market-bar access in replay coverage generation.
+- [x] Return data plus coverage/provenance for replay generation/resolution windows through a single bar-access method.
+- [x] Replace direct market-bar access in replay coverage generation.
 - [ ] Replace replay outcome resolution price-history preparation with the unified access path or with a compatibility wrapper around it.
 - [ ] Update bars refresh/recovery scripts to call the unified service.
 
@@ -202,11 +203,11 @@ Acceptance:
 
 ### Phase 4 — Add replay eligibility reclassification
 
-- [ ] Add `ReplayEligibilityReclassificationService`.
-- [ ] Add `scripts/reclassify_replay_eligibility.py --batch-id X`.
-- [ ] Rebuild coverage from stored inputs using `cache_only` by default.
-- [ ] Recompute provenance hashes and eligibility tiers.
-- [ ] Report before/after tier counts and blocker counts.
+- [x] Add `ReplayEligibilityReclassificationService`.
+- [x] Add `scripts/reclassify_replay_eligibility.py --batch-id X`.
+- [x] Rebuild market coverage from stored bars using `cache_only` when stored replay coverage is missing/empty.
+- [x] Recompute fallback provenance hashes and eligibility tiers.
+- [x] Report before/after tier counts and blocker counts.
 - [ ] Optionally allow `--policy cache-then-remote` for explicit hydration repair.
 
 Acceptance:

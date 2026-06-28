@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import HistoricalMarketBar, IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, RecommendationPlan, TickerSignalSnapshot
-from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.persistence.models import Base, RecommendationPlanRecord, ReplayEligibilityRecord
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
@@ -19,10 +19,12 @@ from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutco
 from trade_proposer_app.repositories.replay_eligibility import ReplayEligibilityRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService, YahooHistoricalBarProvider
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.replay_eligibility_reclassification import ReplayEligibilityReclassificationService
 
 
 def create_session() -> Session:
@@ -201,6 +203,149 @@ class HistoricalReplayTests(unittest.TestCase):
             eligibilities = ReplayEligibilityRepository(session).list_for_slice(slice_row.id or 0)
             self.assertEqual(1, len(eligibilities))
             return {**replay_outcomes[0], "eligibility": eligibilities[0]}, summary
+        finally:
+            session.close()
+
+    def test_historical_bars_access_cache_only_returns_market_input_coverage_and_no_hydration(self) -> None:
+        session = create_session()
+        try:
+            class CountingProvider(StubHistoricalBarProvider):
+                calls = 0
+
+                def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+                    self.calls += 1
+                    return super().fetch_daily_bars(ticker, start_at, end_at)
+
+            provider = CountingProvider()
+            market_repository = HistoricalMarketDataRepository(session)
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            for day_offset in range(-12, 1):
+                day = replay_as_of + timedelta(days=day_offset)
+                market_repository.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1d",
+                        bar_time=day,
+                        available_at=day.replace(hour=23, minute=59, second=59),
+                        open_price=100.0,
+                        high_price=102.0,
+                        low_price=99.0,
+                        close_price=101.0,
+                        volume=1000,
+                        source="fixture",
+                    )
+                )
+            service = HistoricalBarsAccessService(
+                HistoricalMarketDataService(market_repository, provider=provider)
+            )
+
+            result = service.replay_market_inputs(
+                tickers=["AAPL"],
+                batch_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                batch_end=replay_as_of,
+                as_of=replay_as_of,
+                policy="cache_only",
+            )
+
+            self.assertEqual(0, provider.calls)
+            self.assertEqual("skipped_remote_hydration", result.hydration_summary["status"])
+            self.assertEqual(1, result.market_input["covered_ticker_count"])
+            self.assertEqual("cache_only", result.coverage_report["policy"])
+            self.assertEqual("HistoricalBarsAccessService", result.coverage_report["access_service"])
+            self.assertIn("input_coverage_hash", result.coverage_report)
+        finally:
+            session.close()
+
+    def test_replay_eligibility_reclassification_repairs_corrupted_rows_from_stored_artifacts(self) -> None:
+        session = create_session()
+        try:
+            market_repository = HistoricalMarketDataRepository(session)
+            historical_replay = HistoricalReplayService(
+                historical_replays=HistoricalReplayRepository(session),
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+                historical_market_data=HistoricalMarketDataService(
+                    market_repository,
+                    provider=StubHistoricalBarProvider(),
+                ),
+            )
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            for offset, high, low, close in [
+                (timedelta(minutes=1), 101.0, 99.0, 100.0),
+                (timedelta(minutes=2), 106.0, 100.0, 105.5),
+                (timedelta(days=5), 100.0, 96.0, 100.0),
+            ]:
+                bar_time = replay_as_of + offset
+                market_repository.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1m",
+                        bar_time=bar_time,
+                        available_at=bar_time,
+                        open_price=100.0,
+                        high_price=high,
+                        low_price=low,
+                        close_price=close,
+                        volume=1000,
+                        source="fixture",
+                    )
+                )
+            for day_offset in range(-12, 6):
+                day = replay_as_of + timedelta(days=day_offset)
+                market_repository.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1d",
+                        bar_time=day,
+                        available_at=min(day.replace(hour=23, minute=59, second=59), replay_as_of + timedelta(days=max(day_offset, 0))),
+                        open_price=100.0,
+                        high_price=106.0,
+                        low_price=94.0,
+                        close_price=100.0,
+                        volume=1000,
+                        source="fixture",
+                    )
+                )
+            batch = historical_replay.create_batch(
+                name="Replay reclassify",
+                mode="research",
+                tickers=["AAPL"],
+                as_of_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                as_of_end=replay_as_of,
+            )
+            historical_replay.enqueue_batch(batch.id or 0)
+            execution = JobExecutionService(
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+                historical_replay=historical_replay,
+                watchlist_orchestration=PersistingReplayOrchestration(session),
+            )
+            claimed = RunRepository(session).claim_next_queued_run(worker_id="worker-test")
+            assert claimed is not None
+            execution.execute_claimed_run(claimed, worker_id="worker-test")
+            plan_row = session.query(RecommendationPlanRecord).one()
+            signal_breakdown = json.loads(plan_row.signal_breakdown_json or "{}")
+            signal_breakdown.pop("replay_provenance", None)
+            plan_row.signal_breakdown_json = json.dumps(signal_breakdown)
+            row = session.query(ReplayEligibilityRecord).one()
+            row.tier = "ineligible"
+            row.eligible_for_tuning = False
+            row.rejection_reasons_json = '["manual_corruption"]'
+            session.commit()
+
+            summary = ReplayEligibilityReclassificationService(session).reclassify_batch(batch.id or 0)
+
+            self.assertEqual(1, summary.outcome_count)
+            self.assertEqual(1, summary.reclassified_count)
+            self.assertEqual(0, summary.before_eligible_count)
+            self.assertEqual(1, summary.after_eligible_count)
+            self.assertEqual(1, summary.after_tier_counts["tier_a"])
+            repaired = session.query(ReplayEligibilityRecord).one()
+            self.assertTrue(repaired.eligible_for_tuning)
+            self.assertEqual("tier_a", repaired.tier)
+            repaired_plan = session.query(RecommendationPlanRecord).one()
+            repaired_signal_breakdown = json.loads(repaired_plan.signal_breakdown_json or "{}")
+            self.assertEqual("historical_replay_reclassification", repaired_signal_breakdown["replay_provenance"]["source"])
         finally:
             session.close()
 
