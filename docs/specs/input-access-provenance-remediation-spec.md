@@ -295,6 +295,12 @@ Start with the path that unblocks replay/tuning:
 
 Result: run `38` completed from repaired replay eligibility rows for batch `15`, fixed floor `48`, 20 candidates. It is valid as repaired replay evidence, but not promotion evidence: the winning candidate was the baseline/current config, search actionable count was `1`, validation actionable count was `0`, and the outcome population was dominated by phantom rows (`172` phantom vs `2` execution rows).
 
+### Phase 10 — Promotion evidence-quality guardrails
+
+- [x] Add replay promotion guardrails that reject phantom-dominated replay evidence unless execution-row coverage meets the minimum validation sample.
+- [x] Surface the evidence-quality rejection reason in automatic replay promotion and manual replay candidate promotion checks.
+- [x] Preserve dry-run/research reporting for phantom-heavy evidence; only block promotion.
+
 ## Testing requirements
 
 Add unit tests for:

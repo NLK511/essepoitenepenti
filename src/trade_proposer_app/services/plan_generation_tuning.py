@@ -510,6 +510,7 @@ class PlanGenerationTuningService:
             rejection_reasons.append("replay_winner_missing_tier_a_evidence")
         if int(top.get("eligible_record_count") or 0) < min_validation_resolved:
             rejection_reasons.append("replay_winner_insufficient_eligible_records")
+        rejection_reasons.extend(self._replay_evidence_quality_rejection_reasons(top, min_validation_resolved=min_validation_resolved))
         replay_walk_forward_validation = aggregate.get("replay_walk_forward_validation") if isinstance(aggregate, dict) else None
         if not isinstance(replay_walk_forward_validation, dict) or not replay_walk_forward_validation.get("passed"):
             rejection_reasons.append("replay_winner_failed_rolling_baseline_comparison")
@@ -873,6 +874,7 @@ class PlanGenerationTuningService:
                     "loss_count": loss_count,
                     "resolved_count": resolved_count,
                     "replay_score": replay_score,
+                    "outcome_population": result.get("outcome_population") if isinstance(result.get("outcome_population"), dict) else None,
                 }
             )
         ranked.sort(
@@ -1335,9 +1337,27 @@ class PlanGenerationTuningService:
             return {"allowed": False, "reason": "candidate_is_not_replay_reranked_winner", "aggregate": aggregate}
         if int(tier_counts.get("tier_a", 0) or 0) <= 0:
             return {"allowed": False, "reason": "candidate_missing_tier_a_replay_evidence", "aggregate": aggregate}
+        quality_reasons = self._replay_evidence_quality_rejection_reasons(result or {}, min_validation_resolved=1)
+        if quality_reasons:
+            return {"allowed": False, "reason": quality_reasons[0], "aggregate": aggregate}
         if not isinstance(validation, dict) or not validation.get("passed"):
             return {"allowed": False, "reason": "candidate_failed_replay_walk_forward_baseline_check", "aggregate": aggregate}
         return {"allowed": True, "reason": "replay_candidate_passed_manual_checks", "aggregate": aggregate}
+
+    @staticmethod
+    def _replay_evidence_quality_rejection_reasons(source: dict[str, object], *, min_validation_resolved: int) -> list[str]:
+        population = source.get("outcome_population") if isinstance(source.get("outcome_population"), dict) else None
+        if not population:
+            return []
+        row_count = int(population.get("row_count") or 0)
+        phantom_count = int(population.get("phantom_count") or 0)
+        execution_count = int(population.get("execution_count") or 0)
+        if row_count <= 0:
+            return ["replay_winner_empty_outcome_population"]
+        phantom_ratio = phantom_count / row_count if row_count else 0.0
+        if phantom_ratio > 0.5 and execution_count < max(1, min_validation_resolved):
+            return ["replay_winner_phantom_dominated_without_execution_sample"]
+        return []
 
     def _edge_validation_gate_report(
         self, *, walk_forward_validation: object | None = None

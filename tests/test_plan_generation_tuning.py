@@ -444,6 +444,51 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             result["promotion_rejection_reasons"],
         )
 
+    def test_replay_reranked_promotion_rejects_phantom_dominated_evidence(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index in range(4):
+            self._seed_replay_record(
+                created_at=start + timedelta(days=index),
+                mfe=9.0 + index,
+                mae=-2.0,
+                outcome="win",
+            )
+        run = self.service.run(mode="point_in_time_replay", apply=False, limit=4)
+        candidate = self.tuning_repository.list_candidates_for_run(run.id or 0)[0]
+        replay_execution = {
+            "aggregate": {
+                "rerank": [
+                    {
+                        "candidate_id": candidate.id,
+                        "candidate_rank": candidate.rank,
+                        "tier_a_count": 10,
+                        "eligible_record_count": 10,
+                        "replay_score": 10.0,
+                        "outcome_population": {
+                            "row_count": 10,
+                            "phantom_count": 9,
+                            "execution_count": 1,
+                        },
+                    }
+                ],
+                "replay_walk_forward_validation": {"passed": True, "promotion_recommended": True},
+            }
+        }
+
+        result = self.service._apply_replay_reranked_promotion(
+            run=run,
+            replay_execution=replay_execution,
+            baseline_version=self.service._resolve_active_config_version(),
+            walk_forward_validation=object(),
+            min_validation_resolved=4,
+        )
+
+        self.assertFalse(result["promotion_applied"])
+        self.assertIn(
+            "replay_winner_phantom_dominated_without_execution_sample",
+            result["promotion_rejection_reasons"],
+        )
+
     def test_replay_reranked_winner_is_used_for_promotion_decision(self) -> None:
         start = datetime(2026, 4, 1, tzinfo=timezone.utc)
         for index in range(4):
