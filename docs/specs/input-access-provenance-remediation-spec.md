@@ -343,6 +343,14 @@ Result: input-access policies now have shared constants plus a common `input_pol
 
 Result: replay evidence quality now lives in `replay_evidence_quality.py`. Replay audit and plan-generation tuning promotion checks share the same phantom/execution math while preserving their existing public rejection reasons. Validation passed (`227 passed`).
 
+### Phase 16 — Fourth maintainability harmonization pass
+
+- [x] Simplify historical bar access by removing duplicated daily/intraday retrieval flow.
+- [x] Keep public bar-access methods stable while routing shared behavior through one helper.
+- [x] Validate historical replay and price-history consumers after refactor.
+
+Result: `HistoricalBarsAccessService.daily_bars` and `intraday_1m_bars` now share one `_bars_for_timeframe` implementation while keeping the public method names and defaults stable. Validation passed (`227 passed`).
+
 ## Testing requirements
 
 Add unit tests for:

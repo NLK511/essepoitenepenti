@@ -86,31 +86,14 @@ class HistoricalBarsAccessService:
         limit: int = 200,
         policy: str = "cache_only",
     ) -> HistoricalBarsAccessResult:
-        normalized_policy = normalize_input_access_policy(policy, default="cache_only")
-        hydration_summary = self._hydrate_if_allowed(
-            tickers=[ticker],
-            batch_start=start_at or end_at or available_at or datetime.utcnow(),
-            batch_end=end_at or start_at or available_at or datetime.utcnow(),
-            policy=normalized_policy,
-            timeframe="1d",
-        )
-        bars = self.market_data.historical_market_data.list_bars(
+        return self._bars_for_timeframe(
             ticker=ticker,
             timeframe="1d",
             start_at=start_at,
             end_at=end_at,
             available_at=available_at,
             limit=limit,
-        )
-        return HistoricalBarsAccessResult(
-            ticker=ticker,
-            timeframe="1d",
-            start_at=start_at,
-            end_at=end_at,
-            available_at=available_at,
-            bars=bars,
-            coverage=self._bar_coverage(ticker=ticker, timeframe="1d", start_at=start_at, end_at=end_at, available_at=available_at, bar_count=len(bars), policy=normalized_policy),
-            hydration_summary=hydration_summary,
+            policy=policy,
         )
 
     def intraday_1m_bars(
@@ -123,17 +106,39 @@ class HistoricalBarsAccessService:
         limit: int = 500,
         policy: str = "cache_only",
     ) -> HistoricalBarsAccessResult:
+        return self._bars_for_timeframe(
+            ticker=ticker,
+            timeframe="1m",
+            start_at=start_at,
+            end_at=end_at,
+            available_at=available_at,
+            limit=limit,
+            policy=policy,
+        )
+
+    def _bars_for_timeframe(
+        self,
+        *,
+        ticker: str,
+        timeframe: str,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        available_at: datetime | None,
+        limit: int,
+        policy: str,
+    ) -> HistoricalBarsAccessResult:
         normalized_policy = normalize_input_access_policy(policy, default="cache_only")
+        fallback_time = datetime.utcnow()
         hydration_summary = self._hydrate_if_allowed(
             tickers=[ticker],
-            batch_start=start_at or end_at or available_at or datetime.utcnow(),
-            batch_end=end_at or start_at or available_at or datetime.utcnow(),
+            batch_start=start_at or end_at or available_at or fallback_time,
+            batch_end=end_at or start_at or available_at or fallback_time,
             policy=normalized_policy,
-            timeframe="1m",
+            timeframe=timeframe,
         )
         bars = self.market_data.historical_market_data.list_bars(
             ticker=ticker,
-            timeframe="1m",
+            timeframe=timeframe,
             start_at=start_at,
             end_at=end_at,
             available_at=available_at,
@@ -141,12 +146,20 @@ class HistoricalBarsAccessService:
         )
         return HistoricalBarsAccessResult(
             ticker=ticker,
-            timeframe="1m",
+            timeframe=timeframe,
             start_at=start_at,
             end_at=end_at,
             available_at=available_at,
             bars=bars,
-            coverage=self._bar_coverage(ticker=ticker, timeframe="1m", start_at=start_at, end_at=end_at, available_at=available_at, bar_count=len(bars), policy=normalized_policy),
+            coverage=self._bar_coverage(
+                ticker=ticker,
+                timeframe=timeframe,
+                start_at=start_at,
+                end_at=end_at,
+                available_at=available_at,
+                bar_count=len(bars),
+                policy=normalized_policy,
+            ),
             hydration_summary=hydration_summary,
         )
 
