@@ -6,21 +6,18 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import Job, Run, Watchlist
-from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
-from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.builders import (
+    create_historical_replay_service,
     create_industry_context_refresh_service,
     create_industry_context_service,
     create_macro_context_refresh_service,
     create_macro_context_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
-from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
@@ -164,12 +161,7 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         macro_context=create_macro_context_service(session),
         industry_context=create_industry_context_service(session),
         recommendation_plans=RecommendationPlanRepository(session),
-        historical_replay=HistoricalReplayService(
-            historical_replays=HistoricalReplayRepository(session),
-            jobs=JobRepository(session),
-            runs=RunRepository(session),
-            historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
-        ),
+        historical_replay=create_historical_replay_service(session),
     )
     return service.enqueue_job(job_id)
 

@@ -70,6 +70,7 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 - `specs/nitter-social-relevance-scoring.md`
 - `specs/data-quality-audit-spec.md`
 - `specs/bars-refresh-spec.md`
+- `specs/input-access-provenance-remediation-spec.md`
 - `default-watchlists.md`
 
 ### Broker execution and safety

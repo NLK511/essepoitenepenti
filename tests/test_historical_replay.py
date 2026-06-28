@@ -204,6 +204,119 @@ class HistoricalReplayTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_replay_eligibility_rejects_missing_mandatory_provenance(self) -> None:
+        eligibility = JobExecutionService._classify_replay_eligibility(
+            ticker="AAPL",
+            coverage={"tier": "tier_a", "blockers": [], "warnings": []},
+            resolution_source="intraday",
+            outcome={"outcome": "win", "status": "resolved"},
+            candidate_config_hash="abc",
+            replay_provenance={"as_of": "2024-02-05T23:59:59+00:00"},
+        )
+
+        self.assertFalse(eligibility["eligible_for_tuning"])
+        self.assertEqual("tier_c", eligibility["tier"])
+        self.assertIn("missing_replay_provenance:code_version", eligibility["rejection_reasons"])
+        self.assertIn("missing_replay_provenance:settings_hash", eligibility["rejection_reasons"])
+        self.assertIn("missing_replay_provenance:input_coverage_hash", eligibility["rejection_reasons"])
+
+    def test_cache_only_replay_builds_coverage_from_stored_bars_without_remote_hydration(self) -> None:
+        session = create_session()
+        try:
+            class CountingProvider(StubHistoricalBarProvider):
+                calls = 0
+
+                def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+                    self.calls += 1
+                    return super().fetch_daily_bars(ticker, start_at, end_at)
+
+            provider = CountingProvider()
+            market_repository = HistoricalMarketDataRepository(session)
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            for day_offset in range(-12, 6):
+                day = replay_as_of + timedelta(days=day_offset)
+                market_repository.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1d",
+                        bar_time=day,
+                        available_at=day.replace(hour=23, minute=59, second=59),
+                        open_price=100.0,
+                        high_price=102.0,
+                        low_price=99.0,
+                        close_price=101.0,
+                        volume=1000,
+                        source="fixture",
+                    )
+                )
+            historical_replay = HistoricalReplayService(
+                historical_replays=HistoricalReplayRepository(session),
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+                historical_market_data=HistoricalMarketDataService(market_repository, provider=provider),
+                input_access_policy="cache_only",
+            )
+            batch = historical_replay.create_batch(
+                name="Cache-only replay coverage",
+                mode="research",
+                tickers=["AAPL"],
+                as_of_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                as_of_end=replay_as_of,
+            )
+            slice_row = HistoricalReplayRepository(session).list_slices(batch.id or 0)[0]
+
+            input_summary, _ = historical_replay.build_slice_execution_payload(batch.id or 0, slice_row.id or 0)
+
+            self.assertEqual(0, provider.calls)
+            self.assertEqual("skipped_remote_hydration", input_summary["hydration_summary"]["status"])
+            coverage = input_summary["replay_coverage_report"]
+            self.assertEqual("cache_only", coverage["policy"])
+            self.assertEqual(1, coverage["ticker_count"])
+            self.assertIn("input_coverage_hash", coverage)
+            self.assertEqual(1, coverage["tier_counts"]["tier_b"])
+        finally:
+            session.close()
+
+    def test_cache_then_remote_replay_hydrates_before_coverage(self) -> None:
+        session = create_session()
+        try:
+            class CountingProvider(StubHistoricalBarProvider):
+                calls = 0
+
+                def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+                    self.calls += 1
+                    return super().fetch_daily_bars(ticker, start_at, end_at)
+
+            provider = CountingProvider()
+            market_repository = HistoricalMarketDataRepository(session)
+            historical_replay = HistoricalReplayService(
+                historical_replays=HistoricalReplayRepository(session),
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+                historical_market_data=HistoricalMarketDataService(market_repository, provider=provider),
+                input_access_policy="cache_then_remote",
+            )
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            batch = historical_replay.create_batch(
+                name="Cache then remote replay coverage",
+                mode="research",
+                tickers=["AAPL"],
+                as_of_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                as_of_end=replay_as_of,
+            )
+            slice_row = HistoricalReplayRepository(session).list_slices(batch.id or 0)[0]
+
+            input_summary, _ = historical_replay.build_slice_execution_payload(batch.id or 0, slice_row.id or 0)
+
+            self.assertEqual(1, provider.calls)
+            self.assertEqual("stub", input_summary["hydration_summary"]["provider"])
+            coverage = input_summary["replay_coverage_report"]
+            self.assertEqual("cache_then_remote", coverage["policy"])
+            self.assertEqual("cache_plus_remote", coverage["source"])
+            self.assertIn("input_coverage_hash", coverage)
+        finally:
+            session.close()
+
     def test_watchlist_orchestration_embeds_replay_provenance_in_signal_and_plan_payloads(self) -> None:
         service = WatchlistOrchestrationService(
             context_snapshots=MagicMock(),

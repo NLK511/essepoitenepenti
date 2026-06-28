@@ -5,29 +5,15 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice
-from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
-from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
-from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
-from trade_proposer_app.repositories.jobs import JobRepository
-from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
+from trade_proposer_app.services.builders import create_historical_replay_service
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 
 router = APIRouter(prefix="/historical-replay", tags=["historical-replay"])
 
 
 def _create_service(session: Session) -> HistoricalReplayService:
-    return HistoricalReplayService(
-        historical_replays=HistoricalReplayRepository(session),
-        jobs=JobRepository(session),
-        runs=RunRepository(session),
-        historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
-        historical_news=HistoricalNewsRepository(session),
-        context_snapshots=ContextSnapshotRepository(session),
-        fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
-    )
+    return create_historical_replay_service(session)
 
 
 def _parse_date(value: str, field_name: str, *, end_of_day: bool = False) -> datetime:

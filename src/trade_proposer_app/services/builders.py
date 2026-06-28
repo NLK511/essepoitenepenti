@@ -11,6 +11,8 @@ from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
 )
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
+from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
+from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import (
     RecommendationDecisionSampleRepository,
@@ -23,6 +25,8 @@ from trade_proposer_app.services.confidence_calibration_snapshots import (
     ConfidenceCalibrationSnapshotService,
 )
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
+from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
+from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
@@ -69,6 +73,23 @@ def _news_service(session: Session, repository: SettingsRepository, article_limi
         max_articles=int(settings_map.get(article_limit_key, "12")),
         historical_news=HistoricalNewsRepository(session),
         observability=ObservabilityEventRepository(session),
+    )
+
+
+def create_historical_replay_service(
+    session: Session,
+    *,
+    input_access_policy: str = "cache_then_remote",
+) -> HistoricalReplayService:
+    return HistoricalReplayService(
+        historical_replays=HistoricalReplayRepository(session),
+        jobs=JobRepository(session),
+        runs=RunRepository(session),
+        historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
+        historical_news=HistoricalNewsRepository(session),
+        context_snapshots=ContextSnapshotRepository(session),
+        fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
+        input_access_policy=input_access_policy,
     )
 
 

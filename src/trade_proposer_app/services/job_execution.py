@@ -7,9 +7,12 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
+from sqlalchemy import select
+
 from scripts.large_plan_generation_parameter_search import run_large_parameter_search
 from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
+from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
     Recommendation,
@@ -977,7 +980,12 @@ class JobExecutionService:
             )
             stored.append(stored_outcome)
             candidate_hash = str(candidate_config_hash or "")
-            replay_provenance = plan.signal_breakdown.get("replay_provenance") if isinstance(plan.signal_breakdown, dict) else None
+            signal_breakdown = self._model_or_dict_to_dict(plan.signal_breakdown)
+            replay_provenance = signal_breakdown.get("replay_provenance") if isinstance(signal_breakdown, dict) else None
+            if replay_provenance is None and plan.id is not None:
+                raw_plan = self.runs.session.get(RecommendationPlanRecord, plan.id)
+                raw_signal_breakdown = self._loads_json_object(raw_plan.signal_breakdown_json if raw_plan else None)
+                replay_provenance = raw_signal_breakdown.get("replay_provenance")
             eligibility = self._classify_replay_eligibility(
                 ticker=ticker,
                 coverage=coverage_by_ticker.get(ticker),
@@ -1020,6 +1028,20 @@ class JobExecutionService:
         }
 
     @staticmethod
+    def _model_or_dict_to_dict(value: object) -> dict[str, object]:
+        if isinstance(value, dict):
+            return value
+        model_dump = getattr(value, "model_dump", None)
+        if callable(model_dump):
+            dumped = model_dump(mode="json")
+            return dumped if isinstance(dumped, dict) else {}
+        legacy_dict = getattr(value, "dict", None)
+        if callable(legacy_dict):
+            dumped = legacy_dict()
+            return dumped if isinstance(dumped, dict) else {}
+        return {}
+
+    @staticmethod
     def _replay_coverage_by_ticker(coverage: object) -> dict[str, dict[str, object]]:
         if not isinstance(coverage, dict):
             return {}
@@ -1053,12 +1075,17 @@ class JobExecutionService:
         reasons = list(blockers)
         if not coverage:
             reasons.append("missing_coverage_report")
+        mandatory_provenance_keys = ("as_of", "code_version", "settings_hash", "input_coverage_hash")
+        missing_provenance = [key for key in mandatory_provenance_keys if not replay_provenance.get(key)]
+        if missing_provenance:
+            reasons.extend(f"missing_replay_provenance:{key}" for key in missing_provenance)
         if status != "resolved":
             reasons.append("unresolved_open_outcome")
-        if resolution_source == "intraday" and coverage_tier == "tier_a" and status == "resolved" and not blockers:
+        provenance_valid = not missing_provenance
+        if resolution_source == "intraday" and coverage_tier == "tier_a" and status == "resolved" and not blockers and provenance_valid:
             tier = "tier_a"
             eligible = True
-        elif coverage_tier in {"tier_a", "tier_b"} and resolution_source in {"daily_prefilter", "none"} and status == "resolved" and not blockers:
+        elif coverage_tier in {"tier_a", "tier_b"} and resolution_source in {"daily_prefilter", "none"} and status == "resolved" and not blockers and provenance_valid:
             tier = "tier_b"
             eligible = True
             if resolution_source == "daily_prefilter":
@@ -1153,6 +1180,7 @@ class JobExecutionService:
                 set_config_override(None)
             if callable(set_provenance):
                 set_provenance(None)
+        self._ensure_replay_provenance_on_generated_plans(run, provenance)
         summary = orchestration.get("summary") if isinstance(orchestration, dict) else None
         artifact = orchestration.get("artifact") if isinstance(orchestration, dict) else None
         plan_count = self._safe_nested_int(summary, "plan_count")
@@ -1169,6 +1197,37 @@ class JobExecutionService:
             "candidate_config_override_hash": self._stable_hash(config_override) if isinstance(config_override, dict) else None,
             "replay_provenance": provenance,
         }
+
+    def _ensure_replay_provenance_on_generated_plans(self, run: Run, provenance: dict[str, object]) -> None:
+        if getattr(self.runs, "session", None) is None or run.id is None:
+            return
+        rows = self.runs.session.scalars(
+            select(RecommendationPlanRecord).where(RecommendationPlanRecord.run_id == run.id)
+        ).all()
+        changed = False
+        for row in rows:
+            signal_breakdown = self._loads_json_object(row.signal_breakdown_json)
+            evidence_summary = self._loads_json_object(row.evidence_summary_json)
+            if not isinstance(signal_breakdown.get("replay_provenance"), dict):
+                signal_breakdown["replay_provenance"] = dict(provenance)
+                row.signal_breakdown_json = json.dumps(signal_breakdown, sort_keys=True, default=str)
+                changed = True
+            if not isinstance(evidence_summary.get("replay_provenance"), dict):
+                evidence_summary["replay_provenance"] = dict(provenance)
+                row.evidence_summary_json = json.dumps(evidence_summary, sort_keys=True, default=str)
+                changed = True
+        if changed:
+            self.runs.session.commit()
+
+    @staticmethod
+    def _loads_json_object(raw: str | None) -> dict[str, object]:
+        if not raw:
+            return {}
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
 
     def _build_historical_replay_provenance(
         self,
@@ -1188,7 +1247,8 @@ class JobExecutionService:
             "code_version": os.environ.get("GIT_COMMIT") or os.environ.get("SOURCE_VERSION") or "unknown",
             "settings_hash": self._stable_hash({"weights_file_path": settings.weights_file_path}),
             "input_coverage_summary": coverage_summary,
-            "input_coverage_hash": self._stable_hash(coverage),
+            "input_coverage_hash": str(coverage.get("input_coverage_hash") or self._stable_hash(coverage)) if isinstance(coverage, dict) else self._stable_hash(coverage),
+            "plan_generation_config_hash": self._stable_hash(input_summary.get("plan_generation_tuning_config_override") or {}),
             "warnings": self._collect_replay_input_warnings(coverage if isinstance(coverage, dict) else {}),
         }
         return payload

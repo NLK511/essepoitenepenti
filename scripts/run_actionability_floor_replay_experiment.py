@@ -33,10 +33,11 @@ def _historical_replay_service(session, *, hydrate_inputs: bool = False):
         historical_replays=HistoricalReplayRepository(session),
         jobs=JobRepository(session),
         runs=RunRepository(session),
-        historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)) if hydrate_inputs else None,
+        historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
         historical_news=HistoricalNewsRepository(session),
         context_snapshots=ContextSnapshotRepository(session),
         fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
+        input_access_policy="cache_then_remote" if hydrate_inputs else "cache_only",
     )
 
 

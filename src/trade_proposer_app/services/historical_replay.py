@@ -12,6 +12,7 @@ from trade_proposer_app.repositories.historical_replay import HistoricalReplayRe
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
+from trade_proposer_app.services.input_access import normalize_input_access_policy
 from trade_proposer_app.services.replay_universes import list_replay_universe_presets, resolve_replay_universe
 
 
@@ -25,6 +26,7 @@ class HistoricalReplayService:
         historical_news: HistoricalNewsRepository | None = None,
         context_snapshots: ContextSnapshotRepository | None = None,
         fundamental_snapshots: FundamentalAnalysisSnapshotRepository | None = None,
+        input_access_policy: str = "cache_then_remote",
     ) -> None:
         self.historical_replays = historical_replays
         self.jobs = jobs
@@ -33,6 +35,7 @@ class HistoricalReplayService:
         self.historical_news = historical_news
         self.context_snapshots = context_snapshots
         self.fundamental_snapshots = fundamental_snapshots
+        self.input_access_policy = normalize_input_access_policy(input_access_policy)
 
     def create_batch(
         self,
@@ -190,11 +193,23 @@ class HistoricalReplayService:
         hydration_summary: dict[str, object] | None = None
         replay_coverage_report: dict[str, object] | None = None
         if self.historical_market_data is not None:
-            hydration_summary = self.hydrate_batch_market_data(batch_id)
+            if self.input_access_policy in {"cache_then_remote", "remote_refresh"}:
+                hydration_summary = self.hydrate_batch_market_data(batch_id)
+            else:
+                hydration_summary = {
+                    "provider": getattr(self.historical_market_data.provider, "provider_name", "unknown"),
+                    "source_tier": getattr(self.historical_market_data.provider, "source_tier", "unknown"),
+                    "policy": self.input_access_policy,
+                    "status": "skipped_remote_hydration",
+                    "reason": "input_access_policy_disallows_remote_fetch",
+                    "ticker_count": len(tickers),
+                }
             market_input = self.historical_market_data.build_slice_market_input(tickers=tickers, as_of=slice_row.as_of)
             replay_coverage_report = self.historical_market_data.build_replay_coverage_report(
                 tickers=tickers,
                 as_of=slice_row.as_of,
+                input_policy=self.input_access_policy,
+                source="cache" if self.input_access_policy in {"cache_only", "fail_if_missing"} else "cache_plus_remote",
             )
             replay_coverage_report = self._with_news_coverage(
                 replay_coverage_report,
@@ -221,10 +236,14 @@ class HistoricalReplayService:
             }
             replay_coverage_report = {
                 "as_of": slice_row.as_of.isoformat(),
+                "policy": self.input_access_policy,
+                "source": "unconfigured",
                 "ticker_count": len(tickers),
                 "tier_counts": {"tier_a": 0, "tier_b": 0, "tier_c": 0, "ineligible": len(tickers)},
                 "tier_a_ratio": 0.0,
                 "tickers": [],
+                "blockers": ["historical_market_data_service_not_configured"],
+                "warnings": [],
             }
         input_summary = {
             "replay_batch_id": batch.id,
@@ -305,6 +324,8 @@ class HistoricalReplayService:
         report = self.historical_market_data.build_replay_coverage_report(
             tickers=tickers,
             as_of=slice_row.as_of,
+            input_policy=self.input_access_policy,
+            source="cache",
         )
         report = self._with_news_coverage(report, tickers=tickers, as_of=slice_row.as_of)
         report = self._with_context_coverage(report, tickers=tickers, as_of=slice_row.as_of)

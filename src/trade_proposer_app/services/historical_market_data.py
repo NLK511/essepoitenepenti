@@ -8,6 +8,7 @@ import httpx
 
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.input_access import stable_hash
 
 
 class HistoricalMarketDataError(Exception):
@@ -185,6 +186,8 @@ class HistoricalMarketDataService:
         lookback_days: int = 90,
         resolution_days: int = 5,
         minimum_generation_daily_bars: int = 10,
+        input_policy: str = "cache_only",
+        source: str = "cache",
     ) -> dict[str, object]:
         """Report point-in-time replay readiness without mixing generation and outcome data."""
 
@@ -263,8 +266,10 @@ class HistoricalMarketDataService:
                     "warnings": warnings,
                 }
             )
-        return {
+        report = {
             "as_of": normalized_as_of.isoformat(),
+            "policy": input_policy,
+            "source": source,
             "lookback_days": lookback_days,
             "resolution_days": resolution_days,
             "ticker_count": len(tickers),
@@ -272,6 +277,8 @@ class HistoricalMarketDataService:
             "tier_a_ratio": round((tier_counts["tier_a"] / len(tickers)) if tickers else 0.0, 4),
             "tickers": ticker_reports,
         }
+        report["input_coverage_hash"] = stable_hash(report)
+        return report
 
     @staticmethod
     def _normalize(value: datetime) -> datetime:

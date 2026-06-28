@@ -10,16 +10,13 @@ from datetime import datetime, timezone
 
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import SessionLocal
-from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
-from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
-from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.builders import (
+    create_historical_replay_service,
     create_industry_context_refresh_service,
     create_industry_context_service,
     create_macro_context_refresh_service,
@@ -29,8 +26,6 @@ from trade_proposer_app.services.builders import (
 )
 from trade_proposer_app.domain.models import WorkerHeartbeat
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
-from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
@@ -101,15 +96,7 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
             industry_context=create_industry_context_service(session),
             watchlist_orchestration=create_watchlist_orchestration_service(session, proposal_service=proposal_service),
             recommendation_plans=RecommendationPlanRepository(session),
-            historical_replay=HistoricalReplayService(
-                historical_replays=HistoricalReplayRepository(session),
-                jobs=JobRepository(session),
-                runs=RunRepository(session),
-                historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
-                historical_news=HistoricalNewsRepository(session),
-                context_snapshots=ContextSnapshotRepository(session),
-                fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
-            ),
+            historical_replay=create_historical_replay_service(session),
             bars_refresh=BarsRefreshService(HistoricalMarketDataRepository(session)),
         )
         try:
