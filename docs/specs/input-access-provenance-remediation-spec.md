@@ -309,6 +309,15 @@ Result: run `38` completed from repaired replay eligibility rows for batch `15`,
 
 Result: batch `15` audit and tuning run `38` audit both reject promotion readiness. Batch `15` is unresolved-heavy (`177/351` open or unresolved outcomes) and phantom-dominated (`172/174` eligible rows are phantom outcomes). Run `38` is also phantom-dominated without enough execution rows (`2` execution rows vs minimum `8`).
 
+### Phase 12 — Replay outcome refresh for stale open rows
+
+- [x] Add a reusable replay outcome refresh service/script that re-resolves existing replay plan outcomes from persisted bars.
+- [x] Default to refreshing only open/unresolved replay outcomes and preserve already resolved outcomes unless `--include-resolved` is explicit.
+- [x] Reclassify eligibility after refresh so audit/tuning uses current outcome state.
+- [x] Re-audit batch `15` after refresh and decide whether another repaired rescore is warranted.
+
+Result: batch `15` refresh converted `177` open/unresolved replay outcomes to resolved `expired` outcomes using cache-only persisted bars and reclassified eligibility. Audit after refresh shows unresolved ratio `0.0`, but promotion readiness still fails because eligible evidence remains phantom-dominated (`172/174` eligible rows are phantom outcomes, only `2` execution rows). Another repaired rescore is not warranted until a replay batch produces enough execution-row evidence.
+
 ## Testing requirements
 
 Add unit tests for:
