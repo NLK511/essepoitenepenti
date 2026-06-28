@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query
@@ -31,29 +30,13 @@ from trade_proposer_app.services.plan_generation_walk_forward import (
     PlanGenerationWalkForwardService,
 )
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
+from trade_proposer_app.utils.json_payloads import loads_json_list as _loads_json_list
+from trade_proposer_app.utils.json_payloads import loads_json_object as _loads_json_object
 
 router = APIRouter(prefix="/plan-generation-tuning", tags=["plan-generation-tuning"])
 
 STANDARD_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-standard-search"
 LARGE_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-large-search"
-def _loads_json_object(value: str | None) -> dict[str, object]:
-    if not value:
-        return {}
-    try:
-        loaded = json.loads(value)
-    except json.JSONDecodeError:
-        return {}
-    return loaded if isinstance(loaded, dict) else {}
-
-
-def _loads_json_list(value: str | None) -> list[object]:
-    if not value:
-        return []
-    try:
-        loaded = json.loads(value)
-    except json.JSONDecodeError:
-        return []
-    return loaded if isinstance(loaded, list) else []
 
 
 PROMOTION_EVENT_TYPES = {

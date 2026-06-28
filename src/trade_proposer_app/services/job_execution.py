@@ -44,6 +44,7 @@ from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTun
 from trade_proposer_app.services.recommendation_plan_calibration import (
     RecommendationPlanCalibrationService,
 )
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 logger = logging.getLogger(__name__)
 
@@ -984,7 +985,7 @@ class JobExecutionService:
             replay_provenance = signal_breakdown.get("replay_provenance") if isinstance(signal_breakdown, dict) else None
             if replay_provenance is None and plan.id is not None:
                 raw_plan = self.runs.session.get(RecommendationPlanRecord, plan.id)
-                raw_signal_breakdown = self._loads_json_object(raw_plan.signal_breakdown_json if raw_plan else None)
+                raw_signal_breakdown = loads_json_object(raw_plan.signal_breakdown_json if raw_plan else None)
                 replay_provenance = raw_signal_breakdown.get("replay_provenance")
             eligibility = self._classify_replay_eligibility(
                 ticker=ticker,
@@ -1219,8 +1220,8 @@ class JobExecutionService:
         ).all()
         changed = False
         for row in rows:
-            signal_breakdown = self._loads_json_object(row.signal_breakdown_json)
-            evidence_summary = self._loads_json_object(row.evidence_summary_json)
+            signal_breakdown = loads_json_object(row.signal_breakdown_json)
+            evidence_summary = loads_json_object(row.evidence_summary_json)
             if not isinstance(signal_breakdown.get("replay_provenance"), dict):
                 signal_breakdown["replay_provenance"] = dict(provenance)
                 row.signal_breakdown_json = json.dumps(signal_breakdown, sort_keys=True, default=str)
@@ -1231,16 +1232,6 @@ class JobExecutionService:
                 changed = True
         if changed:
             self.runs.session.commit()
-
-    @staticmethod
-    def _loads_json_object(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            loaded = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return loaded if isinstance(loaded, dict) else {}
 
     def _build_historical_replay_provenance(
         self,
@@ -1702,23 +1693,11 @@ class JobExecutionService:
 
     @staticmethod
     def _get_run_summary(run: Run) -> dict[str, object]:
-        if not run.summary_json:
-            return {}
-        try:
-            parsed = json.loads(run.summary_json)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
+        return loads_json_object(run.summary_json)
 
     @staticmethod
     def _get_run_artifact(run: Run) -> dict[str, object]:
-        if not run.artifact_json:
-            return {}
-        try:
-            parsed = json.loads(run.artifact_json)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
+        return loads_json_object(run.artifact_json)
 
     @classmethod
     def _plan_generation_tuning_request(cls, run: Run) -> dict[str, object]:

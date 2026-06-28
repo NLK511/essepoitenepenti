@@ -6,7 +6,11 @@ from datetime import datetime
 from trade_proposer_app.domain.models import HistoricalMarketBar
 
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
-from trade_proposer_app.services.input_access import InputAccessPolicy, normalize_input_access_policy
+from trade_proposer_app.services.input_access import (
+    InputAccessPolicy,
+    input_policy_allows_remote_fetch,
+    normalize_input_access_policy,
+)
 
 
 @dataclass(frozen=True)
@@ -56,7 +60,7 @@ class HistoricalBarsAccessService:
             policy=normalized_policy,
             timeframe="1d",
         )
-        source = "cache" if normalized_policy in {"cache_only", "fail_if_missing"} else "cache_plus_remote"
+        source = "cache_plus_remote" if input_policy_allows_remote_fetch(normalized_policy) else "cache"
         market_input = self.market_data.build_slice_market_input(tickers=tickers, as_of=as_of)
         coverage_report = self.market_data.build_replay_coverage_report(
             tickers=tickers,
@@ -156,7 +160,7 @@ class HistoricalBarsAccessService:
         timeframe: str,
     ) -> dict[str, object]:
         gap_report = self._gap_report(tickers=tickers, timeframe=timeframe, start_at=batch_start, end_at=batch_end)
-        if policy in {"cache_then_remote", "remote_refresh"} and timeframe == "1d":
+        if input_policy_allows_remote_fetch(policy) and timeframe == "1d":
             fetch_tickers = list(tickers) if policy == "remote_refresh" else list(gap_report["missing_tickers"])
             ingested_by_ticker: dict[str, int] = {}
             for ticker in fetch_tickers:
@@ -173,7 +177,7 @@ class HistoricalBarsAccessService:
                 "bar_count": sum(ingested_by_ticker.values()),
                 "gap_report": gap_report,
             }
-        if policy in {"cache_then_remote", "remote_refresh"} and timeframe != "1d":
+        if input_policy_allows_remote_fetch(policy) and timeframe != "1d":
             return {
                 "provider": getattr(self.market_data.provider, "provider_name", "unknown"),
                 "source_tier": getattr(self.market_data.provider, "source_tier", "unknown"),

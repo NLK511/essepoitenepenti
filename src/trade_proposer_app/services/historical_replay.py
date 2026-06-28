@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 
 from trade_proposer_app.domain.enums import JobType
@@ -21,6 +20,7 @@ from trade_proposer_app.services.historical_market_data import HistoricalMarketD
 from trade_proposer_app.services.input_access import normalize_input_access_policy
 from trade_proposer_app.services.json_artifact_validation import JsonArtifactValidationService
 from trade_proposer_app.services.replay_universes import list_replay_universe_presets, resolve_replay_universe
+from trade_proposer_app.utils.json_payloads import loads_json_list, loads_json_object
 
 
 class HistoricalReplayService:
@@ -278,21 +278,13 @@ class HistoricalReplayService:
 
     @staticmethod
     def _plan_generation_tuning_config_override(batch: HistoricalReplayBatch) -> dict[str, object] | None:
-        try:
-            config = json.loads(batch.config_json or "{}")
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(config, dict):
-            return None
+        config = loads_json_object(batch.config_json)
         override = config.get("plan_generation_tuning_config_override")
         return override if isinstance(override, dict) else None
 
     def get_slice_coverage_report(self, slice_id: int) -> dict[str, object]:
         slice_row = self.historical_replays.get_slice(slice_id)
-        try:
-            input_summary = json.loads(slice_row.input_summary_json or "{}")
-        except json.JSONDecodeError:
-            input_summary = {}
+        input_summary = loads_json_object(slice_row.input_summary_json)
         stored_report = input_summary.get("replay_coverage_report")
         if isinstance(stored_report, dict) and stored_report:
             return {"slice_id": slice_id, "source": "stored_input_summary", "coverage": stored_report}
@@ -415,10 +407,5 @@ class HistoricalReplayService:
 
     @staticmethod
     def _parse_batch_tickers(batch: HistoricalReplayBatch) -> list[str]:
-        try:
-            parsed = json.loads(batch.tickers_json or "[]")
-        except json.JSONDecodeError:
-            parsed = []
-        if not isinstance(parsed, list):
-            return []
+        parsed = loads_json_list(batch.tickers_json)
         return [str(item).strip().upper() for item in parsed if str(item).strip()]

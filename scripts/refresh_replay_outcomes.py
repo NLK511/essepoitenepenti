@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.services.input_access import INPUT_ACCESS_POLICIES
 from trade_proposer_app.services.replay_outcome_refresh import ReplayOutcomeRefreshService
 
 
@@ -26,7 +27,7 @@ def main() -> None:
     parser.add_argument("--as-of", default=None, help="Resolution timestamp; defaults to now.")
     parser.add_argument("--include-resolved", action="store_true")
     parser.add_argument("--no-reclassify", action="store_true")
-    parser.add_argument("--policy", default="cache_only", choices=["cache_only", "cache_then_remote", "remote_refresh", "fail_if_missing"])
+    parser.add_argument("--policy", default="cache_only", choices=INPUT_ACCESS_POLICIES)
     parser.add_argument("--artifact-dir", default="artifacts")
     args = parser.parse_args()
     session = SessionLocal()

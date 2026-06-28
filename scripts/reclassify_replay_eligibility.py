@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.services.input_access import INPUT_ACCESS_POLICIES
 from trade_proposer_app.services.replay_eligibility_reclassification import ReplayEligibilityReclassificationService
 
 
@@ -17,7 +18,7 @@ def main() -> None:
     parser.add_argument("--batch-id", type=int, required=True)
     parser.add_argument(
         "--policy",
-        choices=["cache_only", "cache_then_remote", "remote_refresh", "fail_if_missing"],
+        choices=INPUT_ACCESS_POLICIES,
         default="cache_only",
         help="Input access policy for rebuilding missing coverage reports. Defaults to cache_only.",
     )

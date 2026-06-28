@@ -7,6 +7,13 @@ from datetime import datetime
 from typing import Literal
 
 InputAccessPolicy = Literal["cache_only", "cache_then_remote", "remote_refresh", "fail_if_missing"]
+INPUT_ACCESS_POLICIES: tuple[InputAccessPolicy, ...] = (
+    "cache_only",
+    "cache_then_remote",
+    "remote_refresh",
+    "fail_if_missing",
+)
+REMOTE_FETCH_INPUT_POLICIES: tuple[InputAccessPolicy, ...] = ("cache_then_remote", "remote_refresh")
 CoverageTier = Literal["tier_a", "tier_b", "tier_c", "ineligible"]
 
 
@@ -136,9 +143,13 @@ class InputAccessResult:
 
 def normalize_input_access_policy(value: object, default: InputAccessPolicy = "cache_then_remote") -> InputAccessPolicy:
     normalized = str(value or default).strip().lower().replace("-", "_")
-    if normalized in {"cache_only", "cache_then_remote", "remote_refresh", "fail_if_missing"}:
+    if normalized in INPUT_ACCESS_POLICIES:
         return normalized  # type: ignore[return-value]
     return default
+
+
+def input_policy_allows_remote_fetch(policy: object) -> bool:
+    return normalize_input_access_policy(policy, default="cache_only") in REMOTE_FETCH_INPUT_POLICIES
 
 
 def stable_hash(payload: object) -> str:

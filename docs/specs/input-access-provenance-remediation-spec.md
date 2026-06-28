@@ -327,6 +327,14 @@ Result: batch `15` refresh converted `177` open/unresolved replay outcomes to re
 
 Result: replay outcome refresh now uses an explicit `allow_remote_fetch` price-history option instead of monkeypatching the evaluator downloader. Touched remediation code now reuses common `stable_hash` and `loads_json_object` helpers. Focused replay/tuning validation passed (`35 passed`).
 
+### Phase 14 — Second maintainability harmonization pass
+
+- [x] Centralize input-access policy constants and remote-fetch semantics so scripts/services do not repeat policy string sets.
+- [x] Replace remaining remediation-local JSON object loader duplicates with common utilities.
+- [x] Keep behavior unchanged and validate replay/input-access paths after the cleanup.
+
+Result: input-access policies now have shared constants plus a common `input_policy_allows_remote_fetch` helper. Replay refresh, historical bar access, and replay utility scripts use those shared semantics. Historical replay, replay reclassification, plan-generation tuning routes, and job execution now use common JSON payload helpers instead of local duplicate loaders. Validation passed (`225 passed`).
+
 ## Testing requirements
 
 Add unit tests for:

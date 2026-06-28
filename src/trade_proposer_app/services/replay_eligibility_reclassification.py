@@ -22,6 +22,7 @@ from trade_proposer_app.services.historical_bars_access import HistoricalBarsAcc
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.input_access import normalize_input_access_policy, stable_hash
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.utils.json_payloads import loads_json_list, loads_json_object
 
 
 @dataclass(frozen=True)
@@ -74,11 +75,11 @@ class ReplayEligibilityReclassificationService:
             if slice_row is None or plan_row is None:
                 blockers["missing_slice_or_plan"] += 1
                 continue
-            input_summary = self._loads(slice_row.input_summary_json)
+            input_summary = loads_json_object(slice_row.input_summary_json)
             ticker = str(plan_row.ticker or "").strip().upper()
             coverage_report = self._coverage_report_for_slice(input_summary, slice_row, input_access_policy=policy)
             coverage = self._coverage_for_ticker(coverage_report, ticker)
-            signal_breakdown = self._loads(plan_row.signal_breakdown_json)
+            signal_breakdown = loads_json_object(plan_row.signal_breakdown_json)
             replay_provenance = signal_breakdown.get("replay_provenance")
             if not isinstance(replay_provenance, dict):
                 replay_provenance = self._fallback_replay_provenance(
@@ -88,7 +89,7 @@ class ReplayEligibilityReclassificationService:
                 )
                 signal_breakdown["replay_provenance"] = replay_provenance
                 plan_row.signal_breakdown_json = json.dumps(signal_breakdown, sort_keys=True, default=str)
-            outcome_payload = self._loads(outcome_row.outcome_json)
+            outcome_payload = loads_json_object(outcome_row.outcome_json)
             outcome_dict = {
                 "id": outcome_row.id,
                 "outcome": outcome_row.outcome,
@@ -151,7 +152,7 @@ class ReplayEligibilityReclassificationService:
         batch = self.session.get(HistoricalReplayBatchRecord, slice_row.replay_batch_id)
         if batch is None:
             return stored if isinstance(stored, dict) else None
-        tickers = self._loads_list(batch.tickers_json)
+        tickers = [str(item).strip().upper() for item in loads_json_list(batch.tickers_json) if str(item).strip()]
         if not tickers:
             return stored if isinstance(stored, dict) else None
         access = HistoricalBarsAccessService(self.market_data).replay_market_inputs(
@@ -187,28 +188,6 @@ class ReplayEligibilityReclassificationService:
                 "tier_a_ratio": coverage.get("tier_a_ratio"),
             },
         }
-
-    @staticmethod
-    def _loads(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            loaded = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return loaded if isinstance(loaded, dict) else {}
-
-    @staticmethod
-    def _loads_list(raw: str | None) -> list[str]:
-        if not raw:
-            return []
-        try:
-            loaded = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        if not isinstance(loaded, list):
-            return []
-        return [str(item).strip().upper() for item in loaded if str(item).strip()]
 
     @staticmethod
     def _coverage_for_ticker(coverage: object, ticker: str) -> dict[str, object] | None:
