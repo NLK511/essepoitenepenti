@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -14,21 +13,20 @@ from trade_proposer_app.persistence.models import (
     ReplayPlanOutcomeRecord,
 )
 from trade_proposer_app.services.outcome_population import summarize_outcome_population
+from trade_proposer_app.services.replay_evidence_quality import (
+    ReplayEvidenceQualityThresholds,
+    evaluate_replay_evidence_quality,
+)
 from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
-@dataclass(frozen=True)
-class ReplayEvidenceAuditConfig:
-    min_eligible_rows: int = 10
-    min_execution_rows: int = 8
-    max_unresolved_ratio: float = 0.5
-    max_phantom_ratio_without_execution_sample: float = 0.5
+ReplayEvidenceAuditConfig = ReplayEvidenceQualityThresholds
 
 
 class ReplayEvidenceAuditService:
     def __init__(self, session: Session, config: ReplayEvidenceAuditConfig | None = None) -> None:
         self.session = session
-        self.config = config or ReplayEvidenceAuditConfig()
+        self.config = config or ReplayEvidenceQualityThresholds()
 
     def audit_batch(self, replay_batch_id: int) -> dict[str, Any]:
         batch = self.session.get(HistoricalReplayBatchRecord, replay_batch_id)
@@ -122,37 +120,13 @@ class ReplayEvidenceAuditService:
         unresolved_count: int,
         outcome_population: dict[str, object],
     ) -> dict[str, object]:
-        reasons: list[str] = []
-        execution_count = int(outcome_population.get("execution_count") or 0)
-        phantom_count = int(outcome_population.get("phantom_count") or 0)
-        population_count = int(outcome_population.get("row_count") or eligible_count or 0)
-        unresolved_ratio = (unresolved_count / outcome_count) if outcome_count else 0.0
-        phantom_ratio = (phantom_count / population_count) if population_count else 0.0
-        if outcome_count > 0 and eligible_count <= 0:
-            reasons.append("zero_eligible_rows")
-        if eligible_count < self.config.min_eligible_rows:
-            reasons.append("insufficient_eligible_rows")
-        if unresolved_ratio > self.config.max_unresolved_ratio:
-            reasons.append("unresolved_heavy_outcomes")
-        if phantom_ratio > self.config.max_phantom_ratio_without_execution_sample and execution_count < self.config.min_execution_rows:
-            reasons.append("phantom_dominated_without_execution_sample")
-        return {
-            "ready_for_promotion": not reasons,
-            "rejection_reasons": reasons,
-            "thresholds": {
-                "min_eligible_rows": self.config.min_eligible_rows,
-                "min_execution_rows": self.config.min_execution_rows,
-                "max_unresolved_ratio": self.config.max_unresolved_ratio,
-                "max_phantom_ratio_without_execution_sample": self.config.max_phantom_ratio_without_execution_sample,
-            },
-            "metrics": {
-                "eligible_count": eligible_count,
-                "execution_count": execution_count,
-                "phantom_count": phantom_count,
-                "phantom_ratio": round(phantom_ratio, 4),
-                "unresolved_ratio": round(unresolved_ratio, 4),
-            },
-        }
+        return evaluate_replay_evidence_quality(
+            outcome_count=outcome_count,
+            eligible_count=eligible_count,
+            unresolved_count=unresolved_count,
+            outcome_population=outcome_population,
+            thresholds=self.config,
+        ).to_dict()
 
     @staticmethod
     def _count_by(rows: list[object], attr: str) -> dict[str, int]:

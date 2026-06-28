@@ -51,6 +51,7 @@ from trade_proposer_app.services.plan_generation_tuning_logic import family_adju
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.outcome_population import summarize_outcome_population
+from trade_proposer_app.services.replay_evidence_quality import replay_outcome_population_rejection_reasons
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     PARAMETER_BY_KEY,
     exploration_campaigns,
@@ -1348,17 +1349,12 @@ class PlanGenerationTuningService:
     @staticmethod
     def _replay_evidence_quality_rejection_reasons(source: dict[str, object], *, min_validation_resolved: int) -> list[str]:
         population = source.get("outcome_population") if isinstance(source.get("outcome_population"), dict) else None
-        if not population:
-            return []
-        row_count = int(population.get("row_count") or 0)
-        phantom_count = int(population.get("phantom_count") or 0)
-        execution_count = int(population.get("execution_count") or 0)
-        if row_count <= 0:
-            return ["replay_winner_empty_outcome_population"]
-        phantom_ratio = phantom_count / row_count if row_count else 0.0
-        if phantom_ratio > 0.5 and execution_count < max(1, min_validation_resolved):
-            return ["replay_winner_phantom_dominated_without_execution_sample"]
-        return []
+        return replay_outcome_population_rejection_reasons(
+            population,
+            min_execution_rows=min_validation_resolved,
+            phantom_reason="replay_winner_phantom_dominated_without_execution_sample",
+            empty_reason="replay_winner_empty_outcome_population",
+        )
 
     def _edge_validation_gate_report(
         self, *, walk_forward_validation: object | None = None

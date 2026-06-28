@@ -335,6 +335,14 @@ Result: replay outcome refresh now uses an explicit `allow_remote_fetch` price-h
 
 Result: input-access policies now have shared constants plus a common `input_policy_allows_remote_fetch` helper. Replay refresh, historical bar access, and replay utility scripts use those shared semantics. Historical replay, replay reclassification, plan-generation tuning routes, and job execution now use common JSON payload helpers instead of local duplicate loaders. Validation passed (`225 passed`).
 
+### Phase 15 — Third maintainability harmonization pass
+
+- [x] Extract replay evidence-quality checks shared by replay audit and replay tuning promotion gates.
+- [x] Keep caller-specific rejection reason wording while using one implementation for phantom/execution sample math.
+- [x] Validate replay audit and plan-generation tuning promotion guardrails after refactor.
+
+Result: replay evidence quality now lives in `replay_evidence_quality.py`. Replay audit and plan-generation tuning promotion checks share the same phantom/execution math while preserving their existing public rejection reasons. Validation passed (`227 passed`).
+
 ## Testing requirements
 
 Add unit tests for:
