@@ -51,6 +51,9 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
                 result = service.refresh_bars(["AAPL"], lookback_days=7)
                 
             self.assertEqual(result["total_ingested"], 1)
+            self.assertEqual("HistoricalBarsAccessService", result["input_access"]["service"])
+            self.assertEqual("1m", result["input_access"]["coverage"]["timeframe"])
+            self.assertEqual(1, result["input_access"]["coverage"]["covered_ticker_count"])
             
         finally:
             session.close()

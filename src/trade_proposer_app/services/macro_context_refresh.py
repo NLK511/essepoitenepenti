@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from trade_proposer_app.domain.models import MacroContextRefreshPayload
+from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.social import SocialIngestionService
 
@@ -63,6 +64,21 @@ class MacroContextRefreshService:
         computed_at = effective_now
         expires_at = computed_at + timedelta(hours=MACRO_TTL_HOURS)
 
+        primary_evidence = {
+            "social_count": social_count,
+            "news_count": 0,
+            "provider_count": len(getattr(bundle, "feeds_used", []) if bundle is not None else []),
+            "query_count": len(MACRO_QUERIES),
+            "window_start": start_at.isoformat(),
+            "window_end": effective_now.isoformat(),
+        }
+        input_provenance = {
+            "source": "MacroContextRefreshService",
+            "as_of": effective_now.isoformat(),
+            "primary_evidence_hash": stable_hash(primary_evidence),
+            "point_in_time_filter": "context inputs collected with start_at <= item time <= as_of",
+        }
+
         payload = MacroContextRefreshPayload(
             subject_key=MACRO_SUBJECT_KEY,
             subject_label=MACRO_SUBJECT_LABEL,
@@ -74,6 +90,8 @@ class MacroContextRefreshService:
                 "social_count": social_count,
                 "news_count": 0,
                 "ttl_hours": MACRO_TTL_HOURS,
+                "primary_evidence": primary_evidence,
+                "input_provenance": input_provenance,
             },
             source_breakdown={
                 "news": {"score": 0.0, "item_count": 0},
@@ -88,6 +106,7 @@ class MacroContextRefreshService:
                 "warnings": social_sentiment.get("coverage_insights", []),
                 "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
                 "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
+                "input_provenance": input_provenance,
             },
             summary_text="",
             job_id=job_id,

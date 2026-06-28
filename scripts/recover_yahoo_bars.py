@@ -24,6 +24,8 @@ if str(SRC_DIR) not in sys.path:
 from trade_proposer_app.config import settings
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
+from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -173,7 +175,15 @@ def _download_frame(ticker: str, timeframe: str, *, daily_period: str, intraday_
     raise ValueError(f"unsupported timeframe: {timeframe}")
 
 
-def recover_ticker(session, repo: HistoricalMarketDataRepository, ticker: str, *, daily_period: str, intraday_period: str) -> dict[str, object]:
+def recover_ticker(
+    session,
+    repo: HistoricalMarketDataRepository,
+    ticker: str,
+    *,
+    daily_period: str,
+    intraday_period: str,
+    bars_access: HistoricalBarsAccessService | None = None,
+) -> dict[str, object]:
     result: dict[str, object] = {
         "ticker": ticker,
         "daily_ingested": 0,
@@ -214,6 +224,28 @@ def recover_ticker(session, repo: HistoricalMarketDataRepository, ticker: str, *
             logger.exception("[%s] failed to recover %s bars", ticker, timeframe)
             result["warnings"].append(f"{ticker} {timeframe}: {exc}")
 
+    if bars_access is not None:
+        now = datetime.now(timezone.utc)
+        window_start = now - timedelta(days=DEFAULT_INTRADAY_LOOKBACK_DAYS)
+        result["input_access"] = {
+            "service": "HistoricalBarsAccessService",
+            "daily_coverage": bars_access.daily_bars(
+                ticker=ticker,
+                start_at=window_start,
+                end_at=now,
+                available_at=now,
+                limit=1,
+                policy="cache_only",
+            ).coverage,
+            "intraday_coverage": bars_access.intraday_1m_bars(
+                ticker=ticker,
+                start_at=window_start,
+                end_at=now,
+                available_at=now,
+                limit=1,
+                policy="cache_only",
+            ).coverage,
+        }
     return result
 
 
@@ -238,6 +270,7 @@ def main() -> int:
     try:
         with Session() as session:
             repo = HistoricalMarketDataRepository(session)
+            bars_access = HistoricalBarsAccessService(HistoricalMarketDataService(repo))
             if args.tickers:
                 tickers = sorted({ticker.strip().upper() for ticker in args.tickers if ticker and ticker.strip()})
             else:
@@ -253,7 +286,14 @@ def main() -> int:
             totals = {"tickers": 0, "daily_ingested": 0, "intraday_ingested": 0, "warnings": 0}
             for index, ticker in enumerate(tickers, start=1):
                 logger.info("[%s/%s] recovering %s", index, len(tickers), ticker)
-                outcome = recover_ticker(session, repo, ticker, daily_period=args.daily_period, intraday_period=args.intraday_period)
+                outcome = recover_ticker(
+                    session,
+                    repo,
+                    ticker,
+                    daily_period=args.daily_period,
+                    intraday_period=args.intraday_period,
+                    bars_access=bars_access,
+                )
                 totals["tickers"] += 1
                 totals["daily_ingested"] += int(outcome["daily_ingested"])
                 totals["intraday_ingested"] += int(outcome["intraday_ingested"])

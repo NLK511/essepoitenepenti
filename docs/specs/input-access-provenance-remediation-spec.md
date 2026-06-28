@@ -190,7 +190,7 @@ Acceptance:
 - [x] Return data plus coverage/provenance for replay generation/resolution windows through a single bar-access method.
 - [x] Replace direct market-bar access in replay coverage generation.
 - [x] Replace replay outcome resolution price-history preparation with the unified access path or with a compatibility wrapper around it.
-- [ ] Update bars refresh/recovery scripts to call the unified service.
+- [x] Update bars refresh/recovery scripts to call the unified service.
 
 Acceptance:
 - Cached bars and Yahoo-fetched bars produce the same coverage schema.
@@ -237,7 +237,7 @@ Acceptance:
 - [x] Add `ContextSnapshotAccessService` returning macro/industry snapshots plus coverage/provenance.
 - [x] Add `FundamentalSnapshotAccessService` returning fundamental snapshots plus coverage/provenance.
 - [x] Update replay coverage to merge market/news/context/fundamental coverage using common fields.
-- [ ] Update context refresh/reconstruction scripts to emit coverage and primary-evidence provenance.
+- [x] Update context refresh/reconstruction scripts to emit coverage and primary-evidence provenance.
 
 Acceptance:
 - Context/fundamental replay coverage uses the same tier/blocker/warning language as bars.

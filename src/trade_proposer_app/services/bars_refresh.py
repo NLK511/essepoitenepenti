@@ -10,6 +10,8 @@ from sqlalchemy import func
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.persistence.models import HistoricalMarketBarRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
+from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,7 @@ class BarsRefreshService:
 
     def __init__(self, repository: HistoricalMarketDataRepository):
         self.repository = repository
+        self.bars_access = HistoricalBarsAccessService(HistoricalMarketDataService(repository))
 
     def refresh_bars(self, tickers: list[str], lookback_days: int = 6) -> dict[str, object]:
         end_date = datetime.now(timezone.utc)
@@ -106,6 +109,7 @@ class BarsRefreshService:
             else:
                 stats.setdefault(ticker, int(outcome["ingested"]))
 
+        coverage = self._refresh_coverage(tickers=list(dict.fromkeys(tickers)), start_at=default_start_date, end_at=end_date)
         logger.info("Bars refresh complete. Total ingested: %s", total_ingested)
         return {
             "total_ingested": total_ingested,
@@ -113,6 +117,36 @@ class BarsRefreshService:
             "warnings": warnings,
             "retry_diagnostics": retry_diagnostics,
             "refreshed_at": end_date.isoformat(),
+            "input_access": {
+                "service": "HistoricalBarsAccessService",
+                "policy": "cache_only",
+                "coverage": coverage,
+            },
+        }
+
+    def _refresh_coverage(self, *, tickers: list[str], start_at: datetime, end_at: datetime) -> dict[str, object]:
+        by_ticker: dict[str, dict[str, object]] = {}
+        covered = 0
+        for ticker in tickers:
+            result = self.bars_access.intraday_1m_bars(
+                ticker=ticker,
+                start_at=start_at,
+                end_at=end_at,
+                available_at=end_at,
+                limit=1,
+                policy="cache_only",
+            )
+            by_ticker[ticker] = result.coverage
+            if result.coverage.get("covered"):
+                covered += 1
+        return {
+            "timeframe": "1m",
+            "start_at": start_at.isoformat(),
+            "end_at": end_at.isoformat(),
+            "ticker_count": len(tickers),
+            "covered_ticker_count": covered,
+            "coverage_ratio": round((covered / len(tickers)) if tickers else 0.0, 4),
+            "by_ticker": by_ticker,
         }
 
     def _refresh_single_ticker(

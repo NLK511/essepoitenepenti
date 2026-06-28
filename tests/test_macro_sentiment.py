@@ -85,6 +85,10 @@ class MacroContextRefreshServiceTests(unittest.TestCase):
         self.assertIn("geopolitical tensions", call["queries"])
         self.assertEqual(result["summary"]["subject_key"], MACRO_SUBJECT_KEY)
         self.assertEqual(result["summary"]["scope"], "macro")
+        payload = result["payload"]
+        self.assertIn("primary_evidence", payload.coverage)
+        self.assertIn("input_provenance", payload.coverage)
+        self.assertEqual("MacroContextRefreshService", payload.coverage["input_provenance"]["source"])
 
     def test_macro_summary_uses_previous_snapshot_summary_for_continuity(self) -> None:
         social_service = StubSocialService()
@@ -127,6 +131,9 @@ class MacroContextRefreshServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(snapshot.subject_key, "consumer_electronics")
+        self.assertIn("primary_evidence", snapshot.coverage)
+        self.assertIn("input_provenance", snapshot.coverage)
+        self.assertEqual("IndustryContextRefreshService", snapshot.coverage["input_provenance"]["source"])
         # self.assertIn("Update:", snapshot.summary_text)
         # self.assertIn("prior summary centered on phone demand and stable margins", snapshot.summary_text)
         # self.assertEqual(summary["previous_snapshot_id"], 1)

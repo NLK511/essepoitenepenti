@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from trade_proposer_app.domain.models import RunOutput, TickerSignalSnapshot, Watchlist
@@ -70,7 +70,7 @@ class WatchlistSignalBuilder:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=[],
             source_breakdown=self._source_breakdown(candidate, analysis, deep_output=deep_output, transmission=transmission, base_confidence=base_confidence),
-            computed_at=computed_at,
+            computed_at=computed_at or datetime.now(timezone.utc),
             diagnostics=self._diagnostics_payload(
                 candidate,
                 analysis,

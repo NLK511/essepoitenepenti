@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from trade_proposer_app.domain.models import IndustryContextRefreshPayload
+from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -69,6 +70,22 @@ class IndustryContextRefreshService:
         label = social_sentiment.get("label") or "NEUTRAL"
         computed_at = effective_now
         expires_at = computed_at + timedelta(hours=INDUSTRY_TTL_HOURS)
+        primary_evidence = {
+            "social_count": social_count,
+            "news_count": 0,
+            "provider_count": len(getattr(bundle, "feeds_used", []) if bundle is not None else []),
+            "query_count": len(queries or []),
+            "tracked_ticker_count": len(tickers or []),
+            "window_start": start_at.isoformat(),
+            "window_end": effective_now.isoformat(),
+        }
+        input_provenance = {
+            "source": "IndustryContextRefreshService",
+            "as_of": effective_now.isoformat(),
+            "subject_key": subject_key,
+            "primary_evidence_hash": stable_hash(primary_evidence),
+            "point_in_time_filter": "context inputs collected with start_at <= item time <= as_of",
+        }
 
         return IndustryContextRefreshPayload(
             subject_key=subject_key,
@@ -83,6 +100,8 @@ class IndustryContextRefreshService:
                 "ttl_hours": INDUSTRY_TTL_HOURS,
                 "tracked_tickers": tickers or [],
                 "query_count": len(queries or []),
+                "primary_evidence": primary_evidence,
+                "input_provenance": input_provenance,
             },
             source_breakdown={
                 "news": {"score": 0.0, "item_count": 0},
@@ -98,6 +117,7 @@ class IndustryContextRefreshService:
                 "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
                 "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
                 "queries": queries or [subject_label],
+                "input_provenance": input_provenance,
             },
             summary_text="",
             job_id=job_id,
