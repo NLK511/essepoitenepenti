@@ -159,6 +159,8 @@ Filled means broker shows an app-owned open position or filled lifecycle tied to
 
 Broker reconciliation preflight is mandatory. Every steering run must attempt to refresh open broker orders/positions before candidate discovery. The run summary must expose `broker_refresh_attempted`, `broker_refresh_status`, synced/failed counts, error text, and completion time. If the refresh fails or broker reconciliation remains stale, live mutation must fail closed.
 
+Steering freshness is candidate-local first. A fresh active broker order/position `updated_at` can satisfy the freshness gate even when the ticker's latest reconciliation snapshot is older. Reconciliation snapshots remain drift/audit evidence: snapshot warnings or non-`ok` drift severity make the candidate unhealthy regardless of row freshness. For open positions with protective orders, `protective_orders_verified_at` must also be fresh before live amendment or close mutation.
+
 Protective-order evidence is necessary but not sufficient. Before any filled-position amendment or close mutation, steering requires:
 - the position's recommendation holding period is not expired (`expiration_at >= now` when available)
 - a recent broker reconciliation snapshot for the ticker/account with no warnings and `drift_severity=ok`
