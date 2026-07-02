@@ -146,4 +146,22 @@ class BrokerReconciliationService:
         }
 
     def sync_open_orders(self, *, limit: int = 200):
-        return create_order_execution_service(self.session).sync_open_executions(limit=limit)
+        completed_at = datetime.now(UTC)
+        try:
+            outcome = create_order_execution_service(self.session).sync_open_executions(limit=limit)
+        except Exception as exc:
+            self.settings.set_settings(
+                {
+                    "broker_order_sync_last_at": completed_at.isoformat(),
+                    "broker_order_sync_last_error": str(exc),
+                }
+            )
+            raise
+        self.settings.set_settings(
+            {
+                "broker_order_sync_last_at": completed_at.isoformat(),
+                "broker_order_sync_last_count": str(int(outcome.summary.get("synced_count", 0) or 0)),
+                "broker_order_sync_last_error": "",
+            }
+        )
+        return outcome

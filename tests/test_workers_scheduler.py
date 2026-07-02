@@ -143,19 +143,6 @@ class StubIndustryContextRefreshService:
         ]
 
 
-class StubBrokerOrderSyncService:
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def sync_open_executions(self):
-        self.calls += 1
-        return type(
-            "SyncOutcome",
-            (),
-            {"summary": {"synced_count": 2, "skipped_count": 1, "failed_count": 0}},
-        )()
-
-
 class WorkerSchedulerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = create_engine("sqlite:///:memory:", future=True)
@@ -306,38 +293,21 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertEqual(count, 0)
         self.assertEqual(runs.list_latest_runs(limit=10), [])
 
-    def test_scheduler_refreshes_broker_orders_only_during_market_hours_and_at_interval(
-        self,
-    ) -> None:
-        first_session = self.create_session()
-        second_session = self.create_session()
-        check_session = self.create_session()
+    def test_scheduler_run_once_does_not_refresh_broker_orders_automatically(self) -> None:
+        session = self.create_session()
         now = datetime(2026, 3, 17, 14, 0, tzinfo=timezone.utc)
-        service = StubBrokerOrderSyncService()
 
         with (
-            patch(
-                "trade_proposer_app.scheduler.SessionLocal",
-                side_effect=[first_session, second_session],
-            ),
-            patch(
-                "trade_proposer_app.scheduler.OrderExecutionService._is_market_open",
-                return_value=True,
-            ),
-            patch(
-                "trade_proposer_app.scheduler.create_order_execution_service", return_value=service
-            ),
+            patch("trade_proposer_app.scheduler.SessionLocal", return_value=session),
+            patch("trade_proposer_app.services.runs.SessionLocal", return_value=session),
         ):
-            count = scheduler._sync_broker_orders_if_due(now)
-            second_count = scheduler._sync_broker_orders_if_due(now)
+            count = scheduler.run_once(now)
 
-        settings_map = SettingsRepository(check_session).get_setting_map()
-        self.assertEqual(count, 2)
-        self.assertEqual(second_count, 0)
-        self.assertEqual(service.calls, 1)
-        self.assertEqual(settings_map[scheduler.BROKER_ORDER_SYNC_LAST_COUNT_KEY], "2")
-        self.assertEqual(settings_map[scheduler.BROKER_ORDER_SYNC_LAST_AT_KEY], now.isoformat())
-        self.assertEqual(settings_map[scheduler.BROKER_ORDER_SYNC_LAST_ERROR_KEY], "")
+        settings_map = SettingsRepository(session).get_setting_map()
+        self.assertEqual(count, 0)
+        self.assertNotIn("broker_order_sync_last_at", settings_map)
+        self.assertNotIn("broker_order_sync_last_count", settings_map)
+        self.assertNotIn("broker_order_sync_last_error", settings_map)
 
     def test_run_claim_only_succeeds_once(self) -> None:
         jobs_session = self.create_session()

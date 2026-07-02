@@ -40,6 +40,28 @@ from trade_proposer_app.services.broker_position_steering_workflow import (
 NOW = datetime(2026, 5, 1, 15, 0, tzinfo=UTC)
 
 
+class SuccessfulBrokerRefreshStub:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def sync_open_orders(self, *, limit: int = 200):
+        self.calls += 1
+        return type(
+            "SyncOutcome",
+            (),
+            {"summary": {"synced_count": 2, "skipped_count": 0, "failed_count": 0}},
+        )()
+
+
+class FailingBrokerRefreshStub:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def sync_open_orders(self, *, limit: int = 200):
+        self.calls += 1
+        raise RuntimeError("broker refresh unavailable")
+
+
 def create_session() -> Session:
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
@@ -776,7 +798,9 @@ def test_steering_service_persists_decisions_and_events() -> None:
     )
 
     service = BrokerSteeringService(
-        session, builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0)
+        session,
+        builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0),
+        broker_reconciliation_service=SuccessfulBrokerRefreshStub(),
     )
     summary = service.run_once(now=NOW)
 
@@ -784,6 +808,97 @@ def test_steering_service_persists_decisions_and_events() -> None:
     assert summary.execution_status == "dry_run"
     assert session.query(BrokerSteeringDecisionRecord).count() == 1
     assert session.query(ObservabilityEventRecord).count() == 3
+
+
+def test_steering_service_refreshes_broker_state_before_decisions() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    orders = BrokerOrderExecutionRepository(session)
+    settings = SettingsRepository(session)
+    _set_steering_defaults(settings, enabled=True, dry_run=True)
+    plan = plans.create_plan(_plan(computed_at=datetime(2026, 4, 30, tzinfo=UTC)))
+    orders.create(
+        BrokerOrderExecution(
+            recommendation_plan_id=plan.id or 0,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            order_type="limit",
+            quantity=1,
+            notional_amount=100.0,
+            status="submitted",
+            client_order_id="refresh-preflight-order",
+        )
+    )
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
+    refresh = SuccessfulBrokerRefreshStub()
+
+    service = BrokerSteeringService(
+        session,
+        builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0),
+        broker_reconciliation_service=refresh,
+    )
+
+    summary = service.run_once(now=NOW)
+
+    assert refresh.calls == 1
+    assert summary.broker_refresh_attempted is True
+    assert summary.broker_refresh_status == "succeeded"
+    assert summary.broker_refresh_synced_count == 2
+
+
+def test_steering_service_blocks_live_mutation_when_broker_refresh_fails() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    orders = BrokerOrderExecutionRepository(session)
+    settings = SettingsRepository(session)
+    _set_steering_defaults(settings, enabled=True, dry_run=False)
+    plan = plans.create_plan(
+        _plan(holding_period_days=1, computed_at=datetime(2026, 4, 28, tzinfo=UTC))
+    )
+    order = orders.create(
+        BrokerOrderExecution(
+            recommendation_plan_id=plan.id or 0,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            order_type="limit",
+            quantity=1,
+            notional_amount=100.0,
+            status="submitted",
+            broker_order_id="broker-order-1",
+            client_order_id="blocked-refresh-failure-order",
+        )
+    )
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
+
+    class LiveOrderExecutionStub:
+        def __init__(self) -> None:
+            self.canceled: list[int] = []
+
+        def cancel_execution(self, execution_id: int):
+            self.canceled.append(execution_id)
+
+    order_execution = LiveOrderExecutionStub()
+    refresh = FailingBrokerRefreshStub()
+    service = BrokerSteeringService(
+        session,
+        builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0),
+        order_execution=order_execution,
+        broker_reconciliation_service=refresh,
+    )
+
+    summary = service.run_once(now=NOW)
+
+    assert refresh.calls == 1
+    assert summary.broker_refresh_status == "failed"
+    assert summary.execution_status == "blocked"
+    assert order_execution.canceled == []
+    stored = session.query(BrokerSteeringDecisionRecord).one()
+    assert stored.broker_order_id == (order.id or 0)
+    assert stored.execution_status == "blocked"
 
 
 def test_steering_service_blocks_live_pending_invalidation_without_reviewed_history() -> None:
@@ -850,10 +965,12 @@ def test_steering_service_blocks_live_pending_invalidation_without_reviewed_hist
         session,
         builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0),
         order_execution=order_execution,
+        broker_reconciliation_service=SuccessfulBrokerRefreshStub(),
     )
 
     summary = service.run_once(now=NOW)
 
+    assert summary.broker_refresh_status == "succeeded"
     assert summary.execution_status == "blocked"
     assert order_execution.canceled == []
     stored = session.query(BrokerSteeringDecisionRecord).one()
@@ -925,10 +1042,12 @@ def test_steering_service_can_execute_supported_live_pending_cancellation() -> N
         session,
         builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0),
         order_execution=order_execution,
+        broker_reconciliation_service=SuccessfulBrokerRefreshStub(),
     )
 
     summary = service.run_once(now=NOW)
 
+    assert summary.broker_refresh_status == "succeeded"
     assert summary.execution_status == "succeeded"
     assert order_execution.canceled == [order.id or 0]
     stored = session.query(BrokerSteeringDecisionRecord).one()
@@ -1056,10 +1175,12 @@ def test_steering_service_can_execute_supported_live_stop_amendment() -> None:
         session,
         builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 100.0),
         order_execution=order_execution,
+        broker_reconciliation_service=SuccessfulBrokerRefreshStub(),
     )
 
     summary = service.run_once(now=NOW)
 
+    assert summary.broker_refresh_status == "succeeded"
     assert summary.execution_status == "succeeded"
     assert order_execution.amended == [(order.id or 0, 97.5, None)]
     stored = (
@@ -1186,10 +1307,12 @@ def test_steering_service_can_execute_supported_live_take_profit_lowering() -> N
         session,
         builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 100.5),
         order_execution=order_execution,
+        broker_reconciliation_service=SuccessfulBrokerRefreshStub(),
     )
 
     summary = service.run_once(now=NOW)
 
+    assert summary.broker_refresh_status == "succeeded"
     assert summary.execution_status == "succeeded"
     assert order_execution.amended[0][0] == (order.id or 0)
     assert order_execution.amended[0][1] is None
@@ -1292,10 +1415,12 @@ def test_steering_service_can_execute_supported_live_close_position() -> None:
         session,
         builder=BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 94.0),
         order_execution=order_execution,
+        broker_reconciliation_service=SuccessfulBrokerRefreshStub(),
     )
 
     summary = service.run_once(now=NOW)
 
+    assert summary.broker_refresh_status == "succeeded"
     assert summary.execution_status == "succeeded"
     assert order_execution.closed == ["AAPL"]
     stored = (

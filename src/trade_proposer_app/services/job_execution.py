@@ -1332,6 +1332,12 @@ class JobExecutionService:
             "candidate_count": summary.total_candidates,
             "decision_counts": summary.decisions,
             "execution_status": summary.execution_status,
+            "broker_refresh_attempted": summary.broker_refresh_attempted,
+            "broker_refresh_status": summary.broker_refresh_status,
+            "broker_refresh_synced_count": summary.broker_refresh_synced_count,
+            "broker_refresh_failed_count": summary.broker_refresh_failed_count,
+            "broker_refresh_error": summary.broker_refresh_error,
+            "broker_refresh_completed_at": summary.broker_refresh_completed_at,
         }
         self.runs.set_summary(run.id or 0, run_summary)
         self.runs.set_artifact(

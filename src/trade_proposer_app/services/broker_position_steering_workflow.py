@@ -37,6 +37,12 @@ class BrokerSteeringRunSummary:
     total_candidates: int
     decisions: dict[str, int]
     execution_status: str
+    broker_refresh_attempted: bool = False
+    broker_refresh_status: str = "skipped"
+    broker_refresh_synced_count: int = 0
+    broker_refresh_failed_count: int = 0
+    broker_refresh_error: str = ""
+    broker_refresh_completed_at: str | None = None
 
 
 class BrokerSteeringStateBuilder:
@@ -310,6 +316,7 @@ class BrokerSteeringService:
         observability: ObservabilityEventRepository | None = None,
         settings_repository: SettingsRepository | None = None,
         order_execution=None,
+        broker_reconciliation_service=None,
     ) -> None:
         self.session = session
         self.engine = engine or BrokerSteeringEngine()
@@ -318,6 +325,7 @@ class BrokerSteeringService:
         self.observability = observability or ObservabilityEventRepository(session)
         self.settings_repository = settings_repository or SettingsRepository(session)
         self.order_execution = order_execution
+        self.broker_reconciliation_service = broker_reconciliation_service
         if self.order_execution is None:
             try:
                 from trade_proposer_app.services.builders import create_order_execution_service
@@ -325,6 +333,13 @@ class BrokerSteeringService:
                 self.order_execution = create_order_execution_service(session)
             except Exception:
                 self.order_execution = None
+        if self.broker_reconciliation_service is None:
+            try:
+                from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
+
+                self.broker_reconciliation_service = BrokerReconciliationService(session)
+            except Exception:
+                self.broker_reconciliation_service = None
         self.settings = self.settings_repository.get_steering_config()
 
     def run_once(
@@ -338,6 +353,8 @@ class BrokerSteeringService:
     ) -> BrokerSteeringRunSummary:
         normalized_now = now or datetime.now(UTC)
         config = BrokerSteeringConfig(**self.settings)
+        broker_refresh = self._refresh_broker_state(limit=limit)
+        live_refresh_ok = broker_refresh["broker_refresh_status"] == "succeeded"
         states = self.builder.list_states(limit=limit, now=normalized_now)
         reviewed_sample_counts = (
             self._reviewed_sample_counts() if config.enabled and not config.dry_run else None
@@ -352,12 +369,17 @@ class BrokerSteeringService:
                 "candidate_count": len(states),
                 "dry_run": config.dry_run,
                 "enabled": config.enabled,
+                **broker_refresh,
             },
         )
         counts: dict[str, int] = {}
         decision_execution_statuses: list[str] = []
         initial_execution_status = (
-            "dry_run" if config.dry_run else "submitted" if config.enabled else "blocked"
+            "dry_run"
+            if config.dry_run
+            else "submitted"
+            if config.enabled and live_refresh_ok
+            else "blocked"
         )
         for state in states:
             decision = self.engine.evaluate(state, config)
@@ -384,7 +406,7 @@ class BrokerSteeringService:
                     "recommendation_plan_id": decision.recommendation_plan_id,
                 },
             )
-            if config.enabled and not config.dry_run:
+            if config.enabled and not config.dry_run and live_refresh_ok:
                 decision_execution_statuses.append(
                     self._execute_decision_if_supported(
                         saved_decision_id=int(saved_decision.get("id") or 0),
@@ -412,6 +434,7 @@ class BrokerSteeringService:
                 "execution_status": self._aggregate_execution_status(
                     decision_execution_statuses, dry_run=config.dry_run
                 ),
+                **broker_refresh,
             },
         )
         return BrokerSteeringRunSummary(
@@ -420,7 +443,63 @@ class BrokerSteeringService:
             execution_status=self._aggregate_execution_status(
                 decision_execution_statuses, dry_run=config.dry_run
             ),
+            broker_refresh_attempted=bool(broker_refresh["broker_refresh_attempted"]),
+            broker_refresh_status=str(broker_refresh["broker_refresh_status"]),
+            broker_refresh_synced_count=int(broker_refresh["broker_refresh_synced_count"]),
+            broker_refresh_failed_count=int(broker_refresh["broker_refresh_failed_count"]),
+            broker_refresh_error=str(broker_refresh["broker_refresh_error"]),
+            broker_refresh_completed_at=(
+                broker_refresh["broker_refresh_completed_at"]
+                if isinstance(broker_refresh["broker_refresh_completed_at"], str)
+                else None
+            ),
         )
+
+    def _refresh_broker_state(self, *, limit: int) -> dict[str, object]:
+        completed_at = datetime.now(UTC).isoformat()
+        try:
+            if self.broker_reconciliation_service is not None:
+                outcome = self.broker_reconciliation_service.sync_open_orders(limit=limit)
+            elif self.order_execution is not None and hasattr(
+                self.order_execution, "sync_open_executions"
+            ):
+                outcome = self.order_execution.sync_open_executions(limit=limit)
+            else:
+                return {
+                    "broker_refresh_attempted": False,
+                    "broker_refresh_status": "skipped",
+                    "broker_refresh_synced_count": 0,
+                    "broker_refresh_failed_count": 0,
+                    "broker_refresh_error": "broker_refresh_service_unavailable",
+                    "broker_refresh_completed_at": completed_at,
+                }
+        except Exception as exc:
+            return {
+                "broker_refresh_attempted": True,
+                "broker_refresh_status": "failed",
+                "broker_refresh_synced_count": 0,
+                "broker_refresh_failed_count": 1,
+                "broker_refresh_error": str(exc),
+                "broker_refresh_completed_at": datetime.now(UTC).isoformat(),
+            }
+        summary = getattr(outcome, "summary", {})
+        if not isinstance(summary, dict):
+            summary = {}
+        failed_count = int(summary.get("failed_count", 0) or 0)
+        warnings = summary.get("warnings", [])
+        error = (
+            "; ".join(str(item) for item in warnings if str(item).strip())
+            if failed_count and isinstance(warnings, list)
+            else ""
+        )
+        return {
+            "broker_refresh_attempted": True,
+            "broker_refresh_status": "failed" if failed_count else "succeeded",
+            "broker_refresh_synced_count": int(summary.get("synced_count", 0) or 0),
+            "broker_refresh_failed_count": failed_count,
+            "broker_refresh_error": error,
+            "broker_refresh_completed_at": datetime.now(UTC).isoformat(),
+        }
 
     def _execute_decision_if_supported(
         self,
