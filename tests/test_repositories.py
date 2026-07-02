@@ -2323,6 +2323,17 @@ class RepositoryTests(unittest.TestCase):
         refreshed_job = jobs.get(job.id or 0)
         self.assertIsNotNone(refreshed_job.last_enqueued_at)
 
+    def test_run_repository_normalizes_legacy_cancelled_status(self) -> None:
+        session = create_session()
+        job = JobRepository(session).create("Replay", [], None, job_type=JobType.HISTORICAL_REPLAY)
+        legacy_run = RunRecord(job_id=job.id or 0, job_type=JobType.HISTORICAL_REPLAY.value, status="cancelled")
+        session.add(legacy_run)
+        session.commit()
+
+        latest_run = RunRepository(session).list_latest_runs(limit=1)[0]
+
+        self.assertEqual(latest_run.status, "canceled")
+
     def test_job_execution_processes_watchlist_cheap_scan_shortlist_and_deep_analysis(self) -> None:
         session = create_session()
         watchlists = WatchlistRepository(session)

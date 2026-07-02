@@ -29,6 +29,10 @@ TERMINAL_RUN_STATUSES = (
     RunStatus.CANCELED.value,
 )
 
+_RUN_STATUS_ALIASES = {
+    "cancelled": RunStatus.CANCELED.value,
+}
+
 
 class RunRepository:
     def __init__(self, session: Session) -> None:
@@ -43,10 +47,11 @@ class RunRepository:
         job_type: JobType | None = None,
     ) -> Run:
         resolved_job_type = self._resolve_job_type(job_id, job_type)
+        normalized_status = self._normalize_status(status)
         record = RunRecord(
             job_id=job_id,
             job_type=resolved_job_type.value,
-            status=status,
+            status=normalized_status,
             error_message=error_message or "",
             scheduled_for=self._normalize_optional_datetime(scheduled_for),
             correlation_id=self._new_correlation_id(job_id),
@@ -254,11 +259,12 @@ class RunRepository:
         record = self.session.get(RunRecord, run_id)
         if record is None:
             raise ValueError(f"Run {run_id} not found")
-        record.status = status
+        normalized_status = self._normalize_status(status)
+        record.status = normalized_status
         record.error_message = error_message or ""
         if timing is not None:
             record.timing_json = self._serialize_timing(timing)
-        if status in TERMINAL_RUN_STATUSES:
+        if normalized_status in TERMINAL_RUN_STATUSES:
             record.completed_at = self._normalize_datetime(datetime.now(timezone.utc))
             record.lease_expires_at = None
             if record.started_at is not None:
@@ -443,7 +449,7 @@ class RunRepository:
             job_id=record.job_id,
             job_name=record.job.name if getattr(record, "job", None) is not None else None,
             job_type=JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value),
-            status=record.status,
+            status=self._normalize_status(record.status),
             error_message=record.error_message or None,
             scheduled_for=self._normalize_optional_datetime(record.scheduled_for),
             summary_json=record.summary_json or None,
@@ -499,6 +505,10 @@ class RunRepository:
         except json.JSONDecodeError:
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
+    def _normalize_status(status: str) -> str:
+        return _RUN_STATUS_ALIASES.get(status, status)
 
     @staticmethod
     def _normalize_datetime(value: datetime) -> datetime:
