@@ -2,7 +2,7 @@
 
 **Status:** reference
 
-This glossary defines the main terms used across the app and docs.
+This glossary defines the shared terms used across the app and docs. It is intentionally exhaustive: if a recurring product, trading, data, or system term is not defined here, that is a clarity problem to fix rather than a reason to create a competing vocabulary elsewhere.
 
 If you are new, read in this order:
 1. `operator-page-field-guide.md` for page-level orientation

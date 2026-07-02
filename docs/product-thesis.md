@@ -10,7 +10,9 @@ Near-term, it should be read as an explainable market-analysis, candidate-rankin
 
 The point is to keep execution, review, diagnostics, and outcome tracking in one place.
 
-## Core goal
+## Goals and philosophy
+
+The product goal is supervised, explainable trade planning before autonomous trading expansion. The app should help an operator form, inspect, execute cautiously, and learn from short-horizon trade ideas without hiding uncertainty.
 
 The app should answer this sequence:
 1. what are the most important market-moving developments right now?
@@ -18,7 +20,7 @@ The app should answer this sequence:
 3. which tickers are most likely to react within the next few days?
 4. is there a tradeable setup with a clear entry, stop, and target?
 
-The goal is not to maximize signal count.
+The goal is not to maximize signal count or make unsupported profit claims.
 
 The goal is to produce recommendations that are:
 - inspectable

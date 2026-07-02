@@ -1,6 +1,6 @@
 # Broker position steering system
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
 Binding reference for steering app-owned broker orders/positions after submission or fill.
 
@@ -14,7 +14,7 @@ Steering is a conservative post-submit/post-fill control loop. It may:
 
 It must not replace plan generation, broker reconciliation, pre-trade risk management, or open new risk.
 
-## Current behavior and target
+## Current behavior
 
 Current behavior:
 - app-submitted broker records, lifecycle, reconciliation, risk checks, outcomes, steering settings, decisions, and observability exist
@@ -23,6 +23,8 @@ Current behavior:
 - expired pending-order cancellation can execute live when steering is enabled and not dry-run
 - invalidated pending cancellations, non-risk-increasing stop amendments, TP lowering, and close-now require dry-run sample thresholds and broker safety validation
 - decisions include correlation metadata
+
+## Target behavior
 
 Target behavior:
 - autonomous stale/invalidated pending cancellation

@@ -1,10 +1,10 @@
 # Fundamental valuation integration spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
 This spec defines how fundamental data should be transformed into valuation/mispricing signals and integrated into plan generation, evaluation, tuning, and operator review.
 
-## Current implementation snapshot
+## Current behavior
 
 Implemented:
 
@@ -17,14 +17,15 @@ Implemented:
 - reliability feature extraction includes compact point-in-time valuation fields for future tuning/search
 - positive fundamental confidence contribution remains disabled by default
 
-Still target behavior / not yet proven:
+## Target behavior
+
+Not yet proven or not fully shipped:
 
 - sector-relative valuation percentiles
 - UI panels dedicated to valuation reasons and confidence effects
 - live confidence caps for valuation contradictions
 - positive confidence boosts from valuation support
 - walk-forward promotion of any valuation-aware rule
-
 
 ## Purpose
 
@@ -477,39 +478,15 @@ Record counters for:
 
 Dashboard/operator status should warn when fundamental coverage is too sparse to support valuation claims.
 
-## Implementation phases
+## Target rollout gates
 
-### Phase 1: Quality and normalized valuation context
+Implementation history belongs in active plans or archive. The durable rollout gates are:
 
-- Tighten coverage scoring so sparse payloads are not marked `ok`.
-- Add `valuation_context` to fundamental snapshot payloads.
-- Add deterministic bucket logic and reason strings.
-- Add tests for sparse, undervalued, overvalued, and unclear cases.
-
-### Phase 2: Passive plan attachment
-
-- Persist compact `fundamental_valuation_context` in plan signal breakdown.
-- Ensure point-in-time lookup uses only snapshots at or before plan time.
-- Add UI display and API fields.
-- Do not change confidence except for existing data-quality warnings.
-
-### Phase 3: Evaluation features and reports
-
-- Add valuation fields to reliability/evaluation records.
-- Extend fundamental validation slices.
-- Produce walk-forward reports comparing baseline vs valuation-aware risk filters.
-
-### Phase 4: Conservative risk filters
-
-- Enable only negative/capping effects for severe contradictions.
-- Keep positive boost disabled.
-- Validate opportunity loss, win-rate impact, and EV impact.
-
-### Phase 5: Optional positive contribution
-
-- Enable small positive contribution only for validated slices.
-- Positive contribution must be bounded, versioned, and revertible.
-- Default maximum positive impact should be small relative to technical/catalyst evidence.
+1. normalized valuation context with reliable sparse-data handling
+2. passive point-in-time plan attachment and operator visibility
+3. evaluation/reliability slices for valuation fields
+4. conservative negative/capping effects only after validation
+5. bounded positive contribution only after walk-forward evidence supports it
 
 ## Acceptance criteria
 

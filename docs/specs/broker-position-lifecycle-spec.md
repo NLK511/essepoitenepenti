@@ -103,11 +103,6 @@ Broker-order UI must show the linked position lifecycle status and realized P&L 
 
 Broker-position lifecycle is the source of truth for live broker-backed performance. Simulated `RecommendationPlanOutcome` remains useful for research and fallback when no broker execution exists.
 
-## Implementation status
+## Contract coverage
 
-- [x] position lifecycle spec
-- [x] broker position persistence table and repository
-- [x] lifecycle derivation from Alpaca bracket snapshots during submit/refresh/sync
-- [x] API visibility for broker positions
-- [x] broker-orders UI position/P&L visibility
-- [x] tests for open, win, loss, and P&L derivation
+This is a canonical current-behavior contract. The implemented surface includes broker-position persistence, lifecycle derivation from Alpaca bracket snapshots during submit/refresh/sync, broker-position API visibility, broker-order UI position/P&L visibility, and regression coverage for open, win, loss, and P&L derivation. Implementation history belongs in archive, not in this spec.

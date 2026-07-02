@@ -1,12 +1,20 @@
 # Multi-broker execution and risk spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
-This document defines the broker execution model used for account-scoped broker execution and the remaining target constraints before any real-money expansion. The broker-account abstraction, adapter path, multi-broker fan-out, account-scoped risk controls, drawdown/circuit-breaker state, reconciliation evidence, and broker-aware UI/API surfaces are implemented. Real-money eToro mutation remains disabled/fail-closed until external validation and production gates pass.
+This document defines the broker execution model used for account-scoped broker execution and the remaining target constraints before any real-money expansion.
+
+## Current behavior
+
+The broker-account abstraction, adapter path, multi-broker fan-out, account-scoped risk controls, drawdown/circuit-breaker state, reconciliation evidence, and broker-aware UI/API surfaces are implemented. Real-money eToro mutation remains disabled/fail-closed.
+
+## Target behavior
+
+Any real-money expansion must preserve account-scoped isolation and must pass external broker validation, production gates, reconciliation evidence checks, and edge-validation standards before mutation is enabled.
 
 ## Goal
 
-Aurelio must support **any combination of broker accounts enabled at the same time**. Each broker account must have its own execution settings, credentials, account mode, risk limits, exposure state, reconciliation evidence, and kill-switch behavior.
+Trade Proposer App must support **any combination of broker accounts enabled at the same time**. Each broker account must have its own execution settings, credentials, account mode, risk limits, exposure state, reconciliation evidence, and kill-switch behavior.
 
 A broker being enabled or blocked must not silently change another broker's behavior. Every broker candidate must be evaluated, submitted, skipped, halted, and reconciled independently, with an optional global halt above all brokers.
 
@@ -317,25 +325,13 @@ Risk API must return:
 - latest snapshot evidence timestamps
 - broker-account circuit-breaker state and reason
 
-## Implementation status
+## Current behavior and target gates
 
-Implemented current behavior:
+Canonical current behavior includes broker-account settings, default Alpaca paper bootstrap, account-scoped credentials, redacted broker-account APIs, per-broker risk/drawdown/circuit-breaker state, broker adapter contracts, Alpaca paper migration behind the adapter, broker-agnostic price normalization, multi-broker fan-out with per-account skips/submissions, broker-aware workbench APIs/UI, reconciliation evidence, and eToro read-only/demo-shadow/fail-closed adapter tests.
 
-- [x] broker-account settings model and default Alpaca paper account bootstrap
-- [x] account-scoped credentials and redacted broker-account APIs
-- [x] per-broker risk settings, drawdown state, and aggregate live caps
-- [x] broker-account circuit-breaker state and clear controls
-- [x] broker adapter protocol and fake-client contract tests
-- [x] Alpaca paper migrated behind broker adapter without behavior change
-- [x] broker-agnostic executable price normalization before persistence/submission
-- [x] multi-broker fan-out execution service with per-account skips/submissions
-- [x] broker-account-aware order/position/workbench APIs and Execution & Risk UI
-- [x] reconciliation evidence, stale/contradictory broker-state handling, and per-account circuit-breaker activation
-- [x] eToro read-only, demo/mock lifecycle, live-shadow audit, and fail-closed live adapter tests
+Still target/gated:
 
-Still target / gated:
-
-- [ ] real eToro demo lifecycle against current external demo endpoints, not only test doubles
-- [ ] real eToro live mutation enablement; live adapter currently fails closed with `etoro_live_mutation_disabled`
-- [ ] production-grade external validation artifacts and release-readiness evidence before live micro-size rollout
-- [ ] measured broker-backed trading edge before increasing live scope or notional caps
+- real eToro demo lifecycle against current external demo endpoints, not only test doubles
+- real eToro live mutation enablement; live adapter currently fails closed with `etoro_live_mutation_disabled`
+- production-grade external validation artifacts and release-readiness evidence before live micro-size rollout
+- measured broker-backed trading edge before increasing live scope or notional caps

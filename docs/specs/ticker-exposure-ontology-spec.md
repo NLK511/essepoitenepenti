@@ -1,6 +1,14 @@
 # Ticker exposure ontology spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
+
+## Current behavior
+
+Every taxonomy ticker has an explicit exposure ontology profile. Plan-generation payloads carry bounded, auditable ontology context, but ontology output does not bypass calibration, actionability, broker, or risk gates.
+
+## Target behavior
+
+Ontology-enhanced context may get stronger decision influence only after realized/walk-forward evidence proves it improves on the prior taxonomy-only transmission path. Obsolete taxonomy-only plumbing should be cleaned up only after that validation passes.
 
 ## Goal
 
@@ -120,7 +128,7 @@ The generator must:
 - stamp source/version/update metadata
 - keep generated low-confidence mixed mappings when directionality is unknown
 
-## Current implementation status
+## Implementation status
 
 Implemented current behavior:
 

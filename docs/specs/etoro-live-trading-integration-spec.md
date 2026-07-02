@@ -1,8 +1,16 @@
 # eToro live trading integration spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
-This document defines the required behavior for eToro as a broker integration for Aurelio. Read-only plumbing, demo/mock lifecycle plumbing, live-shadow audit rows, broker-account gates, and a fail-closed live adapter are implemented. Real-money eToro mutation is not enabled; safety requirements in this spec remain mandatory before any live mutation path can be activated.
+This document defines the required behavior for eToro as a broker integration for Trade Proposer App.
+
+## Current behavior
+
+Read-only plumbing, demo/mock lifecycle plumbing, live-shadow audit rows, broker-account gates, and a fail-closed live adapter are implemented. Real-money eToro mutation is not enabled.
+
+## Target behavior
+
+Safety requirements in this spec remain mandatory before any live mutation path can be activated. Any future live path must pass external validation, release-readiness, production-readiness, and edge-validation gates.
 
 ## External API basis
 
@@ -32,7 +40,7 @@ If eToro changes endpoint names, payload semantics, or permission behavior, impl
 
 ## Goal
 
-Aurelio must support eToro as a first-class broker alongside Alpaca paper trading, with enough safety controls to submit, reconcile, and audit real-money trades without relying on broker UI inspection as the primary control.
+Trade Proposer App must support eToro as a first-class broker alongside Alpaca paper trading, with enough safety controls to submit, reconcile, and audit real-money trades without relying on broker UI inspection as the primary control.
 
 The integration must allow an operator to:
 
@@ -337,27 +345,13 @@ Before any real-money enablement in production:
 6. **Live micro-size:** live submit enabled for allowlisted symbols with `$25` default cap and manual review.
 7. **Measured expansion:** raise caps or add instruments only after broker-backed outcomes and incident-free operation justify it.
 
-## Implementation status
+## Current behavior and target gates
 
-Implemented current behavior:
+Canonical current behavior includes the eToro integration contract, broker-account adapter abstraction, per-broker eToro risk/drawdown settings, account-scoped credential storage and redaction, read-only client wiring, demo lifecycle plumbing covered with test doubles, fail-closed live adapter behavior, live-shadow would-submit audit rows, broker-account risk/circuit-breaker integration, order-submission safety gates, broker-aware UI/API safety indicators, and release-readiness report support.
 
-- [x] eToro integration spec
-- [x] broker-account adapter abstraction specified by tests
-- [x] per-broker eToro risk and drawdown settings/gates in the shared broker-account model
-- [x] account-scoped credential storage, validation evidence, and redaction tests/API behavior
-- [x] eToro read-only client and adapter wiring
-- [x] eToro demo adapter lifecycle plumbing covered with test doubles
-- [x] eToro live adapter object exists but is explicitly fail-closed for submit/cancel/close
-- [x] live-shadow would-submit audit rows that skip mutation calls
-- [x] eToro risk snapshot/drawdown integration through broker-account risk state
-- [x] broker-account circuit-breaker handling for ambiguous/stale/contradictory broker state
-- [x] order-submission safety gates, allowlist/default-off behavior, and price/slippage gates before mutation paths
-- [x] broker-account-aware UI/API eToro live safety indicators and confirmation prompts
-- [x] release-readiness script/report artifact support
+Still target/gated:
 
-Still target / gated:
-
-- [ ] re-read current eToro docs and confirm official demo endpoint paths before external demo mutation
-- [ ] validate read-only credentials, instrument metadata, demo lifecycle, and live-shadow against external eToro evidence
-- [ ] implement/enable real eToro live mutation; current live adapter returns `etoro_live_mutation_disabled`
-- [ ] production rollout artifact showing release-readiness script pass with required external evidence
+- re-read current eToro docs and confirm official demo endpoint paths before external demo mutation
+- validate read-only credentials, instrument metadata, demo lifecycle, and live-shadow against external eToro evidence
+- implement/enable real eToro live mutation; current live adapter returns `etoro_live_mutation_disabled`
+- production rollout artifact showing release-readiness script pass with required external evidence

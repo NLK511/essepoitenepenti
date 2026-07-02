@@ -2,7 +2,7 @@
 
 **Status:** current behavior
 
-This spec defines how Aurelio computes and inspects confidence calibration across time windows, including operator-controlled inclusion or exclusion of phantom trades. Live plan generation uses the latest persisted execution-only calibration snapshot rather than recomputing calibration on every plan-generation run.
+This spec defines how Trade Proposer App computes and inspects confidence calibration across time windows, including operator-controlled inclusion or exclusion of phantom trades. Live plan generation uses the latest persisted execution-only calibration snapshot rather than recomputing calibration on every plan-generation run.
 
 ## Purpose
 

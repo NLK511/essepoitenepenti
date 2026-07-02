@@ -1,20 +1,27 @@
 # Recommendation plan resolution spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
 This document defines the intended resolution semantics for `RecommendationPlan` outcomes.
 
 It is the static reference to use when evaluating, recomputing, tuning, or refactoring plan outcome logic.
 
-## Canonical behavior vs implementation status
+## Current behavior
 
-This document remains a `current + target behavior` spec by design. The conformance matrix below is the boundary between shipped behavior and stricter target semantics; do not read target-only sections as already implemented unless the matrix says they are aligned.
+The conformance matrix below is the boundary between shipped behavior and stricter target semantics. Do not read target-only sections as already implemented unless the matrix says they are aligned.
 
-This document defines the **expected behavior** for plan resolution.
+Use `../archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` as implementation history, not as the current contract.
 
-It is intentionally stricter than the current evaluator in a few places so that future work can reconcile the codebase back to a single rule set.
+### Current implementation status
 
-Use the notes below as the canonical target and `../archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` as the current implementation history.
+- **Aligned for current core crossing logic:** a dedicated `PlanResolutionEngine` owns entry touch, stop/take ordering, conservative same-bar ties, no-entry diagnostics, phantom outcomes, and realism buffers without database/session dependencies.
+- **Partially aligned for orchestration:** `RecommendationPlanEvaluationService` still owns history loading, daily/intraday source selection, persistence, and expiration finalization.
+- **Aligned for intraday precedence:** when intraday bars are available, they are used as the resolution source even if daily bars disagree.
+- **Still target behavior:** the immediate-or-next-open entry window should become a first-class engine policy if execution semantics tighten further.
+
+## Target behavior
+
+This document defines the **expected behavior** for plan resolution. It is intentionally stricter than the current evaluator in a few places so future work can reconcile the codebase back to a single rule set.
 
 ### Expected behavior
 
@@ -29,13 +36,6 @@ This applies whether the plan was generated:
 
 - during market hours, or
 - at market close
-
-### Current implementation status
-
-- **Aligned for current core crossing logic:** a dedicated `PlanResolutionEngine` owns entry touch, stop/take ordering, conservative same-bar ties, no-entry diagnostics, phantom outcomes, and realism buffers without database/session dependencies.
-- **Partially aligned for orchestration:** `RecommendationPlanEvaluationService` still owns history loading, daily/intraday source selection, persistence, and expiration finalization.
-- **Aligned for intraday precedence:** when intraday bars are available, they are used as the resolution source even if daily bars disagree.
-- **Still target behavior:** the immediate-or-next-open entry window should become a first-class engine policy if execution semantics tighten further.
 
 ### Implementation conformance matrix
 

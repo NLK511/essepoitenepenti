@@ -2,137 +2,82 @@
 
 **Status:** active plan
 
-This roadmap is short on purpose.
+This roadmap is intentionally short. It lists only current priorities and clearly deferred work. Shipped behavior belongs in `features-and-capabilities.md`; detailed history belongs in `archive/roadmap-history.md`.
 
-It covers three things only:
-- what is shipped now
-- what still needs work
-- what is clearly later
+## Current baseline
 
-Anything already shipped should live in the current-state docs, not be re-described here as future work.
+Trade Proposer App already has the core operator workflow in place:
 
-Detailed history is in `archive/roadmap-history.md`.
-
-## Current shipped baseline
-
-Trade Proposer App already has its core workflow in place:
-- watchlists, jobs, runs, settings, context snapshots, ticker signals, recommendation plans, and outcomes all persist inside one schema
-- the operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
-- proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
-- recommendation review is centered on `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
-- broker paper-trading now persists broker order, broker position, and broker steering decision records for app-owned exposure
-- health and preflight surface degraded dependencies and freshness instead of hiding them
-- optimization already uses redesign-native outcomes
+- watchlists, jobs, runs, settings, context snapshots, ticker signals, recommendation plans, outcomes, broker orders, and broker positions persist in one schema
+- proposal generation, evaluation, tuning, context refresh, paper execution, and broker reconciliation run inside this repository
+- the UI supports review, quality, execution/risk, context, data-quality, run-debugging, settings, and in-app docs workflows
+- health, preflight, warnings, provenance, run leases, worker heartbeats, and correlation ids make degraded state visible
+- calibration, effective outcomes, walk-forward tuning, and baseline comparisons exist, but measured edge is still thin
+- Alpaca paper execution is active; eToro read-only/demo/live-shadow plumbing exists; real eToro live mutation remains fail-closed
 
 ## Active priorities
 
+Priority order follows `product-thesis.md`: reliability, observability, security, evidence quality, then feature expansion.
+
 ### 1. Reliability
-Highest current priority.
 
-Already in place:
-- persisted `scheduled_for` slots with uniqueness guards
-- atomic-enough run claiming for the current model
-- duplicate-run protections on enqueue paths
-- persisted run timing, status, error fields, and failure metadata
-- worker heartbeats and run leases
-- stale-run recovery when leases expire, with older timeout fallback still present in some paths
-
-Still needed:
-- continued soak/testing of partial-persistence recovery behavior under real worker crashes
-- stronger coordination guarantees if concurrency grows
+- keep soaking worker/scheduler crash recovery, leases, stale-run recovery, and partial-persistence behavior
+- strengthen coordination only if real concurrency pressure appears
+- keep old persisted rows readable when status names or payload shapes evolve
 
 ### 2. Observability
-Runtime clarity now matters more than more surface area.
 
-Already in place:
-- persisted run timing, summaries, artifacts, and errors
-- health and preflight visibility for degraded state
-- warnings and provenance on context and recommendation review pages
-- persisted worker heartbeat data
-- `/api/health` separation between service health, dependency health, worker health, scheduler health, run health, and context freshness
-- lease-age, stale-running-run, worker-heartbeat-age, and scheduler-heartbeat diagnostics in `/api/health`
-- worker and scheduler daemon logging
-- persisted run correlation ids included in run models and dispatch logs
-- structured `observability_events` for run dispatch, completion, and failure, exposed through `/api/observability/events`
-
-Still needed:
-- continued polish of provider/broker lifecycle event presentation and operator-facing diagnostics
-- easier diagnosis of provider failures across processes when failures span worker, scheduler, and API processes
+- improve provider/broker lifecycle event presentation across API, worker, and scheduler processes
+- make daemon health, stale broker snapshots, circuit breakers, and `needs_review` exposure easy to diagnose from the UI/API
+- keep detailed artifacts on detail/research pages, not dashboard page-load paths
 
 ### 3. Security and credential lifecycle
-The app should not expand provider surface area faster than it improves secret handling.
 
-Already in place:
-- single-user bearer-token API protection with login
-- encrypted provider credentials at rest
-
-Still needed:
-- stronger auth hardening
-- credential rotation and re-encryption workflow
-- safer production defaults and guidance
-- optional external secret-backend support if needed
+- harden single-user auth defaults for production
+- document and test credential rotation/re-encryption
+- keep provider/broker secrets write-only and redacted in API, UI, logs, artifacts, and observability events
+- consider external secret storage only if deployment needs justify it
 
 ### 4. Production readiness and live broker safety
-Real-money execution must not be enabled until deployment, security, observability, and external broker evidence are production-ready.
 
-Already in place:
-- Alpaca paper execution records and broker-position lifecycle records
-- broker-account adapter abstraction with account-scoped credentials
-- per-broker execution settings, exposure limits, drawdown limits, kill switches, and circuit breakers
-- broker workbench visibility for submissions, positions, drawdown, circuit breakers, and operator actions
-- eToro read-only/demo plumbing, live gates, live-shadow audit rows, and fail-closed live adapter behavior
-- broker-agnostic order price normalization and broker-account-scoped risk/reconciliation state
-- release-readiness script requiring eToro read-only/demo/live-shadow artifact ids
-
-Still needed:
-- production configuration hardening, backup/restore validation, incident runbooks, and staging soak following `production-readiness-plan.md`
-- real eToro external validation artifacts before any live-money implementation path
-- continued proof of measured trading edge before capital is increased
+- complete `production-readiness-plan.md`: production preflight, backup/restore proof, incident runbooks, staging soak, and operator sign-off
+- require eToro read-only, demo, live-shadow, and release-readiness artifacts before any live-money implementation path
+- keep broker halt, account-scoped limits, drawdown/circuit-breaker checks, and reconciliation evidence as non-negotiable gates
 
 ### 5. Measured recommendation quality
-The next question is evidence quality, not raw feature count.
 
-Already in place:
-- persisted `RecommendationPlanOutcome` records
-- broker-position lifecycle records for app-submitted Alpaca paper bracket orders, including realized P&L when entry/exit fills are available
-- broker-backed pre-trade risk limits and manual kill switch for autonomous execution safety
-- calibration summaries, baseline cohorts, setup-family review, and evidence-concentration review from stored outcomes
-- calibration-aware confidence and gating in the orchestration path
-
-Still needed:
-- more resolved live broker positions and simulated outcomes over time
-- continued use of calibration without overstating thin buckets
-- continued comparison against simple baselines
-- validation of which setup families, horizons, ontology/transmission conditions, fundamental contexts, and regimes actually work in live data
+- accumulate more broker-backed and replay-backed outcomes
+- compare against simple baselines, not only internal scores
+- validate setup family, horizon, confidence bucket, market regime, ontology/transmission state, and fundamental-context slices
+- keep thin calibration buckets and degraded-input penalties explicit
+- promote tuning/config changes only after walk-forward, concentration, drawdown/loss-streak, and baseline checks
 
 ### 6. Redesign maturation
-The redesign is already the active path.
 
-Already in place:
-- recommendation-plan review as the main operator-facing decision flow
-- dedicated context review and detail pages
-- support-snapshot UI and persistence have been retired from the active runtime path
-
-Still needed:
-- continued improvement of ticker-analysis quality
-- continued avoidance of duplicate legacy-vs-redesign terminology
+- keep `RecommendationPlan` review as the canonical operator decision path
+- improve ticker-analysis quality without reviving duplicate legacy terms
+- retire compatibility paths only after proving they are no longer used by migrations, tests, or old persisted rows
 
 ## Explicitly later
+
 Lower priority until the active items above improve:
-- additional providers that mainly increase source count without measured quality gains
-- broader automation beyond current operator workflows
-- multi-user scope, RBAC, or tenancy before the single-user model is stronger
-- service extraction unless scale or operational pressure clearly justifies it
-- stronger predictive claims before outcome history and calibration support them
+
+- more providers that mainly increase source count without measured quality gains
+- broader automation beyond supervised operator workflows
+- multi-user scope, RBAC, or tenancy before the single-user model is solid
+- service extraction before scale or operational pressure requires it
+- stronger predictive/profit claims before outcome history supports them
 
 ## Maintenance rule
-If a feature is shipped, describe it in the canonical product docs and remove it from the active roadmap unless unfinished follow-through remains.
 
-If historical detail is still useful, move it to archive rather than leaving it in the main reading path.
+If a feature ships, move stable behavior to the canonical current-state doc and remove it from this roadmap unless unfinished follow-through remains. Archive historical detail instead of leaving it in the main reading path.
 
 ## See also
+
 - `product-thesis.md`
 - `features-and-capabilities.md`
 - `recommendation-methodology.md`
 - `architecture.md`
+- `production-readiness-plan.md`
+- `recommendation-quality-improvement-plan.md`
 - `archive/roadmap-history.md`

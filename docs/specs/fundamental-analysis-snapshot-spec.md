@@ -1,8 +1,16 @@
 # Fundamental analysis snapshots
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
-Weekly weekend and event-aware fundamental snapshots for monitored tickers. Persistence, refresh jobs/routes, point-in-time lookup, ticker/plan integration, compact payloads, and initial validation-slice plumbing are implemented. Dedicated stale-coverage UI/observability polish and action-affecting positive contribution remain target behavior pending validation.
+Weekly weekend and event-aware fundamental snapshots for monitored tickers.
+
+## Current behavior
+
+Persistence, refresh jobs/routes, point-in-time lookup, ticker/plan integration, compact payloads, and initial validation-slice plumbing are implemented.
+
+## Target behavior
+
+Dedicated stale-coverage UI/observability polish and any action-affecting positive contribution remain target behavior pending validation.
 
 ## Goal
 

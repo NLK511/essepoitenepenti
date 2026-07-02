@@ -1,6 +1,6 @@
 # Plan generation tuning spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
 Binding reference for recommendation plan-generation tuning. If implementation conflicts with this spec, update the spec first or change the implementation.
 
@@ -32,7 +32,7 @@ To avoid tuning-system complexity explosion, parameter-specific checks must be r
 
 The legacy weight optimizer is retired. Do not revive its workflow, job type, active settings, or rollback path. `weights.json` may remain only as a normal scoring input where still needed.
 
-## Current implementation snapshot
+## Current behavior
 
 Live behavior includes:
 - dedicated routes, persistence, runs, candidates, config versions, and config promotion
@@ -46,6 +46,8 @@ Live behavior includes:
 - default scheduled/API tuning mode is now `point_in_time_replay`; `stored_plan_rescore` remains available only as a manual diagnostic/regression mode using compact eligible records derived from existing stored plans/outcomes
 - weekly actionability-floor calibration runs as a `plan_generation_tuning` job mode, rescoring the latest completed replay batch across 40%-60% floors without executing new replay slices or promoting settings
 - full dry-run tuning must avoid duplicate eligible-record loads; final walk-forward validation should reuse the already loaded eligible record set rather than querying the same large outcome universe again
+
+## Target behavior
 
 Not fully autonomous yet:
 - the complete daily evolution workflow

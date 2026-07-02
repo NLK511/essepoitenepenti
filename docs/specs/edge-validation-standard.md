@@ -1,10 +1,18 @@
 # Edge validation and autonomy gate standard
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
-This standard defines the minimum evidence required before Aurelio may expand autonomous broker execution.
+This standard defines the minimum evidence required before Trade Proposer App may expand autonomous broker execution.
 
 It is intentionally conservative. A coherent plan, high confidence score, or good-looking backtest is not enough. Autonomy may expand only when broker-preferred outcomes show a repeatable edge that survives baseline, calibration, concentration, and drawdown checks.
+
+## Current behavior
+
+The gate is implemented through `EdgeValidationGateService` and operator trust is assembled through `PolicyTrustReport`. Plan-generation tuning auto-promotion is blocked unless the gate returns `eligible_for_cautious_expansion`.
+
+## Target behavior
+
+Any future setting that increases broker autonomy scope, exposure, frequency, or live mutation power must use this gate before it ships.
 
 ## Scope
 
@@ -153,15 +161,14 @@ Even when the gate passes, autonomy must expand in small increments only:
 - require a fresh review window after each increase
 - automatically demote or halt if live evidence falls below the standard
 
-## Required implementation path
+## Implementation conformance
 
-1. [x] Implement the standard as a service using broker-preferred effective outcomes.
-2. [x] Expose the result in the research/performance workbench.
-3. [x] Render the result near `policy_health` in the UI.
-4. [x] Wire the result into plan-generation tuning promotion.
-5. [x] State that no broker autonomy-scope expansion setting may ship without this gate.
-6. [x] Add regression tests for pass, fail, demote, broker-uncertain, and tuning-promotion block cases.
+Implemented contract:
 
-## Current conformance
+- service-level gate using broker-preferred effective outcomes
+- research/performance visibility
+- UI rendering near `policy_health`
+- plan-generation tuning promotion integration
+- regression tests for pass, fail, demote, broker-uncertain, and tuning-promotion block cases
 
-Current behavior computes the gate through `EdgeValidationGateService` and assembles operator-facing trust via `PolicyTrustReport`. Dashboard, recommendation-quality, research, and plan-generation tuning promotion should consume the shared trust report so required inputs are either supplied or explicitly marked missing. Plan-generation tuning auto-promotion is blocked unless the gate returns `eligible_for_cautious_expansion`. Manual promotion of a specific eligible candidate does not depend on this gate. There is no separate broker autonomy-scope expansion setting today; any future setting that increases broker autonomy must use this gate before it ships.
+Manual promotion of a specific eligible candidate does not depend on this gate. There is no separate broker autonomy-scope expansion setting today.

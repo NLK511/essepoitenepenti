@@ -2,17 +2,19 @@
 
 **Status:** reference
 
-This index keeps the main documentation surface complete but lean. Detailed contracts live in `specs/`; completed plans and dated audits live in `archive/`.
+This index keeps the documentation surface complete but lean. The docs should reflect the product philosophy in `product-thesis.md`: operator trust, reproducibility, diagnosability, reliability, and measured recommendation quality before feature expansion. Detailed contracts live in `specs/`; completed plans and dated audits live in `archive/`.
 
 ## Start here
 
-Read these first:
+For the shortest useful path, read:
 
 1. `../README.md` — repo overview and quick start
-2. `getting-started.md` — setup, startup, auth, and troubleshooting
-3. `operator-page-field-guide.md` — UI map and daily operator workflow
-4. `glossary.md` — shared terms
+2. `product-thesis.md` — goals, philosophy, and decision priorities
+3. `getting-started.md` — setup, startup, auth, and troubleshooting
+4. `operator-page-field-guide.md` — UI map and daily operator workflow
 5. `recommendation-methodology.md` — recommendation and plan-generation path
+
+Use `glossary.md` as a reference when terms are unclear.
 
 ## Main current-state docs
 
@@ -41,7 +43,7 @@ These are the primary narrative source of truth for the product today:
 
 ## Specs directory
 
-Detailed behavior contracts live in `specs/`. They are current product truth or explicit current+target contracts, but they are not the first reading path.
+Detailed behavior contracts live in `specs/`. They are current product truth or explicit current-and-target contracts, but they are not the first reading path. If a spec is fully implemented, keep it as a canonical contract and archive implementation history instead of keeping progress logs in the spec.
 
 ### Recommendation quality and outcomes
 
@@ -87,6 +89,7 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 
 - `specs/dashboard-aggregate-performance-spec.md`
 - `specs/observability-spec.md`
+- `specs/production-supervision-spec.md`
 
 ## Archive
 
@@ -104,19 +107,22 @@ Start with:
 
 When a feature ships:
 
-- update the canonical narrative doc and the relevant detailed spec
-- archive completed implementation plans and dated audits
+- update one canonical narrative doc and one relevant spec, not several overlapping summaries
+- archive completed implementation plans, checklists, and dated audits
 - keep `roadmap.md` short and current
-- keep `specs/` as detailed contracts, not transient project plans
+- keep `specs/` as durable contracts, not transient project plans or implementation diaries
+- when a spec becomes fully implemented, remove implementation history from the spec and archive that history under `docs/archive/`
+- split mixed specs into clear current-behavior and target-behavior sections
+- keep `glossary.md` exhaustive; an undefined recurring term is a documentation clarity smell
 - do not leave completed work described as future work
 - keep old persisted rows readable even when docs/plumbing move forward
 
-Before adding a new doc, decide whether it is:
+Before adding a new doc, classify it as exactly one of:
 
-- narrative/current-state docs root
-- detailed spec under `specs/`
-- active plan/tracker
-- reference
-- archive
+- narrative/current-state doc in `docs/`
+- detailed contract in `docs/specs/`
+- active plan/tracker in `docs/`
+- reference in `docs/`
+- historical context in `docs/archive/`
 
 If it is a completed checklist, audit, or transient roadmap, place it under `docs/archive/` instead of the main docs root or `specs/`.

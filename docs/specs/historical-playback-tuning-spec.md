@@ -1,8 +1,16 @@
 # Historical playback tuning spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
-This spec defines the target replay mechanism used by future plan-generation tuning. It also records the current boundary: historical replay can prepare market inputs, while plan-generation tuning currently uses compact stored-plan eligible records rather than full per-candidate replay.
+This spec defines replay mechanisms for plan-generation tuning.
+
+## Current behavior
+
+Historical replay can prepare market inputs. Plan-generation tuning currently uses compact stored-plan eligible records and replay-batch rescoring for narrow threshold experiments rather than full per-candidate point-in-time replay.
+
+## Target behavior
+
+Full point-in-time replay should run current generation logic on historical inputs under scoped candidate configs, then resolve generated plans using canonical post-as-of resolution evidence.
 
 ## Purpose
 

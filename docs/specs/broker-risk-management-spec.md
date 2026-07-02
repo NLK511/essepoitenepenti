@@ -6,7 +6,7 @@ For target multi-broker/live behavior, see `multi-broker-execution-risk-spec.md`
 
 ## Product goal
 
-Aurelio must be able to stop autonomous broker execution before a bad strategy, bad configuration, broker mismatch, or software bug can compound losses. The risk manager is the first guardrail between plan generation and broker submission.
+Trade Proposer App must be able to stop autonomous broker execution before a bad strategy, bad configuration, broker mismatch, or software bug can compound losses. The risk manager is the first guardrail between plan generation and broker submission.
 
 This feature extends, but does not replace:
 

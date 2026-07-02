@@ -7,7 +7,7 @@ This plan turns the current multi-broker/eToro implementation into a production-
 
 ## Definition of production-ready
 
-Aurelio is production-ready when all of these are true:
+Trade Proposer App is production-ready when all of these are true:
 
 1. The deployed app can run unattended for market sessions without data loss, duplicate runs, or silent broker drift.
 2. Secrets, auth, backups, and migrations have production-safe defaults and a documented recovery path.

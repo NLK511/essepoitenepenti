@@ -1,6 +1,6 @@
 # Market intelligence analysis spec
 
-**Status:** current + target behavior
+**Status:** current and target behavior
 
 Binding reference for the optional market-intelligence layer: event, options, and analyst evidence used by ticker analysis and plan framing.
 
@@ -32,6 +32,10 @@ A partial `MarketIntelligenceService` exists and is experimental:
 - no Settings API/UI toggle exists yet
 
 Operator UI must display disabled snapshots as “Market intelligence disabled” rather than active evidence.
+
+## Target behavior
+
+The target layer is a replay-safe, auditable market-intelligence snapshot model with event, options, and analyst subdomains; explicit settings; compact plan payloads; diagnostics; and validation evidence before any positive confidence role.
 
 ## Non-goals
 
