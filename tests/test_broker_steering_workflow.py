@@ -14,6 +14,8 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.persistence.models import (
     Base,
+    BrokerOrderExecutionRecord,
+    BrokerPositionRecord,
     BrokerSteeringDecisionRecord,
     ObservabilityEventRecord,
 )
@@ -469,6 +471,7 @@ def test_state_builder_computes_reconciliation_age_and_expiration_flag() -> None
             take_profit_order_id="tp-1",
             take_profit_order_status="new",
             take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW - timedelta(minutes=10),
         )
     )
     snapshots.create(
@@ -704,6 +707,126 @@ def test_state_builder_uses_latest_reconciliation_snapshot_to_keep_broker_uncert
     assert "broker_uncertainty" in decision.reason_codes
 
 
+def test_state_builder_uses_fresh_order_row_when_snapshot_is_absent() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    orders = BrokerOrderExecutionRepository(session)
+    plan = plans.create_plan(_plan())
+    order = orders.create(
+        BrokerOrderExecution(
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            order_type="limit",
+            quantity=1,
+            notional_amount=100.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            status="submitted",
+            client_order_id="fresh-local-order",
+        )
+    )
+    session.query(BrokerOrderExecutionRecord).filter(
+        BrokerOrderExecutionRecord.id == order.id
+    ).update({"updated_at": NOW - timedelta(minutes=5)})
+    session.commit()
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(
+        now=NOW
+    )[0]
+
+    assert state.broker_reconciliation_healthy is True
+    assert state.broker_reconciliation_age_minutes == 5.0
+
+
+def test_state_builder_snapshot_warning_overrides_fresh_order_row() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    orders = BrokerOrderExecutionRepository(session)
+    snapshots = BrokerReconciliationSnapshotRepository(session)
+    plan = plans.create_plan(_plan())
+    order = orders.create(
+        BrokerOrderExecution(
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            order_type="limit",
+            quantity=1,
+            notional_amount=100.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            status="submitted",
+            client_order_id="fresh-local-order-with-drift",
+        )
+    )
+    session.query(BrokerOrderExecutionRecord).filter(
+        BrokerOrderExecutionRecord.id == order.id
+    ).update({"updated_at": NOW - timedelta(minutes=5)})
+    session.commit()
+    snapshots.create(
+        BrokerReconciliationSnapshot(
+            broker="alpaca",
+            account_mode="paper",
+            snapshot_type="post_sync",
+            ticker=plan.ticker,
+            drift_severity="ok",
+            warnings=["broker drift still unresolved"],
+            created_at=NOW - timedelta(minutes=2),
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(
+        now=NOW
+    )[0]
+
+    assert state.broker_reconciliation_healthy is False
+    assert state.broker_reconciliation_age_minutes == 2.0
+
+
+def test_state_builder_blocks_position_when_protective_verification_is_stale() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    plan = plans.create_plan(_plan())
+    position = positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            stop_loss_order_id="sl-1",
+            stop_loss_order_status="new",
+            stop_loss_order_price=95.0,
+            take_profit_order_id="tp-1",
+            take_profit_order_status="new",
+            take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW - timedelta(minutes=45),
+        )
+    )
+    session.query(BrokerPositionRecord).filter(BrokerPositionRecord.id == position.id).update(
+        {"updated_at": NOW - timedelta(minutes=5)}
+    )
+    session.commit()
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(
+        now=NOW
+    )[0]
+
+    assert state.broker_reconciliation_healthy is False
+    assert state.broker_reconciliation_age_minutes == 45.0
+
+
 def test_state_builder_uses_latest_daily_market_bar_as_price_proxy() -> None:
     session = create_session()
     plans = RecommendationPlanRepository(session)
@@ -733,6 +856,7 @@ def test_state_builder_uses_latest_daily_market_bar_as_price_proxy() -> None:
             take_profit_order_id="tp-1",
             take_profit_order_status="new",
             take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW - timedelta(minutes=1),
         )
     )
     snapshots.create(
@@ -1151,6 +1275,7 @@ def test_steering_service_can_execute_supported_live_stop_amendment() -> None:
             take_profit_order_id="tp-live-amend",
             take_profit_order_status="new",
             take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW - timedelta(minutes=1),
         )
     )
 
@@ -1283,6 +1408,7 @@ def test_steering_service_can_execute_supported_live_take_profit_lowering() -> N
             take_profit_order_id="tp-live-lower-tp",
             take_profit_order_status="new",
             take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW - timedelta(minutes=1),
         )
     )
 
@@ -1391,6 +1517,7 @@ def test_steering_service_can_execute_supported_live_close_position() -> None:
             take_profit_order_id="tp-live-close",
             take_profit_order_status="new",
             take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW - timedelta(minutes=1),
         )
     )
 

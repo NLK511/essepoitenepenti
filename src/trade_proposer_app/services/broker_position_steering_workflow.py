@@ -62,6 +62,7 @@ class BrokerSteeringStateBuilder:
         self.positions = BrokerPositionRepository(session)
         self.snapshots = BrokerReconciliationSnapshotRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
+        self.settings = SettingsRepository(session).get_steering_config()
         self.evidence_builder = BrokerSteeringEvidenceBuilder()
         self._price_cache: dict[str, float | None] = {}
 
@@ -142,7 +143,12 @@ class BrokerSteeringStateBuilder:
             position is not None and expiration_at is not None and expiration_at < normalized_now
         )
         broker_reconciliation_healthy, broker_reconciliation_age_minutes = (
-            self._broker_reconciliation_health(plan.ticker, now=normalized_now)
+            self._broker_reconciliation_health(
+                plan.ticker,
+                now=normalized_now,
+                order=order,
+                position=position,
+            )
         )
         steering_evidence = self.evidence_builder.build(plan, now=now)
         return BrokerSteeringState(
@@ -224,16 +230,87 @@ class BrokerSteeringStateBuilder:
         return "unknown"
 
     def _broker_reconciliation_health(
-        self, ticker: str, *, now: datetime
+        self,
+        ticker: str,
+        *,
+        now: datetime,
+        order: BrokerOrderExecution | None = None,
+        position: BrokerPosition | None = None,
     ) -> tuple[bool, float | None]:
+        snapshot_health, snapshot_age = self._snapshot_reconciliation_health(ticker, now=now)
+        if snapshot_health is False:
+            return False, snapshot_age
+
+        local_health, local_age = self._local_broker_record_health(
+            order=order,
+            position=position,
+            now=now,
+        )
+        if local_health is not None:
+            return local_health, local_age
+        if snapshot_health is not None:
+            return snapshot_health, snapshot_age
+        return False, None
+
+    def _snapshot_reconciliation_health(
+        self, ticker: str, *, now: datetime
+    ) -> tuple[bool | None, float | None]:
         snapshots = self.snapshots.list_latest_for_ticker(ticker, limit=1)
         if not snapshots:
-            return False, None
+            return None, None
         latest = snapshots[0]
-        age_minutes = max(0.0, (now - latest.created_at).total_seconds() / 60.0)
+        age_minutes = self._age_minutes(latest.created_at, now=now)
         if latest.warnings:
             return False, age_minutes
-        return str(latest.drift_severity or "").strip().lower() == "ok", age_minutes
+        severity = str(latest.drift_severity or "").strip().lower()
+        if severity and severity != "ok":
+            return False, age_minutes
+        max_age = float(self.settings.get("max_reconciliation_age_minutes", 30) or 30)
+        return (age_minutes is not None and age_minutes <= max_age), age_minutes
+
+    def _local_broker_record_health(
+        self,
+        *,
+        order: BrokerOrderExecution | None,
+        position: BrokerPosition | None,
+        now: datetime,
+    ) -> tuple[bool | None, float | None]:
+        max_age = float(self.settings.get("max_reconciliation_age_minutes", 30) or 30)
+        if position is not None:
+            protective_required = self._position_has_expected_protective_orders(position)
+            if protective_required:
+                protective_age = self._age_minutes(position.protective_orders_verified_at, now=now)
+                if protective_age is None:
+                    return False, None
+                if protective_age > max_age:
+                    return False, protective_age
+            position_age = self._age_minutes(position.updated_at, now=now)
+            if position_age is not None:
+                local_age = max(position_age, protective_age) if protective_required and protective_age is not None else position_age
+                return local_age <= max_age, local_age
+            return None, None
+        if order is not None:
+            order_age = self._age_minutes(order.updated_at, now=now)
+            if order_age is not None:
+                return order_age <= max_age, order_age
+        return None, None
+
+    @staticmethod
+    def _position_has_expected_protective_orders(position: BrokerPosition) -> bool:
+        return bool(
+            position.stop_loss_order_id
+            or position.take_profit_order_id
+            or position.stop_loss_order_price is not None
+            or position.take_profit_order_price is not None
+        )
+
+    @staticmethod
+    def _age_minutes(value: datetime | None, *, now: datetime) -> float | None:
+        if value is None:
+            return None
+        normalized_value = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        normalized_now = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+        return max(0.0, (normalized_now.astimezone(UTC) - normalized_value.astimezone(UTC)).total_seconds() / 60.0)
 
     @classmethod
     def _has_severe_negative_news(
