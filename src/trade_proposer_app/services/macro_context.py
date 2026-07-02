@@ -10,6 +10,7 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.services.context_quality import assess_context_quality
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
+    authoritative_social_handles,
     count_events_above_saliency,
     coverage_quality_label,
     extract_event_tags,
@@ -221,14 +222,23 @@ class MacroContextService:
         missing_inputs: list[str] = []
         feed_errors = list(news_bundle.feed_errors) if news_bundle is not None else []
         primary_source_counts = source_priority_counts(news_items, source_type="news")
+        social_source_counts = source_priority_counts(supporting_social_items, source_type="social")
+        authoritative_social_count = social_source_counts.get("authoritative_social", 0)
+        authoritative_handles = authoritative_social_handles(supporting_social_items)
         primary_coverage_quality = coverage_quality_label(news_items, source_type="news")
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
 
         if not news_items:
-            warnings.append("macro context was built without primary news evidence; social evidence was used only as a secondary fallback")
+            if authoritative_social_count > 0:
+                warnings.append("macro context was built without primary news evidence; authoritative social evidence was present but confidence remains capped")
+            else:
+                warnings.append("macro context was built without primary news evidence; social evidence was used only as a secondary fallback")
             missing_inputs.append("primary_news_evidence")
         elif primary_coverage_quality == "low":
-            warnings.append("macro context primary-news evidence lacks official or major-source coverage, so saliency confidence is capped")
+            if authoritative_social_count > 0:
+                warnings.append("macro context primary-news evidence lacks official or major-source coverage; authoritative social evidence partially offsets the source-quality gap")
+            else:
+                warnings.append("macro context primary-news evidence lacks official or major-source coverage, so saliency confidence is capped")
         if feed_errors:
             warnings.append("macro context primary-news ingestion reported provider issues")
         if contradiction_labels:
@@ -236,7 +246,7 @@ class MacroContextService:
         support_score = float(getattr(payload, "score", 0.0) or 0.0)
         support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")
         regime_tags = self._regime_tags(active_themes, support_score, support_label)
-        saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts)
+        saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts, authoritative_social_count)
         confidence_percent = self._confidence_percent(
             active_themes,
             len(news_items),
@@ -244,6 +254,7 @@ class MacroContextService:
             diagnostics,
             feed_errors,
             primary_source_counts,
+            authoritative_social_count=authoritative_social_count,
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
         )
         fallback_summary = self._fallback_summary_text(previous, active_themes, lifecycle_summary, news_items, supporting_social_items, warnings)
@@ -291,6 +302,10 @@ class MacroContextService:
                 "context_score": support_score,
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
+                "authoritative_social_item_count": authoritative_social_count,
+                "authoritative_social_handles": authoritative_handles,
+                "generic_social_item_count": max(0, len(supporting_social_items) - authoritative_social_count),
+                "supporting_social_source_priorities": summarize_source_priorities(supporting_social_items, source_type="social"),
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
                 "primary_news_feed_errors": feed_errors,
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
@@ -402,6 +417,7 @@ class MacroContextService:
         social_item_count: int,
         sentiment_magnitude: float,
         primary_source_counts: dict[str, int],
+        authoritative_social_count: int = 0,
     ) -> float:
         top_event_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_themes), default=0.0)
         theme_factor = min(1.0, math.log1p(len(active_themes)) / math.log(6.0)) if active_themes else 0.0
@@ -413,6 +429,7 @@ class MacroContextService:
                 (primary_source_counts.get("official", 0) * 1.0)
                 + (primary_source_counts.get("major", 0) * 0.7)
                 + (primary_source_counts.get("trade", 0) * 0.45)
+                + (authoritative_social_count * 0.55)
             )
             / 3.0,
         )
@@ -437,6 +454,7 @@ class MacroContextService:
         feed_errors: list[str],
         primary_source_counts: dict[str, int],
         *,
+        authoritative_social_count: int = 0,
         contradiction_count: int,
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
@@ -455,6 +473,7 @@ class MacroContextService:
                 (primary_source_counts.get("official", 0) * 1.0)
                 + (primary_source_counts.get("major", 0) * 0.7)
                 + (primary_source_counts.get("trade", 0) * 0.4)
+                + (authoritative_social_count * 0.55)
             )
             / 3.0,
         )
@@ -473,9 +492,9 @@ class MacroContextService:
             + provider_factor * 3.0
         )
         if news_item_count == 0:
-            confidence -= 18.0
+            confidence -= 10.0 if authoritative_social_count > 0 else 18.0
         if primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
-            confidence -= 10.0
+            confidence -= 4.0 if authoritative_social_count > 0 else 10.0
         if contradiction_count > 0:
             confidence -= min(22.0, contradiction_count * 7.0)
         if feed_errors:

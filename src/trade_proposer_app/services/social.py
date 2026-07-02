@@ -11,6 +11,7 @@ from urllib.parse import quote, urljoin
 import httpx
 
 from trade_proposer_app.domain.models import SignalBundle, SignalEngagement, SignalItem
+from trade_proposer_app.services.event_extraction import classify_source_priority
 from trade_proposer_app.services.news import (
     NEGATIVE_KEYWORD_WEIGHTS,
     NEGATIVE_PHRASE_WEIGHTS,
@@ -413,6 +414,8 @@ class NitterProvider(SocialProvider):
     @staticmethod
     def _estimate_credibility_score(handle: str | None, engagement: SignalEngagement) -> float:
         base = 0.35 if not handle else 0.45
+        if classify_source_priority("nitter", source_type="social", author_handle=handle) == "authoritative_social":
+            base += 0.25
         if handle and any(token in handle.lower() for token in ("news", "markets", "finance", "journal")):
             base += 0.2
         if engagement.retweets > 25:
@@ -494,6 +497,12 @@ class SocialSentimentAnalyzer:
                 "scope_tags": item.scope_tags,
                 "quality_score": item.quality_score,
                 "credibility_score": item.credibility_score,
+                "source_priority": classify_source_priority(
+                    item.publisher,
+                    source_type="social",
+                    author_handle=item.author_handle,
+                    author=item.author,
+                ),
                 "engagement": item.engagement.model_dump(),
             }
             for item in bundle.items

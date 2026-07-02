@@ -10,6 +10,7 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.services.context_quality import ContextQualityAssessment, assess_context_quality
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
+    authoritative_social_handles,
     count_events_above_saliency,
     coverage_quality_label,
     event_keys,
@@ -154,21 +155,30 @@ class IndustryContextService:
         )
         feed_errors = list(news_bundle.feed_errors) if news_bundle is not None else []
         primary_source_counts = source_priority_counts(news_items, source_type="news")
+        social_source_counts = source_priority_counts(supporting_social_items, source_type="social")
+        authoritative_social_count = social_source_counts.get("authoritative_social", 0)
+        authoritative_handles = authoritative_social_handles(supporting_social_items)
         primary_coverage_quality = coverage_quality_label(news_items, source_type="news")
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
 
         warnings: list[str] = []
         missing_inputs: list[str] = []
         if not news_items:
-            warnings.append(f"industry context for {industry_label} was built without primary industry news evidence; social evidence was used only as a secondary fallback")
+            if authoritative_social_count > 0:
+                warnings.append(f"industry context for {industry_label} was built without primary industry news evidence; authoritative social evidence was present but confidence remains capped")
+            else:
+                warnings.append(f"industry context for {industry_label} was built without primary industry news evidence; social evidence was used only as a secondary fallback")
             missing_inputs.append("primary_industry_news_evidence")
         elif primary_coverage_quality == "low":
-            warnings.append(f"industry context for {industry_label} lacks trade, official, or major-source coverage in its primary news evidence")
+            if authoritative_social_count > 0:
+                warnings.append(f"industry context for {industry_label} lacks trade, official, or major-source primary news coverage; authoritative social evidence partially offsets the source-quality gap")
+            else:
+                warnings.append(f"industry context for {industry_label} lacks trade, official, or major-source coverage in its primary news evidence")
         if feed_errors:
             warnings.append(f"industry context for {industry_label} encountered provider issues while gathering primary-news evidence")
         if contradiction_labels:
             warnings.append(f"industry context for {industry_label} includes contradictory driver evidence")
-        saliency_score = self._saliency_score(active_drivers, len(news_items), len(supporting_social_items), len(linked_macro_themes), primary_source_counts)
+        saliency_score = self._saliency_score(active_drivers, len(news_items), len(supporting_social_items), len(linked_macro_themes), primary_source_counts, authoritative_social_count)
         confidence_percent = self._confidence_percent(
             active_drivers,
             len(news_items),
@@ -176,6 +186,7 @@ class IndustryContextService:
             diagnostics,
             feed_errors,
             primary_source_counts,
+            authoritative_social_count=authoritative_social_count,
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
         )
         triaged_evidence = self._triaged_news_items(news_items, active_drivers, linked_macro_events)
@@ -265,6 +276,10 @@ class IndustryContextService:
                 "context_score": getattr(payload, "score", None),
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
+                "authoritative_social_item_count": authoritative_social_count,
+                "authoritative_social_handles": authoritative_handles,
+                "generic_social_item_count": max(0, len(supporting_social_items) - authoritative_social_count),
+                "supporting_social_source_priorities": summarize_source_priorities(supporting_social_items, source_type="social"),
                 "tracked_tickers": tracked_tickers,
                 "expanded_queries": expanded_queries,
                 "news_lookback_hours": news_lookback_hours,
@@ -907,6 +922,7 @@ class IndustryContextService:
         social_item_count: int,
         macro_link_count: int,
         primary_source_counts: dict[str, int],
+        authoritative_social_count: int = 0,
     ) -> float:
         top_driver_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_drivers), default=0.0)
         driver_factor = min(1.0, math.log1p(len(active_drivers)) / math.log(6.0)) if active_drivers else 0.0
@@ -919,6 +935,7 @@ class IndustryContextService:
                 (primary_source_counts.get("trade", 0) * 1.0)
                 + (primary_source_counts.get("official", 0) * 0.8)
                 + (primary_source_counts.get("major", 0) * 0.65)
+                + (authoritative_social_count * 0.55)
             )
             / 3.0,
         )
@@ -943,6 +960,7 @@ class IndustryContextService:
         feed_errors: list[str],
         primary_source_counts: dict[str, int],
         *,
+        authoritative_social_count: int = 0,
         contradiction_count: int,
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
@@ -961,6 +979,7 @@ class IndustryContextService:
                 (primary_source_counts.get("trade", 0) * 1.0)
                 + (primary_source_counts.get("official", 0) * 0.75)
                 + (primary_source_counts.get("major", 0) * 0.65)
+                + (authoritative_social_count * 0.55)
             )
             / 3.0,
         )
@@ -979,9 +998,9 @@ class IndustryContextService:
             + provider_factor * 3.0
         )
         if news_item_count == 0:
-            confidence -= 18.0
+            confidence -= 10.0 if authoritative_social_count > 0 else 18.0
         if primary_source_counts.get("trade", 0) == 0 and primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
-            confidence -= 10.0
+            confidence -= 4.0 if authoritative_social_count > 0 else 10.0
         if contradiction_count > 0:
             confidence -= min(22.0, contradiction_count * 7.0)
         if feed_errors:

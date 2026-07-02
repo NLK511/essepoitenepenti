@@ -62,8 +62,50 @@ MAJOR_NEWS_SOURCE_HINTS = (
     "nikkei",
 )
 
+# Curated handles whose posts are higher-provenance social evidence. This is
+# deliberately explicit: engagement or display name alone must never upgrade a
+# social item. The list can move to taxonomy/config once it becomes large.
+AUTHORITATIVE_SOCIAL_ACCOUNTS: dict[str, str] = {
+    # Official policy, regulator, and institution accounts.
+    "federalreserve": "official_policy",
+    "ecb": "official_policy",
+    "secgov": "regulator",
+    "ussec_news": "regulator",
+    "fda": "regulator",
+    "ustreasury": "official_policy",
+    "whitehouse": "government",
+    "bls_gov": "economic_data",
+    "beagov": "economic_data",
+    "eurostat": "economic_data",
+    "bankofengland": "official_policy",
+    "imfnews": "institution",
+    "worldbank": "institution",
+    "iea": "institution",
+    "iaeaorg": "institution",
+    "opecsecretariat": "institution",
+    # Primary newsroom / journal accounts.
+    "reuters": "primary_newsroom",
+    "reutersbiz": "primary_newsroom",
+    "bloomberg": "primary_newsroom",
+    "markets": "primary_newsroom",
+    "financialtimes": "primary_newsroom",
+    "wsj": "primary_newsroom",
+    "cnbc": "primary_newsroom",
+    "ap": "primary_newsroom",
+    "nikkeiasia": "primary_newsroom",
+    "theinformation": "primary_newsroom",
+    # Well-known financial journalists/commentators and analysts with a track
+    # record of source-driven, low-hype market coverage. Keep this list curated.
+    "nicktimiraos": "journalist",
+    "elerianm": "analyst",
+    "lizannsonders": "analyst",
+    "bespokeinvest": "analyst",
+    "soberlook": "analyst",
+}
+
 SOURCE_PRIORITY_SCORES = {
     "official": 1.0,
+    "authoritative_social": 0.88,
     "trade": 0.92,
     "major": 0.82,
     "other": 0.66,
@@ -224,9 +266,32 @@ class EventDefinition:
     loser_tags: tuple[str, ...] = ()
 
 
-def classify_source_priority(publisher: str | None, *, source_type: str) -> str:
+def normalize_social_handle(value: str | None) -> str:
+    return (value or "").strip().lstrip("@").lower()
+
+
+def classify_social_authority(author_handle: str | None, author: str | None = None) -> str:
+    normalized_handle = normalize_social_handle(author_handle)
+    if normalized_handle and normalized_handle in AUTHORITATIVE_SOCIAL_ACCOUNTS:
+        return "authoritative_social"
+    # Only use author/name as a fallback if it is explicitly handle-like.
+    # Plain display names are too easy to spoof.
+    if isinstance(author, str) and author.strip().startswith("@"):
+        normalized_author = normalize_social_handle(author)
+        if normalized_author and normalized_author in AUTHORITATIVE_SOCIAL_ACCOUNTS:
+            return "authoritative_social"
+    return "social"
+
+
+def classify_source_priority(
+    publisher: str | None,
+    *,
+    source_type: str,
+    author_handle: str | None = None,
+    author: str | None = None,
+) -> str:
     if source_type == "social":
-        return "social"
+        return classify_social_authority(author_handle or publisher, author)
     normalized = (publisher or "").strip().lower()
     if not normalized:
         return "other"
@@ -349,9 +414,14 @@ def extract_ranked_events(
 
 
 def source_priority_counts(items: list[object], *, source_type: str = "news") -> dict[str, int]:
-    counts = {"official": 0, "trade": 0, "major": 0, "other": 0, "social": 0}
+    counts = {"official": 0, "authoritative_social": 0, "trade": 0, "major": 0, "other": 0, "social": 0}
     for raw_item in items:
-        priority = classify_source_priority(_item_publisher(raw_item), source_type=source_type)
+        priority = classify_source_priority(
+            _item_publisher(raw_item),
+            source_type=source_type,
+            author_handle=_item_author_handle(raw_item),
+            author=_item_author(raw_item),
+        )
         counts[priority] = counts.get(priority, 0) + 1
     return counts
 
@@ -381,7 +451,7 @@ def event_keys(events: list[dict[str, object]], *, limit: int = 5) -> list[str]:
 
 def highest_source_priority(items: list[object], *, source_type: str = "news") -> str | None:
     counts = source_priority_counts(items, source_type=source_type)
-    for key in ("official", "trade", "major", "other", "social"):
+    for key in ("official", "authoritative_social", "trade", "major", "other", "social"):
         if counts.get(key, 0) > 0:
             return key
     return None
@@ -402,7 +472,7 @@ def coverage_quality_label(items: list[object], *, source_type: str = "news") ->
     highest = highest_source_priority(items, source_type=source_type)
     if highest in {"official", "trade"}:
         return "high"
-    if highest == "major":
+    if highest in {"authoritative_social", "major"}:
         return "medium"
     if highest in {"other", "social"}:
         return "low"
@@ -534,7 +604,12 @@ def _match_items(items: list[object], phrases: tuple[str, ...], *, source_type: 
         if hit_count <= 0:
             continue
         publisher = _item_publisher(raw_item)
-        source_priority = classify_source_priority(publisher, source_type=source_type)
+        source_priority = classify_source_priority(
+            publisher,
+            source_type=source_type,
+            author_handle=_item_author_handle(raw_item),
+            author=_item_author(raw_item),
+        )
         source_score = SOURCE_PRIORITY_SCORES[source_priority]
         published_at = _item_published_at(raw_item)
         recency_score = _recency_weight(published_at)
@@ -703,7 +778,7 @@ def _signature_overlap(left: dict[str, object], right: dict[str, object]) -> flo
 
 
 def _priority_sort_key(priority: str) -> int:
-    order = {"official": 5, "trade": 4, "major": 3, "other": 2, "social": 1}
+    order = {"official": 6, "authoritative_social": 5, "trade": 4, "major": 3, "other": 2, "social": 1}
     return order.get(priority, 0)
 
 
@@ -737,6 +812,41 @@ def _item_publisher(raw_item: object) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
+
+
+def _item_author_handle(raw_item: object) -> str:
+    if not isinstance(raw_item, dict):
+        return ""
+    value = raw_item.get("author_handle")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _item_author(raw_item: object) -> str:
+    if not isinstance(raw_item, dict):
+        return ""
+    value = raw_item.get("author")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def authoritative_social_handles(items: list[object], *, limit: int = 8) -> list[str]:
+    handles: list[str] = []
+    for raw_item in items:
+        if classify_source_priority(
+            _item_publisher(raw_item),
+            source_type="social",
+            author_handle=_item_author_handle(raw_item),
+            author=_item_author(raw_item),
+        ) != "authoritative_social":
+            continue
+        handle = normalize_social_handle(_item_author_handle(raw_item) or _item_author(raw_item))
+        if not handle:
+            continue
+        label = f"@{handle}"
+        if label not in handles:
+            handles.append(label)
+        if len(handles) >= limit:
+            break
+    return handles
 
 
 def _item_published_at(raw_item: object) -> datetime | None:

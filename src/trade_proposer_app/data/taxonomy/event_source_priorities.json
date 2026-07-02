@@ -1,6 +1,8 @@
 {
   "official": {"label": "official"},
+  "authoritative_social": {"label": "authoritative social"},
   "trade": {"label": "trade"},
   "major": {"label": "major"},
-  "other": {"label": "other"}
+  "other": {"label": "other"},
+  "social": {"label": "social"}
 }
