@@ -19,8 +19,9 @@ It must not replace plan generation, broker reconciliation, pre-trade risk manag
 Current behavior:
 - app-submitted broker records, lifecycle, reconciliation, risk checks, outcomes, steering settings, decisions, and observability exist
 - steering can run manually or by job path
+- each steering run attempts broker order/position reconciliation before candidate evaluation and records the refresh result in the run summary
 - dry-run decisions are persisted and visible
-- expired pending-order cancellation can execute live when steering is enabled and not dry-run
+- expired pending-order cancellation can execute live when steering is enabled, not dry-run, and broker refresh/reconciliation is fresh
 - invalidated pending cancellations, non-risk-increasing stop amendments, TP lowering, and close-now require dry-run sample thresholds and broker safety validation
 - decisions include correlation metadata
 
@@ -156,6 +157,8 @@ Filled means broker shows an app-owned open position or filled lifecycle tied to
 
 ### F0 — freshness gates before filled-position mutation
 
+Broker reconciliation preflight is mandatory. Every steering run must attempt to refresh open broker orders/positions before candidate discovery. The run summary must expose `broker_refresh_attempted`, `broker_refresh_status`, synced/failed counts, error text, and completion time. If the refresh fails or broker reconciliation remains stale, live mutation must fail closed.
+
 Protective-order evidence is necessary but not sufficient. Before any filled-position amendment or close mutation, steering requires:
 - the position's recommendation holding period is not expired (`expiration_at >= now` when available)
 - a recent broker reconciliation snapshot for the ticker/account with no warnings and `drift_severity=ok`
@@ -285,6 +288,7 @@ All knobs use `steering.*`:
 ## Architecture and persistence
 
 Components:
+- broker reconciliation preflight: refreshes broker order/position metadata at the start of every steering run
 - `BrokerSteeringStateBuilder`: loads app-owned broker/order/position/plan/evidence/price state
 - `BrokerSteeringEngine`: pure deterministic rules
 - `BrokerSteeringExecutor`: applies approved Alpaca mutations only when enabled and not dry-run

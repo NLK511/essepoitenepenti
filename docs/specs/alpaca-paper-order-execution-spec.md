@@ -111,8 +111,8 @@ Implemented endpoints:
 - `GET /api/broker-orders/{execution_id}` — fetch one broker order
 - `POST /api/broker-orders/{execution_id}/resubmit` — resubmit a failed/canceled order using a fresh client-order id
 - `POST /api/broker-orders/{execution_id}/cancel` — cancel an order on Alpaca paper and persist the canceled state
-- `POST /api/broker-orders/{execution_id}/refresh` — refresh one order from Alpaca and persist the latest broker status
-- `POST /api/broker-orders/sync` — refresh the app’s open broker orders in a small batch
+- `POST /api/broker-orders/{execution_id}/refresh` — manually refresh one order from Alpaca and persist the latest broker status
+- `POST /api/broker-orders/sync` — manually refresh the app’s open broker orders in a small batch; steering also invokes this reconciliation path as a preflight before steering decisions
 
 Run detail also exposes `broker_order_executions` so the operator can see execution history without leaving the run page.
 
@@ -120,4 +120,4 @@ When broker execution records exist for a plan, the operator UI should prefer th
 
 ## Contract coverage
 
-This is a canonical current-behavior contract. The implemented surface includes Alpaca paper submission, broker-order persistence, proposal-generation integration, API/UI visibility, run-detail execution history, manual resubmit/cancel/refresh, periodic reconciliation, bracket exit-leg detection, and regression coverage for sizing, submission, price normalization, order controls, route visibility, and broker-vs-simulated evaluation precedence. Implementation history belongs in archive, not in this spec.
+This is a canonical current-behavior contract. The implemented surface includes Alpaca paper submission, broker-order persistence, proposal-generation integration, API/UI visibility, run-detail execution history, manual resubmit/cancel/refresh, steering-owned reconciliation preflight, bracket exit-leg detection, and regression coverage for sizing, submission, price normalization, order controls, route visibility, and broker-vs-simulated evaluation precedence. Implementation history belongs in archive, not in this spec.
