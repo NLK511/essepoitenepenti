@@ -266,7 +266,9 @@ class BrokerSteeringStateBuilder:
         if severity and severity != "ok":
             return False, age_minutes
         max_age = float(self.settings.get("max_reconciliation_age_minutes", 30) or 30)
-        return (age_minutes is not None and age_minutes <= max_age), age_minutes
+        if age_minutes is not None and age_minutes <= max_age:
+            return True, age_minutes
+        return None, age_minutes
 
     def _local_broker_record_health(
         self,

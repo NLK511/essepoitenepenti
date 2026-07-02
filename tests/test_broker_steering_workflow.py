@@ -741,6 +741,52 @@ def test_state_builder_uses_fresh_order_row_when_snapshot_is_absent() -> None:
     assert state.broker_reconciliation_age_minutes == 5.0
 
 
+def test_state_builder_uses_fresh_order_row_when_snapshot_is_stale_but_clean() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    orders = BrokerOrderExecutionRepository(session)
+    snapshots = BrokerReconciliationSnapshotRepository(session)
+    plan = plans.create_plan(_plan())
+    order = orders.create(
+        BrokerOrderExecution(
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            order_type="limit",
+            quantity=1,
+            notional_amount=100.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            status="submitted",
+            client_order_id="fresh-local-order-stale-snapshot",
+        )
+    )
+    session.query(BrokerOrderExecutionRecord).filter(
+        BrokerOrderExecutionRecord.id == order.id
+    ).update({"updated_at": NOW - timedelta(minutes=5)})
+    session.commit()
+    snapshots.create(
+        BrokerReconciliationSnapshot(
+            broker="alpaca",
+            account_mode="paper",
+            snapshot_type="post_sync",
+            ticker=plan.ticker,
+            drift_severity="ok",
+            warnings=[],
+            created_at=NOW - timedelta(minutes=45),
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(
+        now=NOW
+    )[0]
+
+    assert state.broker_reconciliation_healthy is True
+    assert state.broker_reconciliation_age_minutes == 5.0
+
+
 def test_state_builder_snapshot_warning_overrides_fresh_order_row() -> None:
     session = create_session()
     plans = RecommendationPlanRepository(session)
