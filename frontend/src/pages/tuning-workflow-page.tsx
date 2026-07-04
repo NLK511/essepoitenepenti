@@ -41,6 +41,9 @@ export function TuningWorkflowPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [baselineBatchId, setBaselineBatchId] = useState("");
+  const [candidateBatchId, setCandidateBatchId] = useState("");
+  const [stabilityStatus, setStabilityStatus] = useState("warning");
   const [form, setForm] = useState({
     name: "",
     hypothesis: "",
@@ -109,6 +112,21 @@ export function TuningWorkflowPage() {
     }
   }
 
+  async function workflowAction(path: string, body: Record<string, unknown> = {}) {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await postJson<TuningExperimentResponse>(path, body);
+      setSelected(response.experiment);
+      await load(response.experiment.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Workflow action failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function archiveSelected() {
     if (!selected) return;
     setSaving(true);
@@ -122,6 +140,16 @@ export function TuningWorkflowPage() {
       setSaving(false);
     }
   }
+
+  const candidates = useMemo(() => {
+    const raw = selected?.sections.candidate_pool?.candidates;
+    return Array.isArray(raw) ? raw.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) : [];
+  }, [selected]);
+  const shortlistedIds = useMemo(() => {
+    const raw = selected?.sections.shortlist?.candidate_ids;
+    return Array.isArray(raw) ? raw.map(String) : [];
+  }, [selected]);
+  const firstShortlistedId = shortlistedIds[0] ?? String(candidates[0]?.id ?? "");
 
   const funnel = useMemo(() => {
     const sections = selected?.sections ?? {};
@@ -179,6 +207,26 @@ export function TuningWorkflowPage() {
                 <StatCard label="Promotion proposal" value={funnel.proposal} helper="Blocked until replay and holdout pass" />
               </section>
               {selected.blockers.length ? <div className="alert alert-warning top-gap-small">Blockers: {selected.blockers.join(", ")}</div> : null}
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Workflow actions" title="Next safe actions" subtitle="Actions are staged: readiness → discovery → shortlist → baseline → replay evidence → stability → promotion proposal." />
+              <div className="cluster top-gap-small">
+                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button>
+                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate candidate pool</button>
+                <button className="button-secondary" disabled={saving || !candidates.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/shortlist`, { candidate_ids: candidates.slice(0, Number(selected.sections.shortlist?.max_candidates ?? 5)).map((candidate) => String(candidate.id)) })}>Shortlist top candidates</button>
+              </div>
+              <div className="cluster top-gap-small">
+                <label className="form-field compact-field"><span>Baseline batch id</span><input value={baselineBatchId} onChange={(event) => setBaselineBatchId(event.target.value)} placeholder="22" /></label>
+                <button className="button-subtle" disabled={saving || !baselineBatchId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/baseline-replay/bind`, { replay_batch_id: Number(baselineBatchId) })}>Bind baseline replay</button>
+                <label className="form-field compact-field"><span>Candidate batch id</span><input value={candidateBatchId} onChange={(event) => setCandidateBatchId(event.target.value)} placeholder="23" /></label>
+                <button className="button-subtle" disabled={saving || !candidateBatchId || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/record`, { batch_ids_by_candidate: { [firstShortlistedId]: Number(candidateBatchId) } })}>Record candidate replay</button>
+              </div>
+              <div className="cluster top-gap-small">
+                <label className="form-field compact-field"><span>Stability status</span><select value={stabilityStatus} onChange={(event) => setStabilityStatus(event.target.value)}><option value="warning">Warning / needs more holdout</option><option value="pass">Pass</option><option value="fail">Fail</option></select></label>
+                <button className="button-subtle" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/stability-validation/record`, { candidate_id: firstShortlistedId, status: stabilityStatus, notes: "operator-recorded workflow validation" })}>Record stability</button>
+                <button className="button" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/promotion-proposal`, { candidate_id: firstShortlistedId })}>Create promotion proposal</button>
+              </div>
             </Card>
 
             <section className="card-grid">

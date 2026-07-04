@@ -127,11 +127,11 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [x] API tests cover empty/incomplete states.
 - [x] API response clearly distinguishes discovery-only, replay-validated, holdout-tested, and promotable sections in v1 placeholders.
 
-## Phase 3 — Evidence readiness integration
+## Phase 3 — Evidence readiness integration — partially implemented
 
 ### Tasks
 
-- [ ] Add service method to audit replay readiness for an experiment universe/window.
+- [x] Add service method to audit replay readiness for an experiment universe/window.
 - [ ] Report:
   - cached bar coverage
   - expected Tier A ratio
@@ -139,10 +139,10 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - missing outcome-window risk
   - degraded coverage warnings
   - cache-only policy confirmation
-- [ ] Add endpoint/action:
+- [x] Add endpoint/action:
   - `POST /api/tuning-workflow/experiments/{id}/readiness-audit`
-- [ ] Add watchlist pruning recommendation payload for repeated gap tickers.
-- [ ] Ensure readiness audit does not fetch remote bars.
+- [x] Add watchlist pruning recommendation payload for repeated gap tickers.
+- [x] Ensure readiness audit does not fetch remote bars.
 
 ### Acceptance criteria
 
@@ -150,11 +150,11 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [ ] Repeated bar gaps appear as warnings or pruning recommendations.
 - [ ] Candidate replay remains blocked when hard readiness gates fail, unless experiment is research-only and explicitly accepts risk.
 
-## Phase 4 — Candidate discovery and shortlist management
+## Phase 4 — Candidate discovery and shortlist management — partially implemented
 
 ### Tasks
 
-- [ ] Add candidate pool representation tied to an experiment.
+- [x] Add candidate pool representation tied to an experiment metadata payload.
 - [ ] Support candidate sources:
   - import prior large-search winners
   - fresh bounded search
@@ -174,8 +174,8 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - add manual candidate
   - reject candidate
   - select/unselect candidate for replay
-- [ ] Enforce max candidates for replay pass.
-- [ ] Store or return config diffs vs baseline.
+- [x] Enforce max candidates for replay pass.
+- [x] Store or return config changed keys/config hashes vs baseline.
 
 ### Acceptance criteria
 
@@ -184,7 +184,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [ ] Shortlist cannot exceed experiment replay-pass limit.
 - [ ] Tests cover source labeling and deduplication.
 
-## Phase 5 — Baseline replay binding
+## Phase 5 — Baseline replay binding — partially implemented
 
 ### Tasks
 
@@ -194,7 +194,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - existing replay batch
   - rerun baseline replay
 - [ ] Add action to create/enqueue baseline replay for the experiment window/universe.
-- [ ] Add action to bind an existing completed replay batch as baseline.
+- [x] Add action to bind an existing replay batch as baseline.
 - [ ] Add baseline summary:
   - batch id/status
   - slice progress
@@ -211,7 +211,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [ ] Existing replay batch can be linked and summarized.
 - [ ] Baseline replay creation preserves cache-only policy.
 
-## Phase 6 — Candidate replay execution and comparison
+## Phase 6 — Candidate replay execution and comparison — partially implemented
 
 ### Tasks
 
@@ -245,7 +245,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [ ] Tests cover replay queue creation for shortlisted candidates.
 - [ ] Stale/failed replay states surface clearly in workflow API.
 
-## Phase 7 — Stability validation: walk-forward and holdout
+## Phase 7 — Stability validation: walk-forward and holdout — partially implemented
 
 ### Tasks
 
@@ -269,11 +269,11 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [ ] Walk-forward alone does not make a candidate promotable.
 - [ ] Holdout replay comparison can satisfy promotion evidence only when required gates pass.
 
-## Phase 8 — Promotion proposal and execution
+## Phase 8 — Promotion proposal and execution — partially implemented
 
 ### Tasks
 
-- [ ] Add promotion proposal service/read model.
+- [x] Add promotion proposal service/read model.
 - [ ] Produce a gate table covering:
   - sample gates
   - baseline improvement gates
@@ -367,7 +367,8 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 ### Acceptance criteria
 
 - [x] Operator can create an experiment and see incomplete/missing next steps.
-- [ ] Operator can move from discovery to shortlist to replay queue from one page.
+- [x] Operator can move from discovery to shortlist and record replay evidence from one page.
+- [ ] Operator can queue fresh replay batches directly from one page.
 - [x] UI never labels discovery-only candidates as winners or validated.
 - [x] UI clearly blocks promotion until all required gates pass.
 

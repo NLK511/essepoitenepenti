@@ -27,6 +27,28 @@ class TuningExperimentPayload(BaseModel):
     advanced_settings: dict[str, Any] = Field(default_factory=dict)
 
 
+class TuningExperimentShortlistPayload(BaseModel):
+    candidate_ids: list[str] = Field(default_factory=list)
+
+
+class TuningExperimentBaselinePayload(BaseModel):
+    replay_batch_id: int
+
+
+class TuningExperimentReplayValidationPayload(BaseModel):
+    batch_ids_by_candidate: dict[str, int] = Field(default_factory=dict)
+
+
+class TuningExperimentStabilityPayload(BaseModel):
+    candidate_id: str
+    status: str = "warning"
+    notes: str = ""
+
+
+class TuningExperimentPromotionProposalPayload(BaseModel):
+    candidate_id: str
+
+
 class TuningExperimentPatchPayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     notes: str | None = None
@@ -95,6 +117,95 @@ async def update_tuning_experiment(
     patch = {key: value for key, value in payload.model_dump().items() if value is not None}
     try:
         experiment = _service(session).update_experiment(experiment_id, patch)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/readiness-audit")
+async def run_tuning_experiment_readiness_audit(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).run_readiness_audit(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/candidate-pool/generate")
+async def generate_tuning_experiment_candidate_pool(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).generate_candidate_pool(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/shortlist")
+async def update_tuning_experiment_shortlist(
+    experiment_id: int,
+    payload: TuningExperimentShortlistPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).update_shortlist(experiment_id, payload.candidate_ids)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/baseline-replay/bind")
+async def bind_tuning_experiment_baseline_replay(
+    experiment_id: int,
+    payload: TuningExperimentBaselinePayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).bind_baseline_replay_batch(experiment_id, payload.replay_batch_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/candidate-replay/record")
+async def record_tuning_experiment_candidate_replay(
+    experiment_id: int,
+    payload: TuningExperimentReplayValidationPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).record_candidate_replay_validation(experiment_id, payload.batch_ids_by_candidate)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/stability-validation/record")
+async def record_tuning_experiment_stability_validation(
+    experiment_id: int,
+    payload: TuningExperimentStabilityPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).record_stability_validation(experiment_id, payload.candidate_id, status=payload.status, notes=payload.notes)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/promotion-proposal")
+async def create_tuning_experiment_promotion_proposal(
+    experiment_id: int,
+    payload: TuningExperimentPromotionProposalPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).create_promotion_proposal(experiment_id, payload.candidate_id)
     except TuningWorkflowError as exc:
         raise _to_http_error(exc) from exc
     return {"experiment": experiment}

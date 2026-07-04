@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import create_engine
@@ -8,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.config import settings
-from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
 
 
@@ -30,6 +31,50 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual(1, detail["replay_settings"]["max_concurrency"])
             self.assertEqual("paper_config", detail["promotion_target"])
             self.assertEqual("discovery-only evidence; not promotion evidence", detail["computation_labels"]["discovery"])
+        finally:
+            session.close()
+
+    def test_workflow_actions_move_to_blocked_promotion_proposal(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment(
+                {
+                    "name": "End to end tuning setup",
+                    "universe": {"tickers": ["AAPL"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-04-01",
+                    },
+                    "baseline": {"source": "current_active_config"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            for day in (2, 3):
+                session.add(HistoricalMarketBarRecord(ticker="AAPL", timeframe="1d", bar_time=datetime(2026, 2, day, tzinfo=timezone.utc), open_price=1, high_price=1, low_price=1, close_price=1))
+            baseline_batch = HistoricalReplayBatchRecord(name="baseline", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            candidate_batch = HistoricalReplayBatchRecord(name="candidate", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            session.add_all([baseline_batch, candidate_batch])
+            session.commit()
+
+            detail = service.run_readiness_audit(experiment_id)
+            self.assertEqual("candidate_discovery_needed", detail["current_stage"])
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            detail = service.update_shortlist(experiment_id, [candidate_id])
+            self.assertEqual("baseline_needed", detail["current_stage"])
+            detail = service.bind_baseline_replay_batch(experiment_id, baseline_batch.id or 0)
+            self.assertEqual("candidate_replay_needed", detail["current_stage"])
+            detail = service.record_candidate_replay_validation(experiment_id, {candidate_id: candidate_batch.id or 0})
+            self.assertEqual("stability_validation_needed", detail["current_stage"])
+            detail = service.record_stability_validation(experiment_id, candidate_id, status="warning", notes="needs holdout")
+            detail = service.create_promotion_proposal(experiment_id, candidate_id)
+            self.assertEqual("blocked", detail["current_stage"])
+            self.assertIn("holdout/stability validation has not passed", detail["blockers"])
         finally:
             session.close()
 
