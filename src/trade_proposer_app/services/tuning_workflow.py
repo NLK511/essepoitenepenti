@@ -264,6 +264,66 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def create_holdout_replay_batches(self, experiment_id: int, candidate_id: str, *, enqueue: bool = True) -> dict[str, object]:
+        replay_service = self._require_historical_replay_service()
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        candidates = {str(item.get("id")): item for item in metadata.get("candidate_pool", {}).get("candidates", []) if isinstance(item, dict)}
+        candidate = candidates.get(candidate_id)
+        if candidate is None:
+            raise TuningWorkflowError(f"candidate {candidate_id} not found")
+        universe = loads_json_object(record.universe_json)
+        windows = loads_json_object(record.windows_json)
+        tickers = self._experiment_tickers(universe)
+        start_dt, end_dt = self._window_datetimes(windows, "holdout")
+        baseline_batch = replay_service.create_batch(
+            name=f"tuning-exp-{record.id}-holdout-baseline-{stable_hash({'id': record.id, 'candidate': candidate_id, 'kind': 'baseline'})[:10]}",
+            mode="research",
+            tickers=tickers,
+            as_of_start=start_dt,
+            as_of_end=end_dt,
+            config={"source": "tuning_workflow_holdout_baseline_replay", "tuning_experiment_id": record.id, "cache_only": True},
+        )
+        config_hash = str(candidate.get("config_hash") or stable_hash(candidate.get("config") or {}))
+        candidate_batch = replay_service.create_batch(
+            name=f"tuning-exp-{record.id}-holdout-{candidate_id}-{config_hash[:10]}",
+            mode="research",
+            tickers=tickers,
+            as_of_start=start_dt,
+            as_of_end=end_dt,
+            config={
+                "source": "tuning_workflow_holdout_candidate_replay",
+                "tuning_experiment_id": record.id,
+                "tuning_candidate_id": candidate_id,
+                "candidate_config_hash": config_hash,
+                "plan_generation_tuning_config_override": candidate.get("config") or {},
+                "cache_only": True,
+            },
+        )
+        baseline_runs = replay_service.enqueue_batch(baseline_batch.id or 0) if enqueue else []
+        candidate_runs = replay_service.enqueue_batch(candidate_batch.id or 0) if enqueue else []
+        metadata["holdout_validation"] = {
+            "status": "queued" if enqueue else "created",
+            "candidate_id": candidate_id,
+            "baseline_batch_id": baseline_batch.id,
+            "candidate_batch_id": candidate_batch.id,
+            "queued_run_count": len(baseline_runs) + len(candidate_runs),
+            "label": "holdout replay validation; promotion-satisfying only after completion and pass gate",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        metadata["stability_validation"] = {
+            "status": "queued" if enqueue else "created",
+            "candidate_id": candidate_id,
+            "label": "holdout/stability replay queued",
+            "promotion_satisfying": False,
+            "holdout_validation": metadata["holdout_validation"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
     def create_candidate_replay_batches(self, experiment_id: int, *, enqueue: bool = True) -> dict[str, object]:
         replay_service = self._require_historical_replay_service()
         record = self.get_experiment(experiment_id)
@@ -501,12 +561,14 @@ class TuningWorkflowService:
             blockers.append("holdout/stability validation is required")
         elif not stability.get("promotion_satisfying"):
             blockers.append("holdout/stability validation has not passed")
+        gate_table = self._promotion_gate_table(metadata, candidate_id, blockers)
         proposal = {
             "candidate_id": candidate_id,
             "status": "blocked" if blockers else "recommended_for_paper",
             "blockers": blockers,
             "target": record.promotion_target,
             "live_promotion_enabled": False,
+            "gate_table": gate_table,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         metadata["promotion_proposal"] = proposal
@@ -738,6 +800,50 @@ class TuningWorkflowService:
             "failed_slice_ids": failed_slice_ids[:20],
             "active_run_ids": active_run_ids[:20],
         }
+
+    def _promotion_gate_table(self, metadata: Mapping[str, object], candidate_id: str, blockers: list[str]) -> list[dict[str, object]]:
+        baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {}
+        validation = metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else {}
+        candidate_batches = validation.get("candidate_batches") if isinstance(validation.get("candidate_batches"), dict) else {}
+        candidate_payload = candidate_batches.get(candidate_id) if isinstance(candidate_batches.get(candidate_id), dict) else {}
+        baseline_summary = baseline.get("summary") if isinstance(baseline.get("summary"), dict) else {}
+        candidate_summary = candidate_payload.get("summary") if isinstance(candidate_payload.get("summary"), dict) else {}
+        comparisons = validation.get("comparisons") if isinstance(validation.get("comparisons"), dict) else self._candidate_comparisons(metadata)
+        comparison = comparisons.get(candidate_id) if isinstance(comparisons.get(candidate_id), dict) else {}
+        stability = metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else {}
+        candidate_tier_a = int(candidate_summary.get("tier_a_count") or 0)
+        baseline_tier_a = int(baseline_summary.get("tier_a_count") or 0)
+        win_delta = comparison.get("win_rate_delta_percent")
+        gates = [
+            {
+                "gate": "sample_size",
+                "status": "pass" if candidate_tier_a >= 30 and baseline_tier_a >= 30 else "warn",
+                "detail": f"candidate Tier A={candidate_tier_a}, baseline Tier A={baseline_tier_a}; recommended minimum is 30 for early workflow review",
+            },
+            {
+                "gate": "baseline_improvement",
+                "status": "pass" if isinstance(win_delta, (int, float)) and float(win_delta) > 0 else "warn",
+                "detail": f"win-rate delta vs baseline: {win_delta if win_delta is not None else 'unavailable'}",
+            },
+            {
+                "gate": "holdout_stability",
+                "status": "pass" if stability.get("promotion_satisfying") else "block",
+                "detail": str(stability.get("notes") or stability.get("label") or "holdout/stability validation is required"),
+            },
+            {
+                "gate": "concentration",
+                "status": "pass" if float(candidate_summary.get("top_ticker_concentration_percent") or 0.0) <= 35.0 else "warn",
+                "detail": f"top ticker concentration={candidate_summary.get('top_ticker_concentration_percent')}",
+            },
+            {
+                "gate": "promotion_target",
+                "status": "pass",
+                "detail": "paper promotion only; live promotion disabled by default",
+            },
+        ]
+        if blockers:
+            gates.append({"gate": "blocking_requirements", "status": "block", "detail": "; ".join(blockers)})
+        return gates
 
     def _candidate_comparisons(self, metadata: Mapping[str, object]) -> dict[str, object]:
         baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {}

@@ -252,9 +252,9 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 - [ ] Add walk-forward action for a selected candidate.
 - [ ] Label walk-forward as stability/overfit screen when it does not regenerate plans.
-- [ ] Add holdout baseline replay action.
-- [ ] Add holdout candidate replay action.
-- [ ] Add stability summary:
+- [x] Add holdout baseline replay action.
+- [x] Add holdout candidate replay action.
+- [x] Add initial stability summary:
   - qualified windows
   - worst-window delta
   - average delta
@@ -275,7 +275,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 ### Tasks
 
 - [x] Add promotion proposal service/read model.
-- [ ] Produce a gate table covering:
+- [x] Produce an initial gate table covering:
   - sample gates
   - baseline improvement gates
   - holdout gates
@@ -283,7 +283,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - data-quality gates
   - stability gates
   - promotion target eligibility
-- [ ] Add proposal outcomes:
+- [x] Add initial proposal outcomes:
   - blocked
   - needs more validation
   - recommended for paper
@@ -299,10 +299,10 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Acceptance criteria
 
-- [ ] Tests cover blocked proposal reasons.
-- [ ] A discovery-only or walk-forward-only candidate cannot be promoted.
-- [ ] Paper promotion records evidence links and rollback config.
-- [ ] Live promotion path fails closed by default.
+- [x] Tests cover blocked proposal reasons.
+- [x] A discovery-only or walk-forward-only candidate cannot be promoted.
+- [x] Paper promotion records evidence links and rollback config.
+- [x] Live promotion path fails closed by default.
 
 ## Phase 9 — Post-promotion monitoring — partially implemented
 

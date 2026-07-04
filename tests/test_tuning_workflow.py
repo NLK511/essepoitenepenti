@@ -111,6 +111,37 @@ class TuningWorkflowServiceTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_create_holdout_replay_batches_and_gate_table(self) -> None:
+        session = self.create_session()
+        try:
+            fake_replay = FakeReplayService()
+            service = TuningWorkflowService(session, historical_replay_service=fake_replay)
+            detail = service.create_experiment(
+                {
+                    "name": "Holdout workflow",
+                    "universe": {"tickers": ["AAPL"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-03-03",
+                    },
+                    "baseline": {"source": "current_active_config"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+
+            detail = service.create_holdout_replay_batches(experiment_id, candidate_id)
+            self.assertEqual("queued", detail["sections"]["stability_validation"]["status"])
+            self.assertEqual("tuning_workflow_holdout_baseline_replay", fake_replay.created[0]["config"]["source"])
+            self.assertEqual("tuning_workflow_holdout_candidate_replay", fake_replay.created[1]["config"]["source"])
+        finally:
+            session.close()
+
     def test_create_replay_batches_uses_cache_only_scoped_configs(self) -> None:
         session = self.create_session()
         try:
@@ -222,6 +253,7 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             detail = service.create_promotion_proposal(experiment_id, candidate_id)
             self.assertEqual("blocked", detail["current_stage"])
             self.assertIn("holdout/stability validation has not passed", detail["blockers"])
+            self.assertTrue(any(gate["gate"] == "holdout_stability" and gate["status"] == "block" for gate in detail["sections"]["promotion_proposal"]["gate_table"]))
             detail = service.record_stability_validation(experiment_id, candidate_id, status="pass", notes="holdout passed")
             detail = service.create_promotion_proposal(experiment_id, candidate_id)
             self.assertEqual("recommended_for_paper", detail["current_stage"])

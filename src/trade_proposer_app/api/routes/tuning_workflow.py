@@ -217,6 +217,20 @@ async def create_tuning_experiment_baseline_replay(
     return {"experiment": experiment}
 
 
+@router.post("/experiments/{experiment_id}/holdout-replay/create")
+async def create_tuning_experiment_holdout_replays(
+    experiment_id: int,
+    candidate_id: str,
+    enqueue: bool = True,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _workflow_service_with_replay(session).create_holdout_replay_batches(experiment_id, candidate_id, enqueue=enqueue)
+    except (TuningWorkflowError, ValueError) as exc:
+        raise _to_http_error(TuningWorkflowError(str(exc))) from exc
+    return {"experiment": experiment}
+
+
 @router.post("/experiments/{experiment_id}/candidate-replay/create")
 async def create_tuning_experiment_candidate_replays(
     experiment_id: int,
