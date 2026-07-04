@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { TuningExperiment, TuningExperimentResponse, TuningExperimentsResponse } from "../types";
 
 const specDoc = "/docs?doc=specs-tuning-workflow-ux-spec";
@@ -212,7 +212,19 @@ export function TuningWorkflowPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Workflow actions" title="Next safe actions" subtitle="Actions are staged: readiness → discovery → shortlist → baseline → replay evidence → stability → promotion proposal." />
+              <SectionTitle kicker="Recommended next action" title={selected.next_action} subtitle="Use the guided control below only when it matches the current stage. Full controls are collapsed to keep the workflow readable." />
+              <div className="cluster top-gap-small">
+                {selected.current_stage === "readiness_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button> : null}
+                {selected.current_stage === "candidate_discovery_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate candidate pool</button> : null}
+                {selected.current_stage === "shortlist_needed" ? <button className="button" disabled={saving || !candidates.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/shortlist`, { candidate_ids: candidates.slice(0, Number(selected.sections.shortlist?.max_candidates ?? 5)).map((candidate) => String(candidate.id)) })}>Shortlist top candidates</button> : null}
+                {selected.current_stage === "baseline_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/baseline-replay/create?enqueue=true`)}>Create baseline replay</button> : null}
+                {selected.current_stage === "candidate_replay_needed" ? <button className="button" disabled={saving || !shortlistedIds.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/create?enqueue=true`)}>Create candidate replays</button> : null}
+                {selected.current_stage === "stability_validation_needed" ? <button className="button" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/holdout-replay/create?candidate_id=${encodeURIComponent(firstShortlistedId)}&enqueue=true`)}>Create holdout replays</button> : null}
+                {selected.current_stage === "promotion_proposal_needed" ? <button className="button" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/promotion-proposal`, { candidate_id: firstShortlistedId })}>Create promotion proposal</button> : null}
+              </div>
+            </Card>
+
+            <DisclosureCard kicker="Advanced controls" title="All workflow actions" subtitle="Use these only when binding existing batches or correcting workflow state manually.">
               <div className="cluster top-gap-small">
                 <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button>
                 <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate candidate pool</button>
@@ -237,7 +249,7 @@ export function TuningWorkflowPage() {
                 <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/paper-trial/extend`, { days: 30, reason: "operator extended paper trial" })}>Extend paper trial</button>
                 <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/rollback`, { reason: "operator rollback from workflow" })}>Rollback paper config</button>
               </div>
-            </Card>
+            </DisclosureCard>
 
             <section className="card-grid">
               <SectionStatusCard title="Experiment setup" subtitle="Name, universe, windows, objective, baseline, and promotion target." section={selected.sections.setup} />

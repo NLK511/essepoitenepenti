@@ -1821,10 +1821,19 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             run_payload = run_response.json()
             self.assertEqual(run_payload["status"], "queued")
             self.assertEqual(run_payload["job_type"], "plan_generation_tuning")
+            self.assertTrue(run_payload["queued_new_run"])
+            self.assertFalse(run_payload["reused_active_run"])
+            self.assertIn("Queued plan-generation tuning run", run_payload["queue_message"])
             request_payload = json.loads(run_payload["artifact_json"])["plan_generation_tuning_request"]
             self.assertEqual(request_payload["apply"], True)
             self.assertEqual(request_payload["mode"], "point_in_time_replay")
             self.assertEqual(request_payload["tuning_source_mode"], "point_in_time_replay")
+
+            duplicate_response = await client.post("/api/plan-generation-tuning/run?apply=false")
+            self.assertEqual(duplicate_response.status_code, 200)
+            duplicate_payload = duplicate_response.json()
+            self.assertFalse(duplicate_payload["queued_new_run"])
+            self.assertTrue(duplicate_payload["reused_active_run"])
 
             runs = await client.get("/api/runs?job_type=plan_generation_tuning&limit=10")
             self.assertEqual(runs.status_code, 200)

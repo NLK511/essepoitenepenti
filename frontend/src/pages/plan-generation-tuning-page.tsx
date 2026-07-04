@@ -136,6 +136,7 @@ export function PlanGenerationTuningPage() {
   const [selectedLargeCandidateIndex, setSelectedLargeCandidateIndex] = useState(0);
   const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null);
   const [walkForward, setWalkForward] = useState<WalkForwardResponse | null>(null);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
   const [replayArtifacts, setReplayArtifacts] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -208,10 +209,12 @@ export function PlanGenerationTuningPage() {
     try {
       setSaving(`run-${mode}`);
       setError(null);
-      await postForm<unknown>(`/api/plan-generation-tuning/run?mode=${encodeURIComponent(mode)}&apply=false`, {});
+      const response = await postForm<Record<string, unknown>>(`/api/plan-generation-tuning/run?mode=${encodeURIComponent(mode)}&apply=false`, {});
+      setQueueMessage(typeof response.queue_message === "string" ? response.queue_message : "Tuning run request submitted.");
       await loadData(0);
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Failed to queue tuning job");
+      setQueueMessage(null);
     } finally {
       setSaving(null);
     }
@@ -320,15 +323,17 @@ export function PlanGenerationTuningPage() {
           </div>
         </Card>
         <Card>
-          <SectionTitle kicker="Launch" title="Run tuning jobs" subtitle="Replay-based tuning is the default. Stored-plan rescore remains a manual diagnostic/regression mode." />
+          <SectionTitle kicker="Advanced launch" title="Queue candidate discovery jobs" subtitle="These jobs do not execute a market replay by themselves. They search/rank plan-generation parameter candidates using existing replay artifacts; use Tuning Workflow to create baseline/candidate replay batches." />
+          {queueMessage ? <div className="alert alert-info top-gap-small">{queueMessage}</div> : null}
+          <div className="helper-text top-gap-small">Standard tuning discovery: small bounded search on existing point-in-time replay evidence. Wide tuning discovery: broader search, still discovery-only. Stored-plan diagnostic: regression/debug mode, not promotion evidence.</div>
           <div className="cluster top-gap-small">
             <select className="input" value={standardMode} onChange={(event) => setStandardMode(event.target.value as "point_in_time_replay" | "wide_point_in_time_replay" | "stored_plan_rescore" | "explore")}>
-              <option value="point_in_time_replay">Replay standard</option>
-              <option value="wide_point_in_time_replay">Replay wide</option>
-              <option value="stored_plan_rescore">Stored-plan diagnostic</option>
+              <option value="point_in_time_replay">Standard tuning discovery</option>
+              <option value="wide_point_in_time_replay">Wide tuning discovery</option>
+              <option value="stored_plan_rescore">Diagnostic stored-plan rescore</option>
               <option value="explore">Stored-plan exploratory</option>
             </select>
-            <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(standardMode)}>{saving === `run-${standardMode}` ? "… Queueing" : "Queue tuning job"}</button>
+            <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(standardMode)}>{saving === `run-${standardMode}` ? "… Queueing" : "Queue discovery job"}</button>
           </div>
           <div className="cluster top-gap-medium">
             <label className="form-field compact-field"><span>Coarse</span><input type="number" min="1" max="1000000" value={largeCoarseCandidates} onChange={(event) => setLargeCoarseCandidates(Number(event.target.value || 1))} /></label>

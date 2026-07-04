@@ -217,7 +217,15 @@ async def run_plan_generation_tuning(
         runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
         existing_run = runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
         if existing_run is not None:
-            return existing_run
+            payload = existing_run.model_dump(mode="json")
+            payload.update(
+                {
+                    "queued_new_run": False,
+                    "reused_active_run": True,
+                    "queue_message": f"A plan-generation tuning run is already {existing_run.status.value}; reusing run {existing_run.id} instead of queueing a duplicate.",
+                }
+            )
+            return payload
         job = jobs.get_or_create_system_job(
             STANDARD_TUNING_SYSTEM_JOB_NAME, JobType.PLAN_GENERATION_TUNING
         )
@@ -235,7 +243,16 @@ async def run_plan_generation_tuning(
                 }
             },
         )
-        return runs.get_run(queued_run.id or 0)
+        queued = runs.get_run(queued_run.id or 0)
+        payload = queued.model_dump(mode="json")
+        payload.update(
+            {
+                "queued_new_run": True,
+                "reused_active_run": False,
+                "queue_message": f"Queued plan-generation tuning run {queued.id}. A worker will execute it when available.",
+            }
+        )
+        return payload
     except PlanGenerationTuningError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
