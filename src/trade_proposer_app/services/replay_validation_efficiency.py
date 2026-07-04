@@ -6,8 +6,9 @@ from typing import Any, Iterable, Mapping
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.persistence.models import ReplayEligibilityRecord, ReplayPlanOutcomeRecord
+from trade_proposer_app.persistence.models import RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
 from trade_proposer_app.services.input_access import stable_hash
+from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import candidate_validation_depth
 from trade_proposer_app.utils.json_payloads import loads_json_object
 
@@ -47,6 +48,92 @@ class EarlyStopDecision:
             "reason": self.reason,
             "diagnostics": self.diagnostics,
         }
+
+
+class FrozenInputPlanRegenerationService:
+    """Regenerate downstream plan geometry from a frozen stored plan artifact.
+
+    This service intentionally does not fetch inputs, rerun cheap scan, or mutate live settings.
+    It is the deterministic plan-framing core that later replay execution can pair with
+    canonical outcome resolution.
+    """
+
+    def regenerate_levels(
+        self,
+        plan: RecommendationPlanRecord,
+        *,
+        tuning_config: Mapping[str, float],
+    ) -> dict[str, object]:
+        missing = [
+            field
+            for field, value in {
+                "entry_price_low": plan.entry_price_low,
+                "entry_price_high": plan.entry_price_high,
+                "stop_loss": plan.stop_loss,
+                "take_profit": plan.take_profit,
+            }.items()
+            if value is None
+        ]
+        if missing:
+            return {
+                "status": "incomplete",
+                "rejection_reasons": [f"missing {field}" for field in missing],
+                "source_plan_id": plan.id,
+            }
+        entry_price = (float(plan.entry_price_low) + float(plan.entry_price_high)) / 2.0
+        evidence = loads_json_object(plan.evidence_summary_json)
+        signal = loads_json_object(plan.signal_breakdown_json)
+        setup_family = str(evidence.get("setup_family") or signal.get("setup_family") or "unknown")
+        context_bias = str(evidence.get("transmission_context_bias") or signal.get("transmission_context_bias") or "")
+        volatility_score = self._optional_float(evidence.get("volatility_score") or signal.get("volatility_score"))
+        entry_low, entry_high, stop_loss, take_profit = family_adjusted_trade_levels(
+            entry_price=entry_price,
+            stop_loss=float(plan.stop_loss),
+            take_profit=float(plan.take_profit),
+            setup_family=setup_family,
+            action=str(plan.action),
+            transmission_context_bias=context_bias,
+            volatility_score=volatility_score,
+            tuning_config=dict(tuning_config),
+        )
+        rejection_reasons = self._geometry_rejection_reasons(str(plan.action), entry_low, entry_high, stop_loss, take_profit)
+        return {
+            "status": "invalid" if rejection_reasons else "ok",
+            "source_plan_id": plan.id,
+            "validation_depth": "frozen_input_plan_regeneration",
+            "setup_family": setup_family,
+            "entry_price_low": entry_low,
+            "entry_price_high": entry_high,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "rejection_reasons": rejection_reasons,
+            "remote_fetch_used": False,
+        }
+
+    @staticmethod
+    def _optional_float(value: object) -> float | None:
+        try:
+            return None if value is None else float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _geometry_rejection_reasons(action: str, entry_low: float, entry_high: float, stop_loss: float, take_profit: float) -> list[str]:
+        midpoint = (entry_low + entry_high) / 2.0
+        if midpoint <= 0:
+            return ["entry price must be positive"]
+        normalized_action = action.strip().lower()
+        if normalized_action == "short":
+            if stop_loss <= midpoint:
+                return ["short stop must be above entry"]
+            if take_profit >= midpoint:
+                return ["short take-profit must be below entry"]
+        else:
+            if stop_loss >= midpoint:
+                return ["long stop must be below entry"]
+            if take_profit <= midpoint:
+                return ["long take-profit must be above entry"]
+        return []
 
 
 class CandidateReplayPlanner:

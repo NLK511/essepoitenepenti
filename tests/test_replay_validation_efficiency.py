@@ -4,10 +4,11 @@ from types import SimpleNamespace
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.persistence.models import Base, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
+from trade_proposer_app.persistence.models import Base, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
 from trade_proposer_app.services.replay_validation_efficiency import (
     CandidateEarlyStopPolicy,
     CandidateReplayPlanner,
+    FrozenInputPlanRegenerationService,
     ReplayValidationAggregateService,
 )
 
@@ -16,6 +17,41 @@ def create_session() -> Session:
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
     return Session(bind=engine)
+
+
+def test_frozen_input_plan_regeneration_adjusts_geometry_without_remote_inputs() -> None:
+    plan = RecommendationPlanRecord(
+        id=10,
+        ticker="AAPL",
+        horizon="1w",
+        action="long",
+        status="ok",
+        confidence_percent=70.0,
+        entry_price_low=100.0,
+        entry_price_high=100.0,
+        stop_loss=95.0,
+        take_profit=110.0,
+        evidence_summary_json='{"setup_family":"breakout","volatility_score":50}',
+        signal_breakdown_json="{}",
+        computed_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
+    )
+
+    result = FrozenInputPlanRegenerationService().regenerate_levels(
+        plan,
+        tuning_config={
+            "global.entry_band_risk_fraction": 0.1,
+            "setup_family.breakout.stop_distance_multiplier": 0.8,
+            "setup_family.breakout.take_profit_distance_multiplier": 1.2,
+        },
+    )
+
+    assert result["status"] == "ok"
+    assert result["validation_depth"] == "frozen_input_plan_regeneration"
+    assert result["remote_fetch_used"] is False
+    assert result["entry_price_low"] == 99.5
+    assert result["entry_price_high"] == 100.5
+    assert result["stop_loss"] == 96.0
+    assert result["take_profit"] == 112.0
 
 
 def test_candidate_replay_planner_deduplicates_and_labels_depths() -> None:

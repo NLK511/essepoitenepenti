@@ -173,18 +173,19 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [ ] Incomplete frozen artifacts block cheap regeneration and either degrade to full orchestration or require rerun.
 - [ ] Artifact provenance is sufficient for audit/debug UI.
 
-## Phase 5 — Frozen-input plan regeneration service
+## Phase 5 — Frozen-input plan regeneration service — partially implemented
 
 ### Tasks
 
-- [ ] Create service for `frozen_input_plan_regeneration`.
-- [ ] Inputs:
+- [x] Create reusable geometry-regeneration service for `frozen_input_plan_regeneration`.
+- [ ] Wire the service into candidate replay execution with canonical outcome resolution.
+- [x] Inputs:
   - frozen artifact record/reference
   - candidate config override
   - baseline/current non-tuned settings snapshot
-- [ ] Reuse upstream evidence exactly as stored.
-- [ ] Invoke shared live plan-framing logic under scoped candidate config.
-- [ ] Do not rerun cheap scan, news fetch, social fetch, deep analysis, or signal generation.
+- [x] Reuse upstream evidence exactly as stored for setup/context metadata available in stored plan payloads.
+- [x] Invoke shared live plan-framing logic under scoped candidate config.
+- [x] Do not rerun cheap scan, news fetch, social fetch, deep analysis, or signal generation.
 - [ ] Resolve generated candidate plan through canonical outcome resolution.
 - [ ] Persist candidate plan/outcome/eligibility with provenance:
   - source frozen artifact id
