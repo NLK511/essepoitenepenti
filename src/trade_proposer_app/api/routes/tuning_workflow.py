@@ -63,6 +63,15 @@ class TuningExperimentPromotionExecutionPayload(BaseModel):
     reason: str = "workflow paper promotion"
 
 
+class TuningExperimentPaperTrialExtensionPayload(BaseModel):
+    days: int = Field(default=30, ge=1, le=365)
+    reason: str = "extend paper trial"
+
+
+class TuningExperimentRollbackPayload(BaseModel):
+    reason: str = "workflow rollback"
+
+
 class TuningExperimentPatchPayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     notes: str | None = None
@@ -328,6 +337,32 @@ async def execute_tuning_experiment_paper_promotion(
 ) -> dict[str, object]:
     try:
         experiment = _service(session).execute_paper_promotion(experiment_id, reason=payload.reason)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/paper-trial/extend")
+async def extend_tuning_experiment_paper_trial(
+    experiment_id: int,
+    payload: TuningExperimentPaperTrialExtensionPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).extend_paper_trial(experiment_id, days=payload.days, reason=payload.reason)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/rollback")
+async def rollback_tuning_experiment_paper_promotion(
+    experiment_id: int,
+    payload: TuningExperimentRollbackPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).rollback_paper_promotion(experiment_id, reason=payload.reason)
     except TuningWorkflowError as exc:
         raise _to_http_error(exc) from exc
     return {"experiment": experiment}

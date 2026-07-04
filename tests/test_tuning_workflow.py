@@ -261,6 +261,11 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual("paper_promoted", detail["current_stage"])
             self.assertEqual("paper_config_created", detail["sections"]["promotion_execution"]["status"])
             self.assertEqual("pending_paper_trial", detail["sections"]["post_promotion_monitoring"]["status"])
+            detail = service.extend_paper_trial(experiment_id, days=14, reason="more evidence")
+            self.assertEqual("paper_trial_extended", detail["sections"]["post_promotion_monitoring"]["status"])
+            detail = service.rollback_paper_promotion(experiment_id, reason="failed paper trial")
+            self.assertEqual("rolled_back", detail["current_stage"])
+            self.assertEqual("rolled_back", detail["sections"]["rollback"]["status"])
         finally:
             session.close()
 

@@ -234,6 +234,8 @@ export function TuningWorkflowPage() {
                 <button className="button-subtle" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/holdout-replay/create?candidate_id=${encodeURIComponent(firstShortlistedId)}&enqueue=true`)}>Create holdout replays</button>
                 <button className="button" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/promotion-proposal`, { candidate_id: firstShortlistedId })}>Create promotion proposal</button>
                 <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/promotion-execution/paper`, { reason: "operator-approved paper promotion from workflow" })}>Create paper config</button>
+                <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/paper-trial/extend`, { days: 30, reason: "operator extended paper trial" })}>Extend paper trial</button>
+                <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/rollback`, { reason: "operator rollback from workflow" })}>Rollback paper config</button>
               </div>
             </Card>
 
@@ -248,6 +250,7 @@ export function TuningWorkflowPage() {
               <SectionStatusCard title="Promotion proposal" subtitle="Paper-only by default; live full autonomy fails closed." section={selected.sections.promotion_proposal} />
               <SectionStatusCard title="Promotion execution" subtitle="Creates a paper config and records rollback evidence; live execution is disabled." section={selected.sections.promotion_execution} />
               <SectionStatusCard title="Post-promotion monitoring" subtitle="Shown after paper promotion exists." section={selected.sections.post_promotion_monitoring} />
+              <SectionStatusCard title="Rollback" subtitle="Records rollback reason and source/target evidence for paper configs." section={selected.sections.rollback} />
             </section>
           </>
         ) : null}

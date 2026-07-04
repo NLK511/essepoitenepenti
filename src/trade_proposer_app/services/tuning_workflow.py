@@ -487,6 +487,46 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def extend_paper_trial(self, experiment_id: int, *, days: int = 30, reason: str = "extend paper trial") -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        monitoring = metadata.get("post_promotion_monitoring") if isinstance(metadata.get("post_promotion_monitoring"), dict) else None
+        if not monitoring:
+            raise TuningWorkflowError("paper monitoring is not available before paper promotion")
+        extensions = monitoring.setdefault("extensions", [])
+        extensions.append({"days": max(1, min(365, int(days))), "reason": reason, "created_at": datetime.now(timezone.utc).isoformat()})
+        monitoring["status"] = "paper_trial_extended"
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def rollback_paper_promotion(self, experiment_id: int, *, reason: str = "workflow rollback") -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        execution = metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else None
+        if not execution or execution.get("status") != "paper_config_created":
+            raise TuningWorkflowError("paper rollback requires an executed paper promotion")
+        target_config_version_id = execution.get("target_config_version_id")
+        if target_config_version_id is not None:
+            PlanGenerationTuningRepository(self.session).update_config_status(int(target_config_version_id), "rolled_back")
+        metadata["rollback"] = {
+            "status": "rolled_back",
+            "source_config_version_id": target_config_version_id,
+            "rollback_config": execution.get("rollback_config"),
+            "reason": reason,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        metadata["post_promotion_monitoring"] = {
+            **(metadata.get("post_promotion_monitoring") if isinstance(metadata.get("post_promotion_monitoring"), dict) else {}),
+            "status": "rolled_back",
+            "message": reason,
+        }
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
     def execute_paper_promotion(self, experiment_id: int, *, reason: str = "workflow paper promotion") -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         metadata = loads_json_object(record.metadata_json)
@@ -932,6 +972,9 @@ class TuningWorkflowService:
         if not metadata.get("promotion_proposal"):
             return {"current_stage": "promotion_proposal_needed", "next_action": "Create a promotion proposal with gate table.", "blockers": []}
         execution = metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {}
+        rollback = metadata.get("rollback") if isinstance(metadata.get("rollback"), dict) else {}
+        if rollback.get("status") == "rolled_back":
+            return {"current_stage": "rolled_back", "next_action": "Review rollback reason and open a new experiment if needed.", "blockers": []}
         if execution.get("status") == "paper_config_created":
             return {"current_stage": "paper_promoted", "next_action": "Monitor the paper config before any guarded-live rollout.", "blockers": []}
         proposal = metadata.get("promotion_proposal") if isinstance(metadata.get("promotion_proposal"), dict) else {}
@@ -958,5 +1001,6 @@ class TuningWorkflowService:
             "stability_validation": metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else {"status": "not_run", "label": "stability/overfit screen"},
             "promotion_proposal": metadata.get("promotion_proposal") if isinstance(metadata.get("promotion_proposal"), dict) else {"status": "blocked", "reason": "replay and holdout validation are required"},
             "promotion_execution": metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {"status": "not_run"},
+            "rollback": metadata.get("rollback") if isinstance(metadata.get("rollback"), dict) else {"status": "not_run"},
             "post_promotion_monitoring": metadata.get("post_promotion_monitoring") if isinstance(metadata.get("post_promotion_monitoring"), dict) else {"status": "not_applicable"},
         }

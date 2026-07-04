@@ -317,9 +317,10 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - drift vs replay expectation
   - concentration warnings
   - rollback triggers
-- [ ] Add actions:
+- [x] Add actions:
   - extend paper trial
   - rollback
+- [ ] Add actions:
   - approve guarded live rollout, if supported
   - open performance details
 - [ ] Integrate with existing recommendation-quality/performance endpoints where possible.
@@ -327,8 +328,8 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 ### Acceptance criteria
 
 - [x] Monitoring summary appears for paper-promoted configs.
-- [ ] Rollback action records reason and source/target config.
-- [ ] Monitoring can show pending/insufficient evidence without implying success.
+- [x] Rollback action records reason and source/target config.
+- [x] Monitoring can show pending/insufficient evidence without implying success.
 
 ## Phase 10 — Frontend workflow page
 
