@@ -292,9 +292,9 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - reject proposal
   - request more validation
   - export report
-- [ ] Add promotion execution action for paper config creation.
-- [ ] Persist promotion/rejection reason, actor/mode, evidence links, source config, target config, and rollback config.
-- [ ] Keep live promotion disabled unless the existing live/autonomy gates are explicitly satisfied.
+- [x] Add promotion execution action for paper config creation.
+- [x] Persist promotion reason, actor/mode, evidence links, target config, and rollback config for paper proposals.
+- [x] Keep live promotion disabled unless the existing live/autonomy gates are explicitly satisfied.
 
 ### Acceptance criteria
 
@@ -303,11 +303,12 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 - [ ] Paper promotion records evidence links and rollback config.
 - [ ] Live promotion path fails closed by default.
 
-## Phase 9 — Post-promotion monitoring
+## Phase 9 — Post-promotion monitoring — partially implemented
 
 ### Tasks
 
-- [ ] Add monitoring summary for promoted config:
+- [x] Add pending monitoring summary for paper-promoted config.
+- [ ] Add live outcome monitoring summary for promoted config:
   - days active
   - plans generated
   - resolved outcomes
@@ -324,7 +325,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Acceptance criteria
 
-- [ ] Monitoring summary appears for paper-promoted configs.
+- [x] Monitoring summary appears for paper-promoted configs.
 - [ ] Rollback action records reason and source/target config.
 - [ ] Monitoring can show pending/insufficient evidence without implying success.
 

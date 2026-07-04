@@ -50,6 +50,10 @@ class TuningExperimentPromotionProposalPayload(BaseModel):
     candidate_id: str
 
 
+class TuningExperimentPromotionExecutionPayload(BaseModel):
+    reason: str = "workflow paper promotion"
+
+
 class TuningExperimentPatchPayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     notes: str | None = None
@@ -237,6 +241,19 @@ async def create_tuning_experiment_promotion_proposal(
 ) -> dict[str, object]:
     try:
         experiment = _service(session).create_promotion_proposal(experiment_id, payload.candidate_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/promotion-execution/paper")
+async def execute_tuning_experiment_paper_promotion(
+    experiment_id: int,
+    payload: TuningExperimentPromotionExecutionPayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).execute_paper_promotion(experiment_id, reason=payload.reason)
     except TuningWorkflowError as exc:
         raise _to_http_error(exc) from exc
     return {"experiment": experiment}

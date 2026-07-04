@@ -7,7 +7,9 @@ from typing import Any, Mapping
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.domain.models import PlanGenerationTuningConfigVersion, PlanGenerationTuningEvent
 from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, TuningExperimentRecord
+from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_DEFAULTS, candidate_validation_depth, normalize_plan_generation_tuning_config
 from trade_proposer_app.services.replay_validation_efficiency import ReplayValidationAggregateService
@@ -319,6 +321,64 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def execute_paper_promotion(self, experiment_id: int, *, reason: str = "workflow paper promotion") -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        proposal = metadata.get("promotion_proposal") if isinstance(metadata.get("promotion_proposal"), dict) else {}
+        if proposal.get("status") != "recommended_for_paper":
+            raise TuningWorkflowError("paper promotion requires a recommended_for_paper proposal")
+        if record.promotion_target not in {"paper_config", "research_only"}:
+            raise TuningWorkflowError("live promotion execution is disabled by default")
+        candidate_id = str(proposal.get("candidate_id") or "")
+        candidates = {str(item.get("id")): item for item in metadata.get("candidate_pool", {}).get("candidates", []) if isinstance(item, dict)}
+        candidate = candidates.get(candidate_id)
+        if not candidate:
+            raise TuningWorkflowError("proposal candidate not found")
+        config = normalize_plan_generation_tuning_config(candidate.get("config") if isinstance(candidate.get("config"), dict) else {})
+        repository = PlanGenerationTuningRepository(self.session)
+        version = repository.create_config_version(
+            PlanGenerationTuningConfigVersion(
+                version_label=f"paper-tuning-exp-{record.id}-{candidate_id}",
+                status="paper_candidate",
+                source="tuning_workflow_paper_promotion",
+                config=config,
+            )
+        )
+        repository.create_event(
+            PlanGenerationTuningEvent(
+                event_type="paper_config_proposed",
+                config_version_id=version.id,
+                actor_type="workflow",
+                actor_identifier="tuning_workflow",
+                payload={
+                    "tuning_experiment_id": record.id,
+                    "candidate_id": candidate_id,
+                    "reason": reason,
+                    "proposal": proposal,
+                    "rollback_config": normalize_plan_generation_tuning_config({}),
+                },
+            )
+        )
+        metadata["promotion_execution"] = {
+            "status": "paper_config_created",
+            "target_config_version_id": version.id,
+            "rollback_config": normalize_plan_generation_tuning_config({}),
+            "reason": reason,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        metadata["post_promotion_monitoring"] = {
+            "status": "pending_paper_trial",
+            "config_version_id": version.id,
+            "days_active": 0,
+            "plans_generated": 0,
+            "resolved_outcomes": 0,
+            "message": "paper config created; monitoring evidence is pending",
+        }
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
     def create_promotion_proposal(self, experiment_id: int, candidate_id: str) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         metadata = loads_json_object(record.metadata_json)
@@ -596,6 +656,9 @@ class TuningWorkflowService:
             return {"current_stage": "stability_validation_needed", "next_action": "Run walk-forward or holdout validation for the leading candidate.", "blockers": []}
         if not metadata.get("promotion_proposal"):
             return {"current_stage": "promotion_proposal_needed", "next_action": "Create a promotion proposal with gate table.", "blockers": []}
+        execution = metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {}
+        if execution.get("status") == "paper_config_created":
+            return {"current_stage": "paper_promoted", "next_action": "Monitor the paper config before any guarded-live rollout.", "blockers": []}
         proposal = metadata.get("promotion_proposal") if isinstance(metadata.get("promotion_proposal"), dict) else {}
         return {"current_stage": str(proposal.get("status") or "promotion_proposal_ready"), "next_action": "Review promotion proposal.", "blockers": list(proposal.get("blockers") or [])}
 
@@ -619,5 +682,6 @@ class TuningWorkflowService:
             "candidate_replay_validation": metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else {"status": "blocked", "reason": "baseline and shortlist are required"},
             "stability_validation": metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else {"status": "not_run", "label": "stability/overfit screen"},
             "promotion_proposal": metadata.get("promotion_proposal") if isinstance(metadata.get("promotion_proposal"), dict) else {"status": "blocked", "reason": "replay and holdout validation are required"},
+            "promotion_execution": metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {"status": "not_run"},
             "post_promotion_monitoring": metadata.get("post_promotion_monitoring") if isinstance(metadata.get("post_promotion_monitoring"), dict) else {"status": "not_applicable"},
         }

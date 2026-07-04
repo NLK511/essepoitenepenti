@@ -228,6 +228,7 @@ export function TuningWorkflowPage() {
                 <label className="form-field compact-field"><span>Stability status</span><select value={stabilityStatus} onChange={(event) => setStabilityStatus(event.target.value)}><option value="warning">Warning / needs more holdout</option><option value="pass">Pass</option><option value="fail">Fail</option></select></label>
                 <button className="button-subtle" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/stability-validation/record`, { candidate_id: firstShortlistedId, status: stabilityStatus, notes: "operator-recorded workflow validation" })}>Record stability</button>
                 <button className="button" disabled={saving || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/promotion-proposal`, { candidate_id: firstShortlistedId })}>Create promotion proposal</button>
+                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/promotion-execution/paper`, { reason: "operator-approved paper promotion from workflow" })}>Create paper config</button>
               </div>
             </Card>
 
@@ -240,6 +241,7 @@ export function TuningWorkflowPage() {
               <SectionStatusCard title="Candidate replay validation" subtitle={selected.computation_labels.replay} section={selected.sections.candidate_replay_validation} />
               <SectionStatusCard title="Walk-forward / holdout" subtitle={selected.computation_labels.holdout} section={selected.sections.stability_validation} />
               <SectionStatusCard title="Promotion proposal" subtitle="Paper-only by default; live full autonomy fails closed." section={selected.sections.promotion_proposal} />
+              <SectionStatusCard title="Promotion execution" subtitle="Creates a paper config and records rollback evidence; live execution is disabled." section={selected.sections.promotion_execution} />
               <SectionStatusCard title="Post-promotion monitoring" subtitle="Shown after paper promotion exists." section={selected.sections.post_promotion_monitoring} />
             </section>
           </>

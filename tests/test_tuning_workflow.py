@@ -134,6 +134,13 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             detail = service.create_promotion_proposal(experiment_id, candidate_id)
             self.assertEqual("blocked", detail["current_stage"])
             self.assertIn("holdout/stability validation has not passed", detail["blockers"])
+            detail = service.record_stability_validation(experiment_id, candidate_id, status="pass", notes="holdout passed")
+            detail = service.create_promotion_proposal(experiment_id, candidate_id)
+            self.assertEqual("recommended_for_paper", detail["current_stage"])
+            detail = service.execute_paper_promotion(experiment_id, reason="test promotion")
+            self.assertEqual("paper_promoted", detail["current_stage"])
+            self.assertEqual("paper_config_created", detail["sections"]["promotion_execution"]["status"])
+            self.assertEqual("pending_paper_trial", detail["sections"]["post_promotion_monitoring"]["status"])
         finally:
             session.close()
 
