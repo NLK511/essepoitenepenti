@@ -28,6 +28,8 @@ For each run:
 9. persist signals, decision samples, plans when plan framing ran, run summaries, and artifacts
 10. emit explicit `no_action` plans only after shortlist/deep-analysis/policy gates; non-shortlisted names remain signal+decision-sample audit records, not full plans
 
+Target shortlist behavior: macro context should participate before deep analysis as a bounded prioritization signal when a point-in-time usable macro snapshot and governed ticker exposure path exist. Technical cheap-scan evidence remains primary; macro context must not independently create a shortlist candidate with weak technical evidence. See `specs/macro-context-shortlist-spec.md`.
+
 `ProposalService` remains a lower-level helper for compatibility and shared feature/history/news/context work, not the main run executor.
 
 ## Persisted objects
@@ -79,9 +81,14 @@ Cheap-scan liquidity uses simple `close * volume` over 20 bars, so the warning i
 
 Macro/industry context snapshots are canonical shared artifacts. Missing/stale artifacts fall back to neutral values and explicit warnings. Industry missing-snapshot handling is blocked rather than neutrally informative, and thin snapshots expose evidence/coverage states.
 
+Current shortlist behavior does not explicitly use macro context: shortlist selection is driven by cheap-scan technical attention/confidence plus catalyst proxy logic. Target behavior is to add a small macro-aware shortlist adjustment and optional macro-context lane. Missing/degraded macro evidence stays neutral; usable aligned macro evidence may modestly boost ranking; usable adverse macro evidence may modestly penalize; macro support may not bypass technical floors.
+
 The taxonomy layer provides ticker profiles, industries/sectors, relationship edges, and governed labels so the app can expose readable transmission/read-through fields. The ticker exposure ontology adds explicit business-driver, macro-sensitivity, event-sensitivity, peer/customer/supplier, source, confidence, and version metadata for every taxonomy ticker.
 
-Context scores:
+Context scores are now derived through shared macro/industry scoring primitives from extracted events/drivers, source quality, coverage, context quality, saliency, and contradiction penalties. Readers support older snapshot rows through a schema adapter, but new snapshots expose canonical `support_score`, `support_label`, `directional_confidence_percent`, score components, and score reasons.
+
+Context score meanings:
+- **support score:** signed directional context support from `-1.0` to `+1.0`
 - **saliency:** prominence of active events/drivers
 - **confidence:** trustworthiness given evidence, source quality, contradictions, degradation
 - **quality:** usable/degraded/blocked after separating required vs optional evidence

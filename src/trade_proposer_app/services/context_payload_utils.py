@@ -32,6 +32,10 @@ def macro_snapshot_context_fields(snapshot: dict[str, Any], existing_insights: l
         "macro_context_contradictory_event_labels": snapshot.get("context_contradictory_event_labels", []),
         "macro_context_source_breakdown": snapshot.get("context_source_breakdown", {}),
         "macro_context_metadata": snapshot.get("context_metadata", {}),
+        "macro_context_score_source": snapshot.get("context_score_source"),
+        "macro_directional_confidence_percent": snapshot.get("directional_confidence_percent"),
+        "macro_context_score_components": snapshot.get("score_components") or (snapshot.get("source_breakdown", {}) or {}).get("score_components", {}),
+        "macro_context_score_reasons": snapshot.get("score_reasons") or (snapshot.get("source_breakdown", {}) or {}).get("score_reasons", []),
         "macro_coverage_insights": _merged_insights(existing_insights, snapshot),
     }
 
@@ -67,6 +71,10 @@ def industry_snapshot_context_fields(snapshot: dict[str, Any], existing_insights
         "industry_context_contradictory_event_labels": snapshot.get("context_contradictory_event_labels", []),
         "industry_context_source_breakdown": snapshot.get("context_source_breakdown", {}),
         "industry_context_metadata": snapshot.get("context_metadata", {}),
+        "industry_context_score_source": (snapshot.get("context_metadata", {}) or {}).get("context_score_source"),
+        "industry_directional_confidence_percent": snapshot.get("directional_confidence_percent"),
+        "industry_context_score_components": snapshot.get("score_components") or (snapshot.get("source_breakdown", {}) or {}).get("score_components", {}),
+        "industry_context_score_reasons": snapshot.get("score_reasons") or (snapshot.get("source_breakdown", {}) or {}).get("score_reasons", []),
         "industry_coverage_insights": _merged_insights(existing_insights, snapshot),
     }
 

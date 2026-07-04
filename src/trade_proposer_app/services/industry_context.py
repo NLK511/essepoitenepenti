@@ -8,6 +8,7 @@ from typing import Any
 from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.context_quality import ContextQualityAssessment, assess_context_quality
+from trade_proposer_app.services.context_scoring import ContextEvidenceScorer, ContextSnapshotSchemaAdapter
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
     authoritative_social_handles,
@@ -229,13 +230,8 @@ class IndustryContextService:
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
             summary_error=summary_result.llm_error,
         )
-        evidence_state = self._evidence_state(
-            news_items=news_items,
-            supporting_social_items=supporting_social_items,
-            active_drivers=active_drivers,
-            quality=raw_quality,
-        )
-        coverage_state = self._coverage_state(news_items=news_items, supporting_social_items=supporting_social_items)
+        coverage_state = ContextEvidenceScorer.coverage_state(news_item_count=len(news_items), social_item_count=len(supporting_social_items))
+        evidence_state = ContextEvidenceScorer.evidence_state(active_events=active_drivers, coverage_state=coverage_state, quality=raw_quality)
         quality = self._refine_context_quality(
             raw_quality,
             industry_label=industry_label,
@@ -247,14 +243,22 @@ class IndustryContextService:
         for note in quality.notes:
             if note not in warnings:
                 warnings.append(note)
-        support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL").strip().upper() or "NEUTRAL"
-        support_score = self._support_score(
-            support_label,
-            saliency_score=saliency_score,
-            confidence_percent=confidence_percent,
+        legacy_support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL").strip().upper() or "NEUTRAL"
+        legacy_support_score = float(getattr(payload, "score", 0.0) or 0.0)
+        score_result = ContextEvidenceScorer().score(
+            scope="industry",
+            active_events=active_drivers,
+            news_item_count=len(news_items),
+            social_item_count=len(supporting_social_items),
+            source_priority_counts=primary_source_counts,
             quality=quality,
-            active_drivers=active_drivers,
+            contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
+            legacy_score=legacy_support_score,
+            legacy_label=legacy_support_label,
         )
+        support_label = score_result.support_label
+        support_score = score_result.support_score
+        saliency_score = score_result.saliency_score or saliency_score
         context = IndustryContextSnapshot(
             industry_key=industry_key,
             industry_label=industry_label,
@@ -272,8 +276,7 @@ class IndustryContextService:
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
                 "context_refresh_subject_key": getattr(payload, "subject_key", None),
-                "context_label": getattr(payload, "label", None),
-                "context_score": getattr(payload, "score", None),
+                **ContextSnapshotSchemaAdapter.canonical_score_fields(score_result),
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "authoritative_social_item_count": authoritative_social_count,
@@ -288,14 +291,15 @@ class IndustryContextService:
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
                 "primary_news_publishers": publisher_summary(news_items),
                 "primary_news_coverage_quality": primary_coverage_quality,
-                "coverage_state": coverage_state,
-                "evidence_state": evidence_state,
+                "coverage_state": score_result.coverage_state,
+                "evidence_state": score_result.evidence_state,
                 "support_label": support_label,
                 "support_score": support_score,
                 "context_quality_score": quality.score,
                 "context_quality_status": quality.status,
                 "context_quality_flags": quality.flags,
                 "context_quality_notes": quality.notes,
+                "score_version": "event_v1",
                 "ontology_relationship_count": len(ontology_relationships),
                 "matched_ontology_relationship_count": len(matched_ontology_relationships),
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
@@ -329,14 +333,17 @@ class IndustryContextService:
                 "context_summary_warning": summary_warning,
                 "context_summary_duration_seconds": summary_result.duration_seconds,
                 "context_summary_metadata": summary_result.metadata,
-                "context_evidence_state": evidence_state,
-                "context_coverage_state": coverage_state,
+                "context_evidence_state": score_result.evidence_state,
+                "context_coverage_state": score_result.coverage_state,
                 "context_quality": {
                     "score": quality.score,
                     "status": quality.status,
                     "flags": quality.flags,
                     "notes": quality.notes,
                 },
+                "context_score_components": score_result.score_components,
+                "context_score_reasons": score_result.score_reasons,
+                "context_scoring_version": "event_v1",
             },
             run_id=run_id,
             job_id=job_id,
@@ -429,36 +436,6 @@ class IndustryContextService:
         return 48
 
     @staticmethod
-    def _coverage_state(news_items: list[object], supporting_social_items: list[object]) -> str:
-        has_news = bool(news_items)
-        has_social = bool(supporting_social_items)
-        if has_news and has_social:
-            return "news+social"
-        if has_news:
-            return "news"
-        if has_social:
-            return "social"
-        return "missing"
-
-    @staticmethod
-    def _evidence_state(
-        *,
-        news_items: list[object],
-        supporting_social_items: list[object],
-        active_drivers: list[dict[str, object]],
-        quality: ContextQualityAssessment,
-    ) -> str:
-        if not news_items and not supporting_social_items and not active_drivers:
-            return "missing"
-        if not active_drivers:
-            return "thin"
-        if quality.status == "usable":
-            return "usable"
-        if news_items or supporting_social_items:
-            return "degraded"
-        return "missing"
-
-    @staticmethod
     def _refine_context_quality(
         quality: ContextQualityAssessment,
         *,
@@ -488,25 +465,6 @@ class IndustryContextService:
             status = "degraded"
             notes.append(f"industry evidence for {industry_label} is present but thin")
         return ContextQualityAssessment(score=round(score, 1), status=status, flags=flags, notes=list(dict.fromkeys(notes)))
-
-    @staticmethod
-    def _support_score(
-        support_label: str,
-        *,
-        saliency_score: float,
-        confidence_percent: float,
-        quality: ContextQualityAssessment,
-        active_drivers: list[dict[str, object]],
-    ) -> float:
-        if quality.status != "usable" or not active_drivers:
-            return 0.0
-        normalized = support_label.strip().upper()
-        direction_sign = 1.0 if normalized == "POSITIVE" else -1.0 if normalized == "NEGATIVE" else 0.0
-        if direction_sign == 0.0:
-            return 0.0
-        evidence_strength = min(1.0, (saliency_score * 0.7) + (confidence_percent / 180.0))
-        quality_factor = max(0.0, min(1.0, quality.score / 100.0))
-        return round(direction_sign * evidence_strength * quality_factor, 3)
 
     def _load_news_evidence(
         self,

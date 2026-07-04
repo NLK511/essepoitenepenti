@@ -8,6 +8,7 @@ from typing import Any
 from trade_proposer_app.domain.models import MacroContextRefreshPayload, MacroContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.context_quality import assess_context_quality
+from trade_proposer_app.services.context_scoring import ContextEvidenceScorer, ContextSnapshotSchemaAdapter
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
     authoritative_social_handles,
@@ -243,10 +244,8 @@ class MacroContextService:
             warnings.append("macro context primary-news ingestion reported provider issues")
         if contradiction_labels:
             warnings.append("macro context contains contradictory evidence across active events")
-        support_score = float(getattr(payload, "score", 0.0) or 0.0)
-        support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")
-        regime_tags = self._regime_tags(active_themes, support_score, support_label)
-        saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts, authoritative_social_count)
+        legacy_support_score = float(getattr(payload, "score", 0.0) or 0.0)
+        legacy_support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")
         confidence_percent = self._confidence_percent(
             active_themes,
             len(news_items),
@@ -283,6 +282,21 @@ class MacroContextService:
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
             summary_error=summary_result.llm_error,
         )
+        score_result = ContextEvidenceScorer().score(
+            scope="macro",
+            active_events=active_themes,
+            news_item_count=len(news_items),
+            social_item_count=len(supporting_social_items),
+            source_priority_counts=primary_source_counts,
+            quality=quality,
+            contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
+            legacy_score=legacy_support_score,
+            legacy_label=legacy_support_label,
+        )
+        support_score = score_result.support_score
+        support_label = score_result.support_label
+        regime_tags = self._regime_tags(active_themes, support_score, support_label)
+        saliency_score = score_result.saliency_score or self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts, authoritative_social_count)
         status = "warning" if warnings or quality.status != "usable" else "ok"
 
         context = MacroContextSnapshot(
@@ -298,8 +312,7 @@ class MacroContextService:
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
                 "context_refresh_subject_key": getattr(payload, "subject_key", None),
-                "context_label": support_label,
-                "context_score": support_score,
+                **ContextSnapshotSchemaAdapter.canonical_score_fields(score_result),
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "authoritative_social_item_count": authoritative_social_count,
@@ -311,10 +324,13 @@ class MacroContextService:
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
                 "primary_news_publishers": publisher_summary(news_items),
                 "primary_news_coverage_quality": primary_coverage_quality,
+                "coverage_state": score_result.coverage_state,
+                "evidence_state": score_result.evidence_state,
                 "context_quality_score": quality.score,
                 "context_quality_status": quality.status,
                 "context_quality_flags": quality.flags,
                 "context_quality_notes": quality.notes,
+                "score_version": "event_v1",
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
             },
             metadata={
@@ -346,6 +362,9 @@ class MacroContextService:
                     "flags": quality.flags,
                     "notes": quality.notes,
                 },
+                "context_score_components": score_result.score_components,
+                "context_score_reasons": score_result.score_reasons,
+                "context_scoring_version": "event_v1",
             },
             run_id=run_id,
             job_id=job_id,

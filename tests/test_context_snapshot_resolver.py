@@ -26,6 +26,26 @@ class _StubRepository:
 
 
 class ContextSnapshotResolverTests(unittest.TestCase):
+    def test_macro_resolution_reads_legacy_context_score_keys(self) -> None:
+        snapshot = MacroContextSnapshot(
+            computed_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            summary_text="Macro context",
+            status="ok",
+            source_breakdown={
+                "context_label": "NEGATIVE",
+                "context_score": -0.42,
+                "context_quality_score": 91.0,
+                "context_quality_status": "usable",
+            },
+        )
+        resolver = ContextSnapshotResolver(_StubRepository(macro_snapshot=snapshot))
+
+        payload = resolver.resolve_macro_snapshot()
+
+        self.assertEqual(payload["label"], "NEGATIVE")
+        self.assertEqual(payload["score"], -0.42)
+        self.assertEqual(payload["context_score_source"], "legacy_context_keys")
+
     def test_macro_resolution_exposes_context_quality(self) -> None:
         snapshot = MacroContextSnapshot(
             computed_at=datetime(2026, 5, 1, tzinfo=timezone.utc),

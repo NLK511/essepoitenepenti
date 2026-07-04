@@ -116,6 +116,10 @@ class ContextServiceTests(unittest.TestCase):
         self.assertTrue(any(item["key"] in {"euro_rates", "rates", "valuation_duration"} for item in context.active_themes[0]["transmission_channel_details"]))
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
         self.assertEqual(context.source_breakdown["context_quality_status"], "usable")
+        self.assertEqual(context.source_breakdown["score_version"], "event_v1")
+        self.assertNotEqual(context.source_breakdown["support_label"], "NEUTRAL")
+        self.assertNotEqual(context.source_breakdown["support_score"], 0.0)
+        self.assertIn("event_directional_evidence", context.source_breakdown["score_reasons"])
         self.assertGreaterEqual(context.source_breakdown["context_quality_score"], 90.0)
         self.assertFalse(context.source_breakdown["context_quality_flags"]["hard_missing"])
         self.assertIn("official:1", context.source_breakdown["primary_news_source_priorities"])
@@ -449,6 +453,41 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(news_service.fetch_many_calls[0]["symbols"], ["NVDA", "AMD"])
         self.assertEqual(news_service.fetch_many_calls[0]["request_mode"], "live")
         self.assertTrue(news_service.fetch_many_calls[0]["primary_only"])
+
+    def test_industry_context_derives_support_from_primary_news_when_payload_is_neutral(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_industry_context_snapshot.return_value = None
+        repository.get_latest_industry_context_snapshot_before.return_value = None
+        repository.create_industry_context_snapshot.side_effect = lambda context: context
+        news_service = StubNewsService(
+            NewsBundle(ticker="NVDA, AMD", articles=[], feeds_used=["NewsAPI"]),
+            {
+                "news_items": [
+                    {
+                        "title": "Chip suppliers raise guidance as AI demand accelerates",
+                        "summary": "Semiconductor orders and bookings growth remain strong",
+                        "publisher": "DigiTimes",
+                    }
+                ],
+                "coverage_insights": [],
+            },
+        )
+        snapshot = IndustryContextRefreshPayload(
+            subject_key="semiconductors",
+            subject_label="Semiconductors",
+            score=0.0,
+            label="NEUTRAL",
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": []},
+            diagnostics={"queries": ["semiconductor", "chip demand"]},
+        )
+
+        context = IndustryContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
+
+        self.assertEqual(context.source_breakdown["score_version"], "event_v1")
+        self.assertEqual(context.source_breakdown["support_label"], "POSITIVE")
+        self.assertGreater(context.source_breakdown["support_score"], 0.0)
+        self.assertIn("event_directional_evidence", context.source_breakdown["score_reasons"])
 
     def test_industry_context_blocks_when_no_salient_evidence_is_found(self) -> None:
         repository = MagicMock()

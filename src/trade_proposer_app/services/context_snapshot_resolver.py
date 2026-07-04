@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.services.context_scoring import ContextSnapshotSchemaAdapter
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -41,8 +42,8 @@ class ContextSnapshotResolver:
         source_breakdown = snapshot.source_breakdown if isinstance(snapshot.source_breakdown, dict) else {}
         metadata = self._metadata(snapshot)
         context_quality = self._context_quality(source_breakdown, metadata)
-        support_label = str(source_breakdown.get("support_label") or "NEUTRAL")
-        support_score = float(source_breakdown.get("support_score", 0.0) or 0.0)
+        support_label = ContextSnapshotSchemaAdapter.support_label(source_breakdown)
+        support_score = ContextSnapshotSchemaAdapter.support_score(source_breakdown)
         return {
             "score": support_score,
             "label": support_label,
@@ -65,10 +66,14 @@ class ContextSnapshotResolver:
             "context_contradictory_event_labels": metadata.get("contradictory_event_labels", []),
             "context_source_breakdown": source_breakdown,
             "context_metadata": metadata,
+            "context_score_source": ContextSnapshotSchemaAdapter.score_source(source_breakdown),
             "context_quality_score": context_quality["score"],
             "context_quality_status": context_quality["status"],
             "context_quality_flags": context_quality["flags"],
             "context_quality_notes": context_quality["notes"],
+            "directional_confidence_percent": source_breakdown.get("directional_confidence_percent"),
+            "score_components": source_breakdown.get("score_components", {}),
+            "score_reasons": source_breakdown.get("score_reasons", []),
             "diagnostics": {"warnings": list(snapshot.warnings)},
         }
 
@@ -104,8 +109,8 @@ class ContextSnapshotResolver:
         source_breakdown = snapshot.source_breakdown if isinstance(snapshot.source_breakdown, dict) else {}
         metadata = self._metadata(snapshot)
         context_quality = self._context_quality(source_breakdown, metadata)
-        support_label = str(source_breakdown.get("support_label") or self._label_from_direction(snapshot.direction))
-        support_score = float(source_breakdown.get("support_score", 0.0) or 0.0)
+        support_label = ContextSnapshotSchemaAdapter.support_label(source_breakdown, fallback=self._label_from_direction(snapshot.direction))
+        support_score = ContextSnapshotSchemaAdapter.support_score(source_breakdown)
         evidence_state = str(source_breakdown.get("evidence_state") or ("usable" if support_score else "missing"))
         coverage_state = str(source_breakdown.get("coverage_state") or "missing")
         if context_quality["status"] != "usable" or evidence_state not in {"usable", "degraded"}:
@@ -134,6 +139,7 @@ class ContextSnapshotResolver:
             "context_metadata": {
                 **taxonomy_metadata,
                 **metadata,
+                "context_score_source": ContextSnapshotSchemaAdapter.score_source(source_breakdown),
             },
             "context_quality_score": context_quality["score"],
             "context_quality_status": context_quality["status"],
@@ -141,6 +147,9 @@ class ContextSnapshotResolver:
             "context_quality_notes": context_quality["notes"],
             "context_evidence_state": evidence_state,
             "context_coverage_state": coverage_state,
+            "directional_confidence_percent": source_breakdown.get("directional_confidence_percent"),
+            "score_components": source_breakdown.get("score_components", {}),
+            "score_reasons": source_breakdown.get("score_reasons", []),
             "diagnostics": {"warnings": list(snapshot.warnings)},
         }
 

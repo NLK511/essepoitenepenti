@@ -43,6 +43,8 @@ These are the primary narrative source of truth for the product today:
 - `historical-playback-tuning-plan.md` — point-in-time replay and replay-based tuning implementation tracker
 - `tuning-workflow-ux-implementation-plan.md` — candidate discovery-to-promotion workflow implementation plan
 - `replay-validation-efficiency-remediation-plan.md` — replay validation depth, frozen-input reuse, and local-only input remediation plan
+- `macro-context-shortlist-implementation-plan.md` — planned bounded macro-context participation in upstream shortlist selection
+- `context-scoring-remediation-plan.md` — active shared macro/industry context scoring remediation and downstream application review
 
 ## Specs directory
 
@@ -68,6 +70,8 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 ### Context, data, and analysis
 
 - `specs/ticker-exposure-ontology-spec.md`
+- `specs/macro-context-shortlist-spec.md`
+- `specs/context-scoring-spec.md`
 - `specs/market-intelligence-analysis-spec.md`
 - `specs/fundamental-analysis-snapshot-spec.md`
 - `specs/fundamental-valuation-integration-spec.md`
