@@ -55,6 +55,26 @@ class TuningWorkflowServiceTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_manual_candidate_can_be_rejected_and_removed_from_shortlist(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment({"name": "Manual candidates"})
+            experiment_id = int(detail["id"])
+            detail = service.add_manual_candidate(
+                experiment_id,
+                label="manual floor",
+                config={"global.actionable_confidence_floor_percent": 66.0},
+            )
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            detail = service.update_shortlist(experiment_id, [candidate_id])
+            self.assertEqual([candidate_id], detail["sections"]["shortlist"]["candidate_ids"])
+            detail = service.reject_candidate(experiment_id, candidate_id, reason="too similar")
+            self.assertEqual([], detail["sections"]["shortlist"]["candidate_ids"])
+            self.assertEqual("rejected", detail["sections"]["candidate_pool"]["candidates"][0]["status"])
+        finally:
+            session.close()
+
     def test_create_replay_batches_uses_cache_only_scoped_configs(self) -> None:
         session = self.create_session()
         try:
@@ -90,6 +110,38 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertTrue(fake_replay.created[0]["config"]["cache_only"])
             self.assertEqual("tuning_workflow_candidate_replay", fake_replay.created[1]["config"]["source"])
             self.assertIn("plan_generation_tuning_config_override", fake_replay.created[1]["config"])
+        finally:
+            session.close()
+
+    def test_candidate_replay_is_blocked_by_hard_readiness_failure(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session, historical_replay_service=FakeReplayService())
+            detail = service.create_experiment(
+                {
+                    "name": "Blocked replay",
+                    "universe": {"tickers": ["AAPL"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-04-01",
+                    },
+                    "baseline": {"source": "current_active_config"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            service.run_readiness_audit(experiment_id)
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            service.update_shortlist(experiment_id, [candidate_id])
+            metadata_record = service.get_experiment(experiment_id)
+            metadata_record.metadata_json = metadata_record.metadata_json.replace('"status":"warning"', '"status":"blocked"')
+            session.commit()
+            with self.assertRaisesRegex(Exception, "readiness audit"):
+                service.create_candidate_replay_batches(experiment_id)
         finally:
             session.close()
 

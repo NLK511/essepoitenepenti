@@ -28,6 +28,15 @@ class TuningExperimentPayload(BaseModel):
     advanced_settings: dict[str, Any] = Field(default_factory=dict)
 
 
+class TuningExperimentManualCandidatePayload(BaseModel):
+    label: str = "manual candidate"
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class TuningExperimentRejectCandidatePayload(BaseModel):
+    reason: str = "operator rejected"
+
+
 class TuningExperimentShortlistPayload(BaseModel):
     candidate_ids: list[str] = Field(default_factory=list)
 
@@ -150,6 +159,33 @@ async def generate_tuning_experiment_candidate_pool(
 ) -> dict[str, object]:
     try:
         experiment = _service(session).generate_candidate_pool(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/candidate-pool/manual")
+async def add_tuning_experiment_manual_candidate(
+    experiment_id: int,
+    payload: TuningExperimentManualCandidatePayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).add_manual_candidate(experiment_id, label=payload.label, config=payload.config)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/candidates/{candidate_id}/reject")
+async def reject_tuning_experiment_candidate(
+    experiment_id: int,
+    candidate_id: str,
+    payload: TuningExperimentRejectCandidatePayload,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).reject_candidate(experiment_id, candidate_id, reason=payload.reason)
     except TuningWorkflowError as exc:
         raise _to_http_error(exc) from exc
     return {"experiment": experiment}

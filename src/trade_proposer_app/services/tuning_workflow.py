@@ -149,6 +149,64 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def add_manual_candidate(self, experiment_id: int, *, label: str, config: Mapping[str, object]) -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        normalized_config = normalize_plan_generation_tuning_config(dict(config))
+        baseline = normalize_plan_generation_tuning_config({})
+        changed_keys = [key for key, value in normalized_config.items() if value != baseline.get(key)]
+        if not changed_keys:
+            raise TuningWorkflowError("manual candidate must change at least one registered parameter")
+        depth = candidate_validation_depth(changed_keys)
+        if depth.get("unknown_keys"):
+            raise TuningWorkflowError("manual candidate contains unknown parameter keys")
+        metadata = loads_json_object(record.metadata_json)
+        pool = metadata.setdefault("candidate_pool", {"status": "generated", "candidates": []})
+        candidates = pool.setdefault("candidates", [])
+        config_hash = stable_hash(normalized_config)
+        if any(isinstance(item, dict) and item.get("config_hash") == config_hash for item in candidates):
+            raise TuningWorkflowError("duplicate candidate config")
+        candidate_id = f"manual-{len(candidates) + 1}"
+        candidates.append({
+            "id": candidate_id,
+            "label": label or candidate_id,
+            "source": "manual_config",
+            "status": "discovered",
+            "rank": len(candidates) + 1,
+            "config": normalized_config,
+            "config_hash": config_hash,
+            "changed_keys": changed_keys,
+            "validation_depth": depth["validation_depth"],
+            "validation_depth_reason": depth["validation_depth_reason"],
+            "promotion_capable": False,
+            "computation_label": "manual discovery candidate; requires replay and holdout before promotion",
+        })
+        pool["status"] = "generated"
+        pool["updated_at"] = datetime.now(timezone.utc).isoformat()
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def reject_candidate(self, experiment_id: int, candidate_id: str, *, reason: str = "operator rejected") -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        candidates = metadata.get("candidate_pool", {}).get("candidates", [])
+        found = False
+        for candidate in candidates:
+            if isinstance(candidate, dict) and str(candidate.get("id")) == candidate_id:
+                candidate["status"] = "rejected"
+                candidate["rejection_reason"] = reason
+                found = True
+        if not found:
+            raise TuningWorkflowError(f"candidate {candidate_id} not found")
+        shortlist = metadata.get("shortlist", {})
+        if isinstance(shortlist, dict):
+            shortlist["candidate_ids"] = [item for item in shortlist.get("candidate_ids", []) if str(item) != candidate_id]
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
     def update_shortlist(self, experiment_id: int, candidate_ids: list[str]) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         replay_settings = loads_json_object(record.replay_settings_json)
@@ -210,6 +268,9 @@ class TuningWorkflowService:
         replay_service = self._require_historical_replay_service()
         record = self.get_experiment(experiment_id)
         metadata = loads_json_object(record.metadata_json)
+        readiness = metadata.get("readiness_audit") if isinstance(metadata.get("readiness_audit"), dict) else {}
+        if readiness.get("status") == "blocked":
+            raise TuningWorkflowError("candidate replay is blocked by readiness audit")
         if not metadata.get("baseline_replay"):
             raise TuningWorkflowError("baseline replay is required before candidate replay")
         shortlist_ids = list(metadata.get("shortlist", {}).get("candidate_ids", []))

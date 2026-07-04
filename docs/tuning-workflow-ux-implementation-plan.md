@@ -146,9 +146,9 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Acceptance criteria
 
-- [ ] Tests prove readiness audit is cache-only.
-- [ ] Repeated bar gaps appear as warnings or pruning recommendations.
-- [ ] Candidate replay remains blocked when hard readiness gates fail, unless experiment is research-only and explicitly accepts risk.
+- [x] Tests prove readiness audit is cache-only.
+- [x] Repeated bar gaps appear as warnings or pruning recommendations.
+- [x] Candidate replay remains blocked when hard readiness gates fail, unless experiment is research-only and explicitly accepts risk.
 
 ## Phase 4 — Candidate discovery and shortlist management — partially implemented
 
@@ -169,7 +169,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - promotion-capable yes/no
   - expected runtime/cost
 - [ ] Add deduplication by config hash and similarity to baseline/existing candidates.
-- [ ] Add actions:
+- [x] Add actions:
   - generate/import candidate pool
   - add manual candidate
   - reject candidate
@@ -179,9 +179,9 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Acceptance criteria
 
-- [ ] Discovery-only candidates cannot be marked promotable.
-- [ ] Unknown config keys are rejected through existing parameter schema.
-- [ ] Shortlist cannot exceed experiment replay-pass limit.
+- [x] Discovery-only candidates cannot be marked promotable.
+- [x] Unknown config keys are rejected through existing parameter schema.
+- [x] Shortlist cannot exceed experiment replay-pass limit.
 - [ ] Tests cover source labeling and deduplication.
 
 ## Phase 5 — Baseline replay binding — partially implemented
