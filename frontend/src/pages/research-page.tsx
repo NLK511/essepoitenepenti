@@ -283,10 +283,18 @@ export function ResearchPage() {
           </Card>
 
           <Card>
-            <SectionTitle kicker="Downstream tuning" title="Plan generation tuning" subtitle="Use when Quality & Edge indicates plan construction, entry framing, or reward/risk parameters need work." />
+            <SectionTitle kicker="Normal optimization path" title="Tuning Workflow" subtitle="Use this guided workflow for plan-generation tuning from experiment setup through replay validation and promotion proposal." />
             <div className="cluster top-gap-small">
-              <Link to="/research/plan-generation-tuning" className="button-secondary">⚒ Open plan tuning</Link>
-              <Badge tone="info">research</Badge>
+              <Link to="/research/tuning-workflow" className="button-secondary">⚒ Open tuning workflow</Link>
+              <Badge tone="info">guided</Badge>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle kicker="Advanced research" title="Plan generation tuning" subtitle="Advanced candidate discovery and diagnostics. Normal optimization should start from Tuning Workflow." />
+            <div className="cluster top-gap-small">
+              <Link to="/research/plan-generation-tuning" className="button-secondary">↗ Open advanced plan tuning</Link>
+              <Badge tone="info">advanced</Badge>
             </div>
           </Card>
 

@@ -358,6 +358,26 @@ class BrokerSteeringDecisionRecord(Base, TimestampMixin):
     error_message: Mapped[str] = mapped_column(Text, default="")
 
 
+class TuningExperimentRecord(Base, TimestampMixin):
+    __tablename__ = "tuning_experiments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    hypothesis: Mapped[str] = mapped_column(Text, default="")
+    universe_json: Mapped[str] = mapped_column(Text, default="{}")
+    windows_json: Mapped[str] = mapped_column(Text, default="{}")
+    discovery_settings_json: Mapped[str] = mapped_column(Text, default="{}")
+    replay_settings_json: Mapped[str] = mapped_column(Text, default="{}")
+    objective: Mapped[str] = mapped_column(String(64), default="balanced_score", index=True)
+    baseline_json: Mapped[str] = mapped_column(Text, default="{}")
+    promotion_target: Mapped[str] = mapped_column(String(64), default="paper_config", index=True)
+    advanced_settings_json: Mapped[str] = mapped_column(Text, default="{}")
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+
 class RuntimeProcessRecord(Base, TimestampMixin):
     __tablename__ = "runtime_processes"
     __table_args__ = (Index("ix_runtime_processes_role_status", "role", "status"),)

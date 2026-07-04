@@ -1752,3 +1752,56 @@ export interface DocDocument {
 export interface DocsResponse {
   documents: DocDocument[];
 }
+
+export interface TuningExperimentSetupCompleteness {
+  complete: boolean;
+  missing_fields: string[];
+  warnings: string[];
+}
+
+export interface TuningExperiment {
+  id: number;
+  name: string;
+  status: string;
+  notes: string;
+  hypothesis: string;
+  universe: Record<string, unknown>;
+  windows: Record<string, unknown>;
+  discovery_settings: Record<string, unknown>;
+  replay_settings: Record<string, unknown>;
+  objective: string;
+  baseline: Record<string, unknown>;
+  promotion_target: string;
+  advanced_settings: Record<string, unknown>;
+  setup_completeness: TuningExperimentSetupCompleteness;
+  current_stage: string;
+  next_action: string;
+  blockers: string[];
+  sections: Record<string, Record<string, unknown>>;
+  computation_labels: Record<string, string>;
+  created_at: string | null;
+  updated_at: string | null;
+  archived_at: string | null;
+}
+
+export interface TuningExperimentSummary {
+  id: number;
+  name: string;
+  status: string;
+  current_stage: string;
+  next_action: string;
+  blockers: string[];
+  objective: string;
+  promotion_target: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TuningExperimentsResponse {
+  experiments: TuningExperimentSummary[];
+  count: number;
+}
+
+export interface TuningExperimentResponse {
+  experiment: TuningExperiment;
+}

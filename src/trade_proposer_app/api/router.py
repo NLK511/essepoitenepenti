@@ -38,6 +38,7 @@ from trade_proposer_app.api.routes.settings import router as settings_router
 from trade_proposer_app.api.routes.signal_gating_tuning import router as signal_gating_tuning_router
 from trade_proposer_app.api.routes.steering import router as steering_router
 from trade_proposer_app.api.routes.tickers import router as tickers_router
+from trade_proposer_app.api.routes.tuning_workflow import router as tuning_workflow_router
 from trade_proposer_app.api.routes.watchlists import router as watchlists_router
 from trade_proposer_app.api.routes.workers import router as workers_router
 
@@ -71,4 +72,5 @@ router.include_router(jobs_router)
 router.include_router(runs_router)
 router.include_router(settings_router)
 router.include_router(tickers_router)
+router.include_router(tuning_workflow_router)
 router.include_router(workers_router)

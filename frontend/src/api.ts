@@ -94,3 +94,11 @@ export async function postJson<T>(path: string, values: JsonObject): Promise<T> 
     body: JSON.stringify(values),
   });
 }
+
+export async function patchJson<T>(path: string, values: JsonObject): Promise<T> {
+  return request<T>(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(values),
+  });
+}

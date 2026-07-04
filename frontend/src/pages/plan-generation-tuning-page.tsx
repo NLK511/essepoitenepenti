@@ -305,6 +305,10 @@ export function PlanGenerationTuningPage() {
         actions={<HelpHint tooltip="Large searches are research-only. Revalidate selected configs/candidates with walk-forward before promotion." to={tuningSpecDoc} />}
       />
 
+      <Card>
+        <SectionTitle kicker="Advanced/research page" title="Use Tuning Workflow for normal optimization" subtitle="This page remains available for raw candidate discovery, diagnostics, and config management. Promotion evidence should flow through the guided workflow." actions={<Link to="/research/tuning-workflow" className="button-secondary">Open Tuning Workflow</Link>} />
+      </Card>
+
       <section className="card-grid">
         <Card>
           <SectionTitle kicker="Live baseline" title={activeConfig?.config.version_label ?? "No active config"} subtitle="Currently promoted plan-generation config used as the default comparison baseline." />

@@ -1,6 +1,6 @@
 # Tuning workflow UX implementation plan
 
-**Status:** planned
+**Status:** in progress
 
 Canonical spec: `specs/tuning-workflow-ux-spec.md`.
 
@@ -26,8 +26,8 @@ This plan breaks the work into small shippable phases. The goal is to give Aurel
 
 ### Tasks
 
-- [ ] Re-read `specs/tuning-workflow-ux-spec.md`, `specs/plan-generation-tuning-spec.md`, and `specs/historical-playback-tuning-spec.md` before implementation.
-- [ ] Inventory existing tables/entities that can back the first workflow read model:
+- [x] Re-read `specs/tuning-workflow-ux-spec.md`, `specs/plan-generation-tuning-spec.md`, and `specs/historical-playback-tuning-spec.md` before implementation.
+- [x] Inventory existing tables/entities that can back the first workflow read model:
   - historical replay batches
   - historical replay slices
   - replay eligibility records
@@ -35,21 +35,23 @@ This plan breaks the work into small shippable phases. The goal is to give Aurel
   - config versions/promotions
   - job runs
   - app settings
-- [ ] Identify which experiment fields can be inferred from existing replay batch config metadata.
-- [ ] Identify fields that require a new persisted experiment table.
-- [ ] Decide whether v1 persists experiments or starts with a read-only inferred workflow.
+- [x] Identify which experiment fields can be inferred from existing replay batch config metadata.
+- [x] Identify fields that require a new persisted experiment table.
+- [x] Decide whether v1 persists experiments or starts with a read-only inferred workflow.
+
+Implementation choice: v1 now persists first-class `tuning_experiments` rows. Existing replay/tuning artifacts remain linked by ids and metadata in later phases. This avoids trying to infer operator hypothesis, windows, objective, and promotion target from replay batch config alone.
 
 ### Acceptance criteria
 
-- [ ] Implementation choice is documented in this plan.
+- [x] Implementation choice is documented in this plan.
 - [ ] No code changes begin until the persistence/read-model approach is clear.
 
 ## Phase 1 — Backend experiment model/read model
 
 ### Tasks
 
-- [ ] Add a `TuningExperiment` persistence model or read-model adapter.
-- [ ] Represent required experiment fields:
+- [x] Add a `TuningExperiment` persistence model or read-model adapter.
+- [x] Represent required experiment fields:
   - name
   - notes/hypothesis
   - universe definition
@@ -62,7 +64,7 @@ This plan breaks the work into small shippable phases. The goal is to give Aurel
   - baseline selection
   - promotion target
   - status/current stage
-- [ ] Represent advanced fields with conservative defaults:
+- [x] Represent advanced fields with conservative defaults:
   - candidate sources
   - parameter bounds
   - validation gates
@@ -71,9 +73,9 @@ This plan breaks the work into small shippable phases. The goal is to give Aurel
   - evaluation horizons
   - manual review policy
   - stop conditions
-- [ ] Add repository methods for create/list/get/update/archive experiments, if persisted.
-- [ ] Add migration/tests if a new table is used.
-- [ ] Add lifecycle-state derivation for experiments:
+- [x] Add service methods for create/list/get/update/archive experiments.
+- [x] Add migration/tests for the new table.
+- [x] Add initial lifecycle-state derivation for experiments:
   - setup incomplete
   - readiness needed
   - candidate discovery needed
@@ -86,9 +88,9 @@ This plan breaks the work into small shippable phases. The goal is to give Aurel
 
 ### Acceptance criteria
 
-- [ ] Unit tests cover experiment creation/defaults or inferred read-model assembly.
-- [ ] Lifecycle state is deterministic from stored artifacts.
-- [ ] Missing optional artifacts produce warnings, not crashes.
+- [x] Unit tests cover experiment creation/defaults and read-model assembly.
+- [x] Lifecycle state is deterministic from stored artifacts for setup/readiness stages.
+- [x] Missing optional artifacts produce warnings/blockers, not crashes.
 
 ## Phase 2 — Workflow API endpoints
 
@@ -96,17 +98,17 @@ This plan breaks the work into small shippable phases. The goal is to give Aurel
 
 Add API routes under a new workflow namespace, for example `/api/tuning-workflow`.
 
-- [ ] `GET /api/tuning-workflow/experiments`
+- [x] `GET /api/tuning-workflow/experiments`
   - list experiments with status, current stage, and next action
-- [ ] `POST /api/tuning-workflow/experiments`
+- [x] `POST /api/tuning-workflow/experiments`
   - create an experiment from required setup fields
-- [ ] `GET /api/tuning-workflow/experiments/{id}`
+- [x] `GET /api/tuning-workflow/experiments/{id}`
   - return full workflow read model
-- [ ] `PATCH /api/tuning-workflow/experiments/{id}`
+- [x] `PATCH /api/tuning-workflow/experiments/{id}`
   - update setup/advanced settings when safe
-- [ ] `POST /api/tuning-workflow/experiments/{id}/archive`
+- [x] `POST /api/tuning-workflow/experiments/{id}/archive`
   - archive experiment
-- [ ] Add response sections for:
+- [x] Add initial response sections for:
   - setup completeness
   - evidence readiness
   - candidate pool
@@ -116,14 +118,14 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - stability validation
   - promotion proposal
   - post-promotion monitoring
-- [ ] Include computation labels in API responses where results are shown.
-- [ ] Include deep links or ids for replay batches, tuning runs, job runs, config versions, and artifacts.
+- [x] Include computation labels in API responses where results are shown.
+- [ ] Include deep links or ids for replay batches, tuning runs, job runs, config versions, and artifacts as artifacts become linked to experiments.
 
 ### Acceptance criteria
 
-- [ ] API tests cover create/get/list/update/archive.
-- [ ] API tests cover empty states.
-- [ ] API response clearly distinguishes discovery-only, replay-validated, holdout-tested, and promotable candidates.
+- [x] API tests cover create/get/list/update/archive.
+- [x] API tests cover empty/incomplete states.
+- [x] API response clearly distinguishes discovery-only, replay-validated, holdout-tested, and promotable sections in v1 placeholders.
 
 ## Phase 3 — Evidence readiness integration
 
@@ -330,16 +332,16 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Tasks
 
-- [ ] Add route, for example `/research/tuning-workflow`.
-- [ ] Add navigation label: `Tuning Workflow`.
-- [ ] Build top lifecycle banner:
+- [x] Add route `/research/tuning-workflow`.
+- [x] Add navigation label: `Tuning Workflow`.
+- [x] Build top lifecycle banner:
   - experiment name
   - current stage
   - candidate funnel counts
   - recommendation
   - next action
   - blockers
-- [ ] Build cards:
+- [x] Build initial cards:
   1. Experiment setup
   2. Evidence readiness
   3. Candidate discovery
@@ -350,9 +352,9 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   8. Promotion proposal
   9. Promotion execution
   10. Post-promotion monitoring
-- [ ] Use explicit computation labels on all result cards.
-- [ ] Add setup/edit form with required fields.
-- [ ] Add advanced settings drawers.
+- [x] Use explicit computation labels on all result cards.
+- [x] Add create/setup form with required fields.
+- [ ] Add edit form and advanced settings drawers.
 - [ ] Add deep links to:
   - historical replay batch
   - run detail
@@ -360,20 +362,20 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - plan-generation tuning run
   - config version
   - promotion report
-- [ ] Avoid raw JSON by default; place it behind details/advanced controls.
+- [x] Avoid raw JSON by default.
 
 ### Acceptance criteria
 
-- [ ] Operator can create an experiment and see incomplete/missing next steps.
+- [x] Operator can create an experiment and see incomplete/missing next steps.
 - [ ] Operator can move from discovery to shortlist to replay queue from one page.
-- [ ] UI never labels discovery-only candidates as winners or validated.
-- [ ] UI clearly blocks promotion until all required gates pass.
+- [x] UI never labels discovery-only candidates as winners or validated.
+- [x] UI clearly blocks promotion until all required gates pass.
 
 ## Phase 11 — Existing page cleanup
 
 ### Tasks
 
-- [ ] Add banner to current Plan Generation Tuning page:
+- [x] Add banner to current Plan Generation Tuning page:
   - “Use Tuning Workflow for normal optimization; this page is advanced/research.”
 - [ ] Rename ambiguous UI copy:
   - `stored_plan_rescore` → `Diagnostic stored-plan rescore`
@@ -384,9 +386,9 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Acceptance criteria
 
-- [ ] Existing advanced controls remain accessible.
-- [ ] Normal operator path points to the workflow page.
-- [ ] Copy matches `specs/tuning-workflow-ux-spec.md` operator-copy rules.
+- [x] Existing advanced controls remain accessible.
+- [x] Normal operator path points to the workflow page.
+- [x] Initial copy matches `specs/tuning-workflow-ux-spec.md` operator-copy rules.
 
 ## Phase 12 — Tests, docs, and rollout
 
