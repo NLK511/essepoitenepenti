@@ -257,7 +257,7 @@ class HistoricalReplayTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_historical_bars_access_cache_then_remote_hydrates_only_missing_daily_tickers(self) -> None:
+    def test_historical_bars_access_replay_ignores_remote_policy_and_stays_cache_only(self) -> None:
         session = create_session()
         try:
             class CountingProvider(StubHistoricalBarProvider):
@@ -295,10 +295,14 @@ class HistoricalReplayTests(unittest.TestCase):
                 policy="cache_then_remote",
             )
 
-            self.assertEqual(["MSFT"], provider.tickers)
-            self.assertEqual("hydrated", result.hydration_summary["status"])
+            self.assertEqual([], provider.tickers)
+            self.assertEqual("skipped_remote_hydration", result.hydration_summary["status"])
+            self.assertEqual("cache_then_remote", result.hydration_summary["requested_policy"])
+            self.assertEqual("cache_only", result.hydration_summary["policy"])
             self.assertEqual(["MSFT"], result.hydration_summary["gap_report"]["missing_tickers"])
-            self.assertEqual(2, result.market_input["covered_ticker_count"])
+            self.assertEqual(1, result.market_input["covered_ticker_count"])
+            self.assertEqual("cache_only", result.coverage_report["policy"])
+            self.assertEqual("cache", result.coverage_report["source"])
         finally:
             session.close()
 
@@ -512,7 +516,7 @@ class HistoricalReplayTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_cache_then_remote_replay_hydrates_before_coverage(self) -> None:
+    def test_cache_then_remote_replay_service_is_forced_to_cache_only(self) -> None:
         session = create_session()
         try:
             class CountingProvider(StubHistoricalBarProvider):
@@ -533,7 +537,7 @@ class HistoricalReplayTests(unittest.TestCase):
             )
             replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
             batch = historical_replay.create_batch(
-                name="Cache then remote replay coverage",
+                name="Forced cache-only replay coverage",
                 mode="research",
                 tickers=["AAPL"],
                 as_of_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
@@ -543,11 +547,13 @@ class HistoricalReplayTests(unittest.TestCase):
 
             input_summary, _ = historical_replay.build_slice_execution_payload(batch.id or 0, slice_row.id or 0)
 
-            self.assertEqual(1, provider.calls)
-            self.assertEqual("stub", input_summary["hydration_summary"]["provider"])
+            self.assertEqual(0, provider.calls)
+            self.assertEqual("cache_then_remote", historical_replay.requested_input_access_policy)
+            self.assertEqual("cache_only", historical_replay.input_access_policy)
+            self.assertEqual("cache_only", input_summary["hydration_summary"]["requested_policy"])
             coverage = input_summary["replay_coverage_report"]
-            self.assertEqual("cache_then_remote", coverage["policy"])
-            self.assertEqual("cache_plus_remote", coverage["source"])
+            self.assertEqual("cache_only", coverage["policy"])
+            self.assertEqual("cache", coverage["source"])
             self.assertIn("input_coverage_hash", coverage)
         finally:
             session.close()
@@ -812,6 +818,14 @@ class HistoricalReplayTests(unittest.TestCase):
             self.assertIsNotNone(service.historical_news_access)
             self.assertIsNotNone(service.context_snapshot_access)
             self.assertIsNotNone(service.fundamental_snapshot_access)
+            self.assertEqual("cache_only", service.input_access_policy)
+        finally:
+            session.close()
+
+    def test_canonical_replay_builder_defaults_to_cache_only_for_vps_safety(self) -> None:
+        session = create_session()
+        try:
+            service = create_historical_replay_service(session)
             self.assertEqual("cache_only", service.input_access_policy)
         finally:
             session.close()
@@ -1097,6 +1111,22 @@ class HistoricalReplayTests(unittest.TestCase):
                 fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
             )
             replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            market_repository = HistoricalMarketDataRepository(session)
+            for ticker, close in [("AAPL", 101.0), ("MSFT", 205.0)]:
+                market_repository.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker=ticker,
+                        timeframe="1d",
+                        bar_time=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                        available_at=replay_as_of,
+                        open_price=close - 1.0,
+                        high_price=close + 1.0,
+                        low_price=close - 2.0,
+                        close_price=close,
+                        volume=1000,
+                        source="fixture",
+                    )
+                )
             HistoricalNewsRepository(session).save_news(
                 "AAPL",
                 "fixture",

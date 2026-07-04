@@ -358,6 +358,30 @@ class BrokerSteeringDecisionRecord(Base, TimestampMixin):
     error_message: Mapped[str] = mapped_column(Text, default="")
 
 
+class RuntimeProcessRecord(Base, TimestampMixin):
+    __tablename__ = "runtime_processes"
+    __table_args__ = (Index("ix_runtime_processes_role_status", "role", "status"),)
+
+    instance_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    hostname: Mapped[str] = mapped_column(String(120), nullable=False)
+    pid: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    graceful_shutdown_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
+    version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+
+    def __repr__(self) -> str:
+        return (
+            f"<RuntimeProcess(instance_id={self.instance_id}, "
+            f"role={self.role}, status={self.status})>"
+        )
+
+
 class WorkerHeartbeatRecord(Base, TimestampMixin):
     __tablename__ = "worker_heartbeats"
 
@@ -631,14 +655,24 @@ class ReplayEligibilityRecord(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    replay_batch_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_batches.id"), index=True)
-    replay_slice_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_slices.id"), index=True)
-    replay_plan_outcome_id: Mapped[int | None] = mapped_column(ForeignKey("replay_plan_outcomes.id"), nullable=True, index=True)
-    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    replay_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("historical_replay_batches.id"), index=True
+    )
+    replay_slice_id: Mapped[int] = mapped_column(
+        ForeignKey("historical_replay_slices.id"), index=True
+    )
+    replay_plan_outcome_id: Mapped[int | None] = mapped_column(
+        ForeignKey("replay_plan_outcomes.id"), nullable=True, index=True
+    )
+    recommendation_plan_id: Mapped[int] = mapped_column(
+        ForeignKey("recommendation_plans.id"), index=True
+    )
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
     ticker: Mapped[str] = mapped_column(String(32), index=True)
     candidate_config_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
-    eligibility_mode: Mapped[str] = mapped_column(String(64), default="current_code_point_in_time_replay", index=True)
+    eligibility_mode: Mapped[str] = mapped_column(
+        String(64), default="current_code_point_in_time_replay", index=True
+    )
     tier: Mapped[str] = mapped_column(String(32), default="tier_c", index=True)
     eligible_for_tuning: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     resolution_source: Mapped[str] = mapped_column(String(64), default="", index=True)
@@ -659,15 +693,23 @@ class ReplayPlanOutcomeRecord(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    replay_batch_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_batches.id"), index=True)
-    replay_slice_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_slices.id"), index=True)
+    replay_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("historical_replay_batches.id"), index=True
+    )
+    replay_slice_id: Mapped[int] = mapped_column(
+        ForeignKey("historical_replay_slices.id"), index=True
+    )
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
-    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(
+        ForeignKey("recommendation_plans.id"), index=True
+    )
     candidate_config_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
     resolution_source: Mapped[str] = mapped_column(String(64), default="")
     outcome: Mapped[str] = mapped_column(String(32), default="open", index=True)
     status: Mapped[str] = mapped_column(String(32), default="open", index=True)
-    evaluated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    evaluated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
     outcome_json: Mapped[str] = mapped_column(Text, default="{}")
 
 

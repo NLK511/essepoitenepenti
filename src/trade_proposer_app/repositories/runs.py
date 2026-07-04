@@ -15,6 +15,8 @@ from trade_proposer_app.persistence.models import (
     RecommendationDecisionSampleRecord,
     RecommendationOutcomeRecord,
     RecommendationPlanRecord,
+    HistoricalReplayBatchRecord,
+    HistoricalReplaySliceRecord,
     RunRecord,
     TickerSignalSnapshotRecord,
     WorkerHeartbeatRecord,
@@ -209,9 +211,85 @@ class RunRepository:
                 record.duration_seconds = (
                     max(0.0, (reference_now - started_at).total_seconds()) if started_at is not None else None
                 )
+            self._sync_historical_replay_slices_for_recovered_runs(stale_records, reference_now=reference_now)
             self.session.commit()
             return [self._to_run_model(record) for record in stale_records]
         return []
+
+    def _sync_historical_replay_slices_for_recovered_runs(self, stale_records: list[RunRecord], *, reference_now: datetime) -> None:
+        stale_run_ids = [record.id for record in stale_records if record.id is not None]
+        if not stale_run_ids:
+            return
+        stale_slices = list(
+            self.session.scalars(
+                select(HistoricalReplaySliceRecord).where(
+                    HistoricalReplaySliceRecord.run_id.in_(stale_run_ids),
+                    HistoricalReplaySliceRecord.status == RunStatus.RUNNING.value,
+                )
+            ).all()
+        )
+        if not stale_slices:
+            return
+        replay_batch_ids: set[int] = set()
+        for slice_record in stale_slices:
+            run_record = next((record for record in stale_records if record.id == slice_record.run_id), None)
+            message = run_record.error_message if run_record is not None else "Recovered stale running run."
+            slice_record.status = RunStatus.FAILED.value
+            slice_record.error_message = message or "Recovered stale running run."
+            timing = self._deserialize_json_object(slice_record.timing_json)
+            timing["recovery"] = {
+                "recovered_at": reference_now.isoformat(),
+                "strategy": "run_stale_recovery_sync",
+                "run_id": slice_record.run_id,
+                "previous_status": RunStatus.RUNNING.value,
+            }
+            slice_record.timing_json = self._serialize_timing(timing)
+            replay_batch_ids.add(slice_record.replay_batch_id)
+        self._refresh_historical_replay_batch_summaries(replay_batch_ids, reference_now=reference_now)
+
+    def _refresh_historical_replay_batch_summaries(self, batch_ids: set[int], *, reference_now: datetime) -> None:
+        for batch_id in batch_ids:
+            rows = self.session.execute(
+                select(HistoricalReplaySliceRecord.status, func.count(HistoricalReplaySliceRecord.id))
+                .where(HistoricalReplaySliceRecord.replay_batch_id == batch_id)
+                .group_by(HistoricalReplaySliceRecord.status)
+            ).all()
+            counts = {status: count for status, count in rows}
+            total = sum(counts.values())
+            status = "planned"
+            completed = int(counts.get("completed", 0) or 0)
+            failed = int(counts.get("failed", 0) or 0)
+            degraded = int(counts.get("degraded", 0) or 0)
+            running = int(counts.get("running", 0) or 0)
+            queued = int(counts.get("queued", 0) or 0)
+            if total == 0 or int(counts.get("planned", 0) or 0) == total:
+                status = "planned"
+            elif running > 0:
+                status = "running"
+            elif queued > 0:
+                status = "queued"
+            elif completed + failed + degraded == total:
+                status = "failed" if failed == total else ("completed_with_warnings" if failed > 0 or degraded > 0 else "completed")
+            batch = self.session.get(HistoricalReplayBatchRecord, batch_id)
+            if batch is None:
+                continue
+            batch.status = status
+            batch.summary_json = json.dumps(
+                {
+                    "slice_count": total,
+                    "status_counts": counts,
+                    "queued_count": counts.get("queued", 0),
+                    "running_count": counts.get("running", 0),
+                    "completed_count": counts.get("completed", 0),
+                    "failed_count": counts.get("failed", 0),
+                    "degraded_count": counts.get("degraded", 0),
+                    "planned_count": counts.get("planned", 0),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            if status in {"completed", "failed", "completed_with_warnings"}:
+                batch.completed_at = reference_now
 
     def claim_queued_run(self, run_id: int, worker_id: str | None = None, lease_seconds: int = 1200) -> Run | None:
         started_at = datetime.now(timezone.utc)

@@ -1,5 +1,8 @@
+import logging
+import tempfile
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -22,6 +25,7 @@ from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.runs import enqueue_enabled_jobs
 from trade_proposer_app.workers.tasks import (
     WorkerRuntimeState,
+    _configure_logging,
     _write_worker_heartbeat,
     process_once,
 )
@@ -150,6 +154,24 @@ class WorkerSchedulerTests(unittest.TestCase):
 
     def create_session(self) -> Session:
         return Session(bind=self.engine)
+
+    def test_worker_configure_logging_writes_worker_id_log_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_dir = Path(temp_dir) / "workers"
+            worker_id = "worker-test-docker"
+            root_logger = logging.getLogger()
+            before_handlers = list(root_logger.handlers)
+            with patch.dict("os.environ", {"WORKER_LOG_DIR": str(log_dir)}, clear=False):
+                _configure_logging(worker_id)
+                logging.getLogger("trade_proposer_app.workers.tasks").info("docker worker log smoke")
+            for handler in list(root_logger.handlers):
+                if handler not in before_handlers:
+                    handler.flush()
+                    handler.close()
+                    root_logger.removeHandler(handler)
+            log_path = log_dir / f"{worker_id}.log"
+            self.assertTrue(log_path.exists())
+            self.assertIn("docker worker log smoke", log_path.read_text())
 
     def test_scheduler_enqueues_only_scheduled_jobs_without_duplicate_active_runs(self) -> None:
         session = self.create_session()

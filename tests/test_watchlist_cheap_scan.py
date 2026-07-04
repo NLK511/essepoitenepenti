@@ -108,3 +108,26 @@ class CheapScanSignalServiceTests(unittest.TestCase):
 
         self.assertEqual(signal.ticker, "MSFT")
         self.assertEqual(signal.diagnostics["data_source"], "database")
+
+    def test_replay_score_never_fetches_remote_when_local_history_is_short_but_valid(self) -> None:
+        local_history = pd.DataFrame(
+            {
+                "Close": [100 + i for i in range(12)],
+                "Volume": [1_000_000 for _ in range(12)],
+            }
+        )
+        calls = {"count": 0}
+
+        def fetcher(*_args, **_kwargs):
+            calls["count"] += 1
+            raise AssertionError("replay cheap scan must not fetch remote history")
+
+        service = CheapScanSignalService(history_fetcher=fetcher, repository=object())
+        service._fetch_from_db = lambda ticker, as_of, is_replay=False: local_history  # type: ignore[method-assign]
+
+        signal = service.score("MSFT", StrategyHorizon.ONE_WEEK, as_of=pd.Timestamp("2024-02-05", tz="UTC").to_pydatetime())
+
+        self.assertEqual(0, calls["count"])
+        self.assertEqual(signal.ticker, "MSFT")
+        self.assertEqual(signal.diagnostics["data_source"], "database")
+        self.assertEqual(0, signal.diagnostics["price_history"]["remote_attempt_count"])

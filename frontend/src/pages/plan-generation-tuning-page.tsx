@@ -116,6 +116,13 @@ function candidateLabel(candidate: PlanGenerationTuningCandidate): string {
   return `${candidate.is_baseline ? "baseline" : s(campaign) || "candidate"} #${candidate.rank ?? candidate.id ?? "?"}`;
 }
 
+function validationDepthLabel(depth: string | undefined): string {
+  if (depth === "rescore_only") return "rescore only";
+  if (depth === "frozen_input_plan_regeneration") return "frozen-input plan regen";
+  if (depth === "full_orchestration_replay") return "full replay";
+  return "depth unknown";
+}
+
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
   const [portfolio, setPortfolio] = useState<ConfigPortfolioItem[] | null>(null);
@@ -427,6 +434,10 @@ export function PlanGenerationTuningPage() {
               </select>
               <button className="button" type="button" disabled={saving !== null || !selectedCandidate} onClick={() => void runWalkForward("candidate")}>{saving === "walk-candidate" ? "… Validating" : "Walk-forward candidate"}</button>
             </div>
+            {selectedCandidate ? <div className="cluster top-gap-small">
+              <Badge tone={selectedCandidate.validation_depth === "full_orchestration_replay" ? "warning" : "neutral"}>{validationDepthLabel(selectedCandidate.validation_depth)}</Badge>
+              <span className="helper-text">{selectedCandidate.validation_depth_reason || "Validation depth explains the cheapest safe recomputation boundary for this candidate."}</span>
+            </div> : null}
           </div>
           <div className="data-card">
             <div className="data-card-header"><div className="data-card-title">Large-search candidates</div><Badge tone="warning">research only</Badge></div>

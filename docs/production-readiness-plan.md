@@ -136,6 +136,19 @@ Exit criteria:
 - Rotation procedure is tested on staging data.
 - Redaction tests include `x-user-key`, `x_user_key`, `api_key`, and `api_secret`.
 
+## Optional single-host Docker deployment track
+
+Docker Compose deployment is an additive path for small single-host operation. It must pass the same safety checks as the host-level supervisor and must not replace `scripts/start-prod.sh` until a separate soak decision is recorded.
+
+Required Docker evidence before use as the main deployment path:
+
+- Compose starts Postgres, API, one worker, and one scheduler.
+- Runtime heartbeats and lifecycle events are visible in authenticated health endpoints.
+- Public `/api/health` remains minimal and internet-safe.
+- Postgres backup and restore-smoke commands pass.
+- Worker scaling remains opt-in and scheduler remains single-instance.
+- Existing `scripts/start-prod.sh` still works unchanged.
+
 ## Phase 5 — Staging soak without real-money mutation
 
 **Goal:** prove the runtime behaves over full market sessions.

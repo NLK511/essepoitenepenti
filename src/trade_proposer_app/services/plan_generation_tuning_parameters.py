@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
+
+
+ValidationDepth = Literal["rescore_only", "frozen_input_plan_regeneration", "full_orchestration_replay"]
+
+_VALIDATION_DEPTH_RANK: dict[ValidationDepth, int] = {
+    "rescore_only": 0,
+    "frozen_input_plan_regeneration": 1,
+    "full_orchestration_replay": 2,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +25,8 @@ class PlanGenerationTuningParameterDefinition:
     step: float
     category: str
     description: str
+    validation_depth: ValidationDepth
+    validation_depth_reason: str
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -28,6 +40,8 @@ class PlanGenerationTuningParameterDefinition:
             "step": self.step,
             "category": self.category,
             "description": self.description,
+            "validation_depth": self.validation_depth,
+            "validation_depth_reason": self.validation_depth_reason,
         }
 
 
@@ -61,6 +75,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="entry",
         description="Expands entry into a bounded range around the baseline entry using the baseline risk distance.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Entry geometry changes require regenerating plans from frozen upstream evidence, but do not require rerunning cheap scan or signal generation.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.entry_band_multiplier",
@@ -73,6 +89,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="entry",
         description="Scales the global entry band before family-specific entry framing is applied.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Entry geometry changes require regenerating plans from frozen upstream evidence, but do not require rerunning cheap scan or signal generation.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="global.headwind_stop_multiplier",
@@ -85,6 +103,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.02,
         category="risk",
         description="Multiplies the stop distance when transmission context_bias is headwind.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Stop geometry changes require regenerating plans and resolving outcomes against reused local outcome bars.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="global.actionable_confidence_floor_percent",
@@ -97,6 +117,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=5.0,
         category="selectivity",
         description="Raises the minimum calibrated confidence required for a plan to stay actionable.",
+        validation_depth="rescore_only",
+        validation_depth_reason="A standalone final actionability-floor change can reuse generated plan geometry and rescore actionable eligibility.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="global.volatility_stop_multiplier",
@@ -109,6 +131,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.04,
         category="risk",
         description="Scales stop distance using the stored volatility proxy so noisy setups can breathe more.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Stop geometry changes require regenerating plans and resolving outcomes against reused local outcome bars.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.breakout.stop_distance_multiplier",
@@ -121,6 +145,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="risk",
         description="Scales breakout/breakdown stop distance relative to baseline recommendation risk.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Setup-family stop geometry changes require regenerating plans and resolving outcomes from frozen inputs.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.breakout.take_profit_distance_multiplier",
@@ -133,6 +159,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="reward",
         description="Scales breakout/breakdown take-profit distance relative to baseline recommendation reward.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Take-profit geometry changes require regenerating plans and resolving outcomes from frozen inputs.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.mean_reversion.stop_distance_multiplier",
@@ -145,6 +173,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="risk",
         description="Scales mean-reversion stop distance relative to baseline recommendation risk.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Setup-family stop geometry changes require regenerating plans and resolving outcomes from frozen inputs.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.mean_reversion.take_profit_distance_multiplier",
@@ -157,6 +187,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="reward",
         description="Scales mean-reversion take-profit distance relative to baseline recommendation reward.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Take-profit geometry changes require regenerating plans and resolving outcomes from frozen inputs.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.catalyst_follow_through.take_profit_distance_multiplier",
@@ -169,6 +201,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="reward",
         description="Scales catalyst follow-through take-profit distance relative to baseline recommendation reward.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Take-profit geometry changes require regenerating plans and resolving outcomes from frozen inputs.",
     ),
     PlanGenerationTuningParameterDefinition(
         key="setup_family.macro_beneficiary_loser.take_profit_distance_multiplier",
@@ -181,11 +215,58 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         step=0.05,
         category="reward",
         description="Scales macro beneficiary/loser take-profit distance relative to baseline recommendation reward.",
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason="Take-profit geometry changes require regenerating plans and resolving outcomes from frozen inputs.",
     ),
 )
 
 PARAMETER_DEFAULTS: dict[str, float] = {item.key: item.default for item in PARAMETER_DEFINITIONS}
 PARAMETER_BY_KEY: dict[str, PlanGenerationTuningParameterDefinition] = {item.key: item for item in PARAMETER_DEFINITIONS}
+
+
+def candidate_validation_depth(changed_keys: list[str] | tuple[str, ...] | set[str]) -> dict[str, object]:
+    """Return the cheapest safe validation depth for a candidate.
+
+    Mixed candidates inherit the deepest required recomputation boundary. Unknown keys fail
+    closed as full orchestration and are reported for schema validation to reject earlier.
+    """
+    normalized_keys = sorted({str(key) for key in changed_keys if str(key)})
+    if not normalized_keys:
+        return {
+            "validation_depth": "rescore_only",
+            "validation_depth_reason": "Baseline/no-op candidate does not require recomputation.",
+            "unknown_keys": [],
+            "parameter_depths": {},
+        }
+    selected_depth: ValidationDepth = "rescore_only"
+    unknown_keys: list[str] = []
+    parameter_depths: dict[str, dict[str, str]] = {}
+    reasons: list[str] = []
+    for key in normalized_keys:
+        definition = PARAMETER_BY_KEY.get(key)
+        if definition is None:
+            selected_depth = "full_orchestration_replay"
+            unknown_keys.append(key)
+            parameter_depths[key] = {
+                "validation_depth": "full_orchestration_replay",
+                "validation_depth_reason": "Unknown parameter key; fail closed until schema validation rejects or maps it.",
+            }
+            reasons.append(f"{key}: unknown key requires fail-closed handling")
+            continue
+        parameter_depths[key] = {
+            "validation_depth": definition.validation_depth,
+            "validation_depth_reason": definition.validation_depth_reason,
+        }
+        reasons.append(f"{key}: {definition.validation_depth_reason}")
+        if _VALIDATION_DEPTH_RANK[definition.validation_depth] > _VALIDATION_DEPTH_RANK[selected_depth]:
+            selected_depth = definition.validation_depth
+    return {
+        "validation_depth": selected_depth,
+        "validation_depth_reason": " ".join(reasons),
+        "unknown_keys": unknown_keys,
+        "parameter_depths": parameter_depths,
+    }
+
 
 EXPLORATION_CAMPAIGNS: tuple[PlanGenerationExplorationCampaign, ...] = (
     PlanGenerationExplorationCampaign(

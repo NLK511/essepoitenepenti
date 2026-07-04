@@ -117,10 +117,13 @@ Implemented today:
 - historical news items support `available_at`, `ingested_at`, and inferred-availability metadata for legacy/provider-limited rows
 - historical replay batches/slices exist
 - historical replay can hydrate/build market input summaries
+- historical replay execution is cache-only: replay must never fetch remote bars during slice execution or cheap-scan replay; operators must run explicit bars-refresh/backfill jobs before replay when coverage is missing
+- replay coverage gaps are watchlist-quality evidence: tickers with repeated or material bar gaps should be flagged for operator review and removed from default watchlists when gaps make replay evidence too thin
 - historical replay coverage reports include point-in-time bars, news, context snapshots, and fundamental snapshots
 - historical replay slice execution invokes watchlist orchestration for plan generation when that service is configured, passing the slice `as_of`; replay-generated signal and plan `computed_at` values must equal the slice `as_of` rather than wall-clock execution time so outcome resolution remains point-in-time correct
 - replay-generated signal diagnostics and plan evidence/signal payloads receive replay provenance with batch id, slice id, `as_of`, code/settings/input hashes, coverage summary, and input warnings
 - replay execution can apply a scoped plan-generation tuning config override from batch config without mutating the live active config, and unknown keys are rejected through the parameter schema
+- replay-mode news and social/signal input access is local-only: ticker/topic news queries use `historical_news` bounded by replay time and skip all remote providers, while replay signal construction skips remote social providers unless local signal artifacts already exist
 - replay-generated plans are resolved through the canonical evaluation path and stored separately in `replay_plan_outcomes`; persisted intraday bars that cover the requested session date are reused instead of refetching from Yahoo merely because the replay resolution timestamp is end-of-day
 - replay-generated plan/outcome cases produce `replay_eligibility_records` with Tier A/B/C/ineligible quality labels, tuning eligibility, rejection reasons, and diagnostics
 - plan-generation tuning supports `point_in_time_replay` and `wide_point_in_time_replay` modes that aggregate candidate metrics from existing replay eligibility records, include the baseline candidate, are repeatable for unchanged replay artifacts, and reject stale replay artifacts when code/settings versions no longer match
@@ -134,6 +137,8 @@ Implemented today:
 - `ActionabilityFloorCalibrationService` and `scripts/rescore_replay_actionability_floors.py` compare downstream actionability floors against one existing replay batch and report actionability, outcomes, ticker/setup concentration, and EV without rerunning replay; the weekly default job searches 40%-60% and emits a paper-only proposal/no-change recommendation
 
 Not implemented yet:
+- frozen-input plan-regeneration validation path that reuses persisted upstream replay artifacts for geometry/framing candidates without rerunning cheap scan, deep analysis, signal generation, or context construction
+- shared multi-candidate slice execution over one loaded frozen artifact set
 - full production gate policy for unattended auto-promotion beyond the current replay Tier A and execution-required fail-closed gates
 - full replay artifact reuse across per-candidate slice execution, beyond the current replay eligibility aggregation keys
 - auto-promotion based on replay Tier A evidence

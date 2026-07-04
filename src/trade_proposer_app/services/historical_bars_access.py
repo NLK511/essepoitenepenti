@@ -52,7 +52,11 @@ class HistoricalBarsAccessService:
         as_of: datetime,
         policy: str = "cache_then_remote",
     ) -> ReplayMarketInputAccessResult:
-        normalized_policy: InputAccessPolicy = normalize_input_access_policy(policy)
+        requested_policy: InputAccessPolicy = normalize_input_access_policy(policy)
+        # Historical replay is intentionally cache-only. Remote bars fetched today
+        # cannot reconstruct what was available at the replay timestamp and can
+        # overload constrained VPS/provider limits during long replay batches.
+        normalized_policy: InputAccessPolicy = "cache_only"
         hydration_summary = self._hydrate_if_allowed(
             tickers=tickers,
             batch_start=batch_start,
@@ -60,7 +64,8 @@ class HistoricalBarsAccessService:
             policy=normalized_policy,
             timeframe="1d",
         )
-        source = "cache_plus_remote" if input_policy_allows_remote_fetch(normalized_policy) else "cache"
+        hydration_summary["requested_policy"] = requested_policy
+        source = "cache"
         market_input = self.market_data.build_slice_market_input(tickers=tickers, as_of=as_of)
         coverage_report = self.market_data.build_replay_coverage_report(
             tickers=tickers,

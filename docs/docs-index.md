@@ -35,11 +35,14 @@ These are the primary narrative source of truth for the product today:
 ## Active plans and operating trackers
 
 - `production-readiness-plan.md` — production hardening, staging soak, external broker gates, and rollout ladder
+- `docker-deployment-implementation-plan.md` — optional single-host Docker Compose deployment checklist
 - `codebase-simplification-plan.md` — lightweight behavior-preserving refactor maintenance backlog
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
 - `industry-context-improvement-plan.md` — industry-context evidence-quality and post-ontology role review
 - `historical-playback-tuning-plan.md` — point-in-time replay and replay-based tuning implementation tracker
+- `tuning-workflow-ux-implementation-plan.md` — candidate discovery-to-promotion workflow implementation plan
+- `replay-validation-efficiency-remediation-plan.md` — replay validation depth, frozen-input reuse, and local-only input remediation plan
 
 ## Specs directory
 
@@ -58,6 +61,7 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 - `signal-gating-tuning-guide.md`
 - `specs/plan-generation-tuning-spec.md`
 - `specs/historical-playback-tuning-spec.md`
+- `specs/tuning-workflow-ux-spec.md`
 - `specs/large-parameter-search-spec.md`
 - `specs/gating-severity-alert-spec.md`
 
@@ -90,6 +94,7 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 - `specs/dashboard-aggregate-performance-spec.md`
 - `specs/observability-spec.md`
 - `specs/production-supervision-spec.md`
+- `specs/docker-deployment-spec.md`
 
 ## Archive
 

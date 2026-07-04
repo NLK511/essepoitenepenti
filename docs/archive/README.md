@@ -39,6 +39,8 @@ For those, start with:
 ## Recently archived implementation records and audits
 
 - `implementation-plans/multi-broker-etoro-implementation-plan.md`
+- `implementation-plans/steering-broker-refresh-remediation-plan.md`
+- `implementation-plans/steering-reconciliation-freshness-remediation-plan.md`
 - `implementation-plans/audit-remediation-and-autonomy-readiness-plan.md`
 - `implementation-plans/lean-architecture-and-docs-reconciliation-plan.md`
 - `implementation-plans/ui-attention-audit-2026-05-30.md`

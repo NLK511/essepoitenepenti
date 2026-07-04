@@ -41,7 +41,7 @@ Useful setup options:
 Local URLs:
 - frontend: `http://localhost:5173/`
 - API health: `http://localhost:8000/api/health`
-- preflight: `http://localhost:8000/api/health/preflight`
+- preflight: `http://localhost:8000/api/health/preflight` (authenticated when auth is enabled)
 
 For full setup and troubleshooting, see `docs/getting-started.md`.
 
@@ -75,6 +75,29 @@ POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432
 GitHub workflow:
 - file: `.github/workflows/postgres-integration.yml`
 - trigger: manual `workflow_dispatch`
+
+## Optional Docker single-host launch
+
+Docker Compose deployment is available as an additive path; it does not replace the current startup scripts.
+
+```bash
+cp .env.docker.example .env.docker
+# edit .env.docker and replace all unsafe secrets
+scripts/docker-up.sh
+```
+
+The stack runs Postgres, API, one worker, and one scheduler. Worker scaling is opt-in:
+
+```bash
+scripts/docker-up.sh --scale worker=2
+```
+
+Do not scale the scheduler above one instance. Backups are written under `./backups` with:
+
+```bash
+scripts/docker-backup.sh
+scripts/docker-restore-smoke.sh
+```
 
 ## Production-style local launch
 

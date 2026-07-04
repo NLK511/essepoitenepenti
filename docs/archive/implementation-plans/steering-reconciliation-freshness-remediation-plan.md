@@ -1,6 +1,6 @@
 # Steering reconciliation freshness remediation plan
 
-**Status:** active remediation plan
+**Status:** completed and archived remediation plan
 
 ## Problem
 

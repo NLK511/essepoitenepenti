@@ -46,6 +46,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
+from trade_proposer_app.services.runtime_supervision import RuntimeSupervisionService
 
 
 class StubAppPreflightService:
@@ -466,10 +467,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             response = await client.get("/api/health")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["status"], "degraded")
-        self.assertEqual(payload["preflight"]["status"], "warning")
-        self.assertEqual(payload["context_snapshots"]["macro"]["status"], "warning")
-        self.assertEqual(payload["context_snapshots"]["industry"]["status"], "warning")
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["api"], "ok")
+        self.assertEqual(payload["database"], "ok")
+        self.assertIn("timestamp", payload)
+        self.assertNotIn("preflight", payload)
+        self.assertNotIn("workers", payload)
 
     async def test_preflight_health_endpoint(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -481,6 +484,49 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["engine"], "internal_price_pipeline")
         self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
         self.assertTrue(any(check["name"] == "context_snapshot:macro" for check in payload["checks"]))
+
+    async def test_runtime_health_requires_auth_when_auth_is_enabled(self) -> None:
+        settings.single_user_auth_enabled = True
+        settings.single_user_auth_token = "runtime-test-token"
+        settings.single_user_auth_allowlist_paths = "/api/health,/api/login"
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            public_response = await client.get("/api/health")
+            unauthenticated_response = await client.get("/api/health/runtime")
+            authenticated_response = await client.get(
+                "/api/health/runtime",
+                headers={"Authorization": "Bearer runtime-test-token"},
+            )
+
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(unauthenticated_response.status_code, 401)
+        self.assertEqual(authenticated_response.status_code, 200)
+
+    async def test_runtime_health_endpoint_lists_processes_and_events(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            service = RuntimeSupervisionService(session)
+            service.register_process_start(role="worker", instance_id="worker-runtime-test")
+            service.heartbeat(instance_id="worker-runtime-test", metadata={"api_secret": "hidden"})
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/health/runtime")
+            events_response = await client.get("/api/health/runtime/events")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["runtime"]["counts"]["worker"], 1)
+        self.assertEqual(payload["runtime"]["active_processes"][0]["instance_id"], "worker-runtime-test")
+        self.assertEqual(
+            payload["runtime"]["active_processes"][0]["metadata"]["api_secret"], "[redacted]"
+        )
+        self.assertEqual(events_response.status_code, 200)
+        self.assertTrue(
+            any(event["event_type"] == "process_started" for event in events_response.json()["events"])
+        )
 
     async def test_active_workers_endpoint_lists_worker_heartbeats(self) -> None:
         session = Session(bind=self.engine)

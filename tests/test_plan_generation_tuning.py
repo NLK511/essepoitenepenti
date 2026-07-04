@@ -574,7 +574,7 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
 
         self.assertTrue(run.summary["candidate_replay_execution_requested"])
         self.assertEqual(1, run.summary["candidate_replay_execution"]["bridge"]["candidate_count"])
-        self.assertEqual(4, run.summary["candidate_replay_execution"]["executed_run_count"])
+        self.assertEqual(2, run.summary["candidate_replay_execution"]["executed_run_count"])
         self.assertEqual(
             run.summary["candidate_replay_execution"]["executed_run_ids"],
             fake_execution.executed_run_ids,
@@ -618,7 +618,7 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         )
 
         self.assertEqual("completed", payload["status"])
-        self.assertEqual(4, payload["executed_run_count"])
+        self.assertEqual(2, payload["executed_run_count"])
         self.assertEqual(payload["executed_run_ids"], fake_execution.executed_run_ids)
         self.assertEqual(1, payload["bridge"]["candidate_count"])
         self.assertIn("aggregate", payload)

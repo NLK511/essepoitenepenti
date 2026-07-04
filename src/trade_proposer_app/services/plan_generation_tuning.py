@@ -54,6 +54,7 @@ from trade_proposer_app.services.outcome_population import summarize_outcome_pop
 from trade_proposer_app.services.replay_evidence_quality import replay_outcome_population_rejection_reasons
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     PARAMETER_BY_KEY,
+    candidate_validation_depth,
     exploration_campaigns,
     normalize_plan_generation_tuning_config,
     parameter_definitions,
@@ -2306,6 +2307,7 @@ class PlanGenerationTuningService:
             "config": item.config,
             "changed_keys": item.changed_keys,
             "campaign": PlanGenerationTuningService._candidate_campaign_name(item.changed_keys),
+            **candidate_validation_depth(item.changed_keys),
             "search_actionable_count": item.search_actionable_count,
             "search_win_count": item.search_win_count,
             "search_win_rate_percent": round(item.search_win_rate * 100.0, 2),

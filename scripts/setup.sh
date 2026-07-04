@@ -245,7 +245,7 @@ DATABASE_URL=${database_url}
 SECRET_KEY=${secret_key}
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=change-me
-SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/login
+SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/login
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 EOF

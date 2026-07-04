@@ -32,7 +32,7 @@ class SignalIngestionService:
             bundle.feeds_used.extend(news_bundle.feeds_used)
             bundle.feed_errors.extend(news_bundle.feed_errors)
             bundle.coverage["news_count"] = len(news_bundle.articles)
-        if self.social_service is not None:
+        if self.social_service is not None and request_mode != "replay":
             social_bundle = self.social_service.fetch(ticker, start_at=start_at, end_at=end_at)
             bundle.items.extend(social_bundle.items)
             bundle.feeds_used.extend(social_bundle.feeds_used)
@@ -40,6 +40,12 @@ class SignalIngestionService:
             bundle.coverage.update(social_bundle.coverage)
             if social_bundle.query_diagnostics:
                 bundle.query_diagnostics.update(social_bundle.query_diagnostics)
+        elif self.social_service is not None:
+            bundle.query_diagnostics["social"] = {
+                "request_mode": "replay",
+                "provider_fetch_skipped": True,
+                "provider_fetch_skip_reason": "replay uses local signal/news artifacts only",
+            }
         bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         bundle.coverage.setdefault("news_count", 0)

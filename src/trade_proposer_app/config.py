@@ -11,6 +11,9 @@ class AppSettings(BaseSettings):
     weights_file_path: str = ""
     run_stale_after_seconds: int = 1800
     worker_heartbeat_interval_seconds: int = 30
+    runtime_process_heartbeat_interval_seconds: int = 30
+    runtime_process_stale_after_seconds: int = 90
+    historical_replay_input_access_policy: str = "cache_only"
     single_user_auth_enabled: bool = True
     single_user_auth_token: str = "change-me"
     single_user_auth_allowlist_paths: str | None = None

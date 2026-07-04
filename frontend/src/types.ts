@@ -346,14 +346,17 @@ export interface PreflightCheck {
 
 export interface AppHealthResponse {
   status: string;
-  app: string;
-  env: string;
-  preflight: {
+  api?: string;
+  database?: string;
+  timestamp?: string;
+  app?: string;
+  env?: string;
+  preflight?: {
     status: string;
     engine: string;
     checked_at: string;
   };
-  workers: {
+  workers?: {
     status: string;
     count: number;
     details: string[];
@@ -1200,6 +1203,10 @@ export interface PlanGenerationTuningCandidate {
   promotion_eligible: boolean;
   config: Record<string, unknown>;
   changed_keys: string[];
+  validation_depth?: string;
+  validation_depth_reason?: string;
+  unknown_keys?: string[];
+  parameter_depths?: Record<string, { validation_depth: string; validation_depth_reason: string }>;
   score_summary: Record<string, unknown>;
   metric_breakdown: Record<string, unknown>;
   sample_breakdown: Record<string, unknown>;

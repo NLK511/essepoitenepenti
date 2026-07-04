@@ -1,30 +1,57 @@
 import logging
+import os
 import traceback
 from datetime import datetime, timedelta, timezone
 from time import sleep
 
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.runs import enqueue_enabled_jobs
-
+from trade_proposer_app.services.runtime_supervision import (
+    RuntimeSupervisionService,
+    build_runtime_instance_id,
+)
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 logger = logging.getLogger(__name__)
 
 
 POLL_SECONDS = 30
-def _write_scheduler_heartbeat(now: datetime | None = None, *, last_successful_enqueue_count: int | None = None, last_error: str | None = None) -> None:
+
+
+def _write_scheduler_heartbeat(
+    now: datetime | None = None,
+    *,
+    last_successful_enqueue_count: int | None = None,
+    last_error: str | None = None,
+    instance_id: str | None = None,
+) -> None:
     session = SessionLocal()
     try:
         repository = SettingsRepository(session)
         timestamp = (now or datetime.now(timezone.utc)).isoformat()
         scheduler_settings = SettingsDomainService(repository=repository).scheduler_settings()
-        repository.set_settings({
-            "scheduler_last_poll_at": timestamp,
-            "scheduler_last_success_at": timestamp if last_error is None else (scheduler_settings.last_success_at or ""),
-            "scheduler_last_enqueue_count": "" if last_successful_enqueue_count is None else str(int(last_successful_enqueue_count)),
-            "scheduler_last_error": last_error or "",
-        })
+        repository.set_settings(
+            {
+                "scheduler_last_poll_at": timestamp,
+                "scheduler_last_success_at": timestamp
+                if last_error is None
+                else (scheduler_settings.last_success_at or ""),
+                "scheduler_last_enqueue_count": ""
+                if last_successful_enqueue_count is None
+                else str(int(last_successful_enqueue_count)),
+                "scheduler_last_error": last_error or "",
+            }
+        )
+        if instance_id:
+            RuntimeSupervisionService(session).heartbeat(
+                instance_id=instance_id,
+                status="healthy" if last_error is None else "degraded",
+                metadata={
+                    "last_successful_enqueue_count": last_successful_enqueue_count,
+                    "last_error": last_error or "",
+                },
+            )
     finally:
         session.close()
 
@@ -45,15 +72,35 @@ def _seconds_until_next_poll(now: datetime | None = None) -> float:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+    instance_id = os.getenv("SCHEDULER_INSTANCE_ID") or build_runtime_instance_id("scheduler")
+    session = SessionLocal()
+    try:
+        RuntimeSupervisionService(session).register_process_start(
+            role="scheduler", instance_id=instance_id
+        )
+    finally:
+        session.close()
     logger.info("scheduler started: polling for due jobs")
-    while True:
+    try:
+        while True:
+            try:
+                count = enqueue_enabled_jobs()
+                logger.info("scheduler enqueue pass finished: enqueued=%s", count)
+                _write_scheduler_heartbeat(
+                    last_successful_enqueue_count=count,
+                    instance_id=instance_id,
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging for live daemon usage
+                logger.exception("scheduler enqueue pass failed: %s", exc)
+                _write_scheduler_heartbeat(last_error=str(exc), instance_id=instance_id)
+                traceback.print_exc()
+            sleep(_seconds_until_next_poll())
+    finally:
+        session = SessionLocal()
         try:
-            run_once()
-        except Exception as exc:  # pragma: no cover - defensive logging for live daemon usage
-            logger.exception("scheduler enqueue pass failed: %s", exc)
-            _write_scheduler_heartbeat(last_error=str(exc))
-            traceback.print_exc()
-        sleep(_seconds_until_next_poll())
+            RuntimeSupervisionService(session).graceful_shutdown(instance_id=instance_id)
+        finally:
+            session.close()
 
 
 if __name__ == "__main__":

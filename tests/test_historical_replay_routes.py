@@ -103,8 +103,8 @@ class HistoricalReplayRouteTests(unittest.IsolatedAsyncioTestCase):
             detail_response = await client.get(f"/api/historical-replay/batches/{batch['id']}")
             self.assertEqual(200, detail_response.status_code)
             detail_payload = detail_response.json()
-            self.assertEqual(2, len(detail_payload["slices"]))
-            self.assertEqual(2, detail_payload["summary"]["slice_count"])
+            self.assertEqual(1, len(detail_payload["slices"]))
+            self.assertEqual(1, detail_payload["summary"]["slice_count"])
             self.assertEqual(20, len(detail_payload["resolved_tickers"]))
 
             coverage_response = await client.get(
@@ -128,5 +128,5 @@ class HistoricalReplayRouteTests(unittest.IsolatedAsyncioTestCase):
             execute_response = await client.post(f"/api/historical-replay/batches/{batch['id']}/execute")
             self.assertEqual(200, execute_response.status_code)
             execution_payload = execute_response.json()
-            self.assertEqual(2, execution_payload["queued_run_count"])
-            self.assertEqual(2, len(execution_payload["run_ids"]))
+            self.assertEqual(1, execution_payload["queued_run_count"])
+            self.assertEqual(1, len(execution_payload["run_ids"]))

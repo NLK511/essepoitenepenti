@@ -473,6 +473,21 @@ class BrokerPosition(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class RuntimeProcess(BaseModel):
+    instance_id: str
+    role: str
+    hostname: str
+    pid: int
+    status: str = "healthy"
+    started_at: datetime
+    last_heartbeat_at: datetime
+    graceful_shutdown_at: datetime | None = None
+    version: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class WorkerHeartbeat(BaseModel):
     worker_id: str
     hostname: str

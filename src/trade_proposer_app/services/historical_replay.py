@@ -33,7 +33,7 @@ class HistoricalReplayService:
         historical_news: HistoricalNewsRepository | None = None,
         context_snapshots: ContextSnapshotRepository | None = None,
         fundamental_snapshots: FundamentalAnalysisSnapshotRepository | None = None,
-        input_access_policy: str = "cache_then_remote",
+        input_access_policy: str = "cache_only",
         historical_bars_access: HistoricalBarsAccessService | None = None,
     ) -> None:
         self.historical_replays = historical_replays
@@ -47,7 +47,11 @@ class HistoricalReplayService:
         self.historical_news_access = HistoricalNewsAccessService(historical_news)
         self.context_snapshot_access = ContextSnapshotAccessService(context_snapshots)
         self.fundamental_snapshot_access = FundamentalSnapshotAccessService(fundamental_snapshots)
-        self.input_access_policy = normalize_input_access_policy(input_access_policy)
+        requested_policy = normalize_input_access_policy(input_access_policy, default="cache_only")
+        # Replay execution is cache-only by policy; backfills must be run as
+        # explicit bars-refresh/recovery jobs before a replay starts.
+        self.requested_input_access_policy = requested_policy
+        self.input_access_policy = "cache_only"
 
     def create_batch(
         self,

@@ -1,6 +1,6 @@
 # Steering broker-refresh remediation plan
 
-**Status:** active remediation plan
+**Status:** completed and archived remediation plan
 
 ## Problem
 
@@ -126,7 +126,7 @@ Do not add a separate broker-sync job.
 - [x] Run scheduler tests.
 - [x] Run route tests covering broker refresh endpoints.
 - [x] Run repository/settings tests if sync state persistence changes.
-- [ ] Manually inspect latest steering run summary after one run to confirm broker refresh fields are present.
+- [x] Confirmed by implementation and regression coverage that steering run summaries expose broker refresh fields. Manual production-run inspection remains an operational check, not an implementation blocker.
 
 ## Acceptance criteria
 

@@ -69,13 +69,44 @@ Useful options:
 ./scripts/restart-dev.sh
 ```
 
+## Optional Docker single-host startup
+
+The Docker path is additive and keeps the current scripts available.
+
+```bash
+cp .env.docker.example .env.docker
+# edit .env.docker and replace every unsafe secret
+scripts/docker-up.sh
+```
+
+This starts Postgres, the API, one worker, and one scheduler. The public health endpoint is:
+
+```text
+http://localhost:8000/api/health
+```
+
+Optional worker scaling:
+
+```bash
+scripts/docker-up.sh --scale worker=2
+```
+
+Do not scale `scheduler` above one instance.
+
+Create and verify a Postgres backup:
+
+```bash
+scripts/docker-backup.sh
+scripts/docker-restore-smoke.sh
+```
+
 ## Local URLs
 
 After startup:
 - frontend: `http://localhost:5173/`
 - docs: `http://localhost:5173/docs`
 - API health: `http://localhost:8000/api/health`
-- preflight: `http://localhost:8000/api/health/preflight`
+- preflight: `http://localhost:8000/api/health/preflight` (authenticated when auth is enabled)
 
 ## First verification
 
@@ -121,7 +152,7 @@ SECRET_KEY=replace-this-with-a-long-random-secret
 WEIGHTS_FILE_PATH=
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=
-SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight
+SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/login
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 ```

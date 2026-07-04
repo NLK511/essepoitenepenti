@@ -893,6 +893,13 @@ class NewsIngestionService:
         )
         if database_bundle is not None:
             return database_bundle
+        if request_mode == "replay":
+            return self._finalize_ticker_replay_local_only_bundle(
+                bundle,
+                ticker,
+                provider_results=provider_results,
+                cache_key=cache_key,
+            )
 
         providers, selection_errors = self._providers_for_request(
             query_type="ticker",
@@ -1010,6 +1017,31 @@ class NewsIngestionService:
                 end_at=end_at,
                 limit=limit,
             )
+
+    def _finalize_ticker_replay_local_only_bundle(
+        self,
+        bundle: NewsBundle,
+        ticker: str,
+        *,
+        provider_results: list[dict[str, object]],
+        cache_key: tuple[object, ...] | None,
+    ) -> NewsBundle:
+        bundle.query_diagnostics = self._build_ticker_query_diagnostics(
+            request_mode="replay",
+            provider_results=provider_results,
+            feeds_used=bundle.feeds_used,
+            article_count=len(bundle.articles),
+        )
+        bundle.query_diagnostics["database_article_count"] = self._database_article_count(provider_results)
+        bundle.query_diagnostics["provider_fetch_skipped"] = True
+        bundle.query_diagnostics["provider_fetch_skip_reason"] = "replay uses local historical_news only"
+        for result in provider_results:
+            if result.get("provider") == "database" and result.get("available_at_filter"):
+                bundle.query_diagnostics["database_available_at_filter"] = result.get("available_at_filter")
+                break
+        self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
+        self._cache_windowed_bundle(cache_key, bundle)
+        return bundle
 
     def _finalize_ticker_no_provider_bundle(
         self,
@@ -1295,6 +1327,13 @@ class NewsIngestionService:
         )
         if database_bundle is not None:
             return database_bundle
+        if request_mode == "replay":
+            return self._finalize_topic_replay_local_only_bundle(
+                bundle,
+                topic,
+                provider_results=provider_results,
+                cache_key=cache_key,
+            )
 
         providers, selection_errors = self._providers_for_request(
             query_type="topic",
@@ -1377,6 +1416,32 @@ class NewsIngestionService:
         bundle.query_diagnostics["database_available_at_filter"] = end_at.isoformat() if request_mode == "replay" and end_at else None
         bundle.query_diagnostics["provider_fetch_skipped"] = True
         bundle.query_diagnostics["provider_fetch_skip_reason"] = "database coverage satisfied minimum"
+        self._record_provider_observability(subject=topic, query_type="topic", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
+        self._cache_windowed_bundle(cache_key, bundle)
+        return bundle
+
+    def _finalize_topic_replay_local_only_bundle(
+        self,
+        bundle: NewsBundle,
+        topic: str,
+        *,
+        provider_results: list[dict[str, object]],
+        cache_key: tuple[object, ...] | None,
+    ) -> NewsBundle:
+        bundle.query_diagnostics = self._build_query_diagnostics(
+            query_type="topic",
+            request_mode="replay",
+            provider_results=provider_results,
+            feeds_used=bundle.feeds_used,
+            article_count=len(bundle.articles),
+        )
+        bundle.query_diagnostics["database_article_count"] = self._database_article_count(provider_results)
+        bundle.query_diagnostics["provider_fetch_skipped"] = True
+        bundle.query_diagnostics["provider_fetch_skip_reason"] = "replay uses local historical_news only"
+        for result in provider_results:
+            if result.get("provider") == "database" and result.get("available_at_filter"):
+                bundle.query_diagnostics["database_available_at_filter"] = result.get("available_at_filter")
+                break
         self._record_provider_observability(subject=topic, query_type="topic", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
         self._cache_windowed_bundle(cache_key, bundle)
         return bundle
@@ -1508,6 +1573,15 @@ class NewsIngestionService:
         bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         bundle.articles = bundle.articles[: self.max_articles]
+        if request_mode == "replay":
+            bundle.query_diagnostics = {
+                "query_type": "topics",
+                "request_mode": "replay",
+                "provider_fetch_skipped": True,
+                "provider_fetch_skip_reason": "replay uses local historical_news only",
+                "article_count": len(bundle.articles),
+                "feeds_used": bundle.feeds_used,
+            }
         return bundle
 
     def fetch_many(

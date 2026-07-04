@@ -4,6 +4,53 @@
 
 This document lists the standalone scripts available in the `scripts/` directory for maintenance, hydration, and regression testing.
 
+## Docker single-host deployment helpers
+
+These scripts are optional helpers around the single `docker-compose.yml` deployment path. They require `.env.docker` to exist.
+
+### `scripts/docker-up.sh`
+Starts the Docker Compose stack.
+
+```bash
+scripts/docker-up.sh
+```
+
+Pass extra Compose arguments after the script name. Example worker scaling:
+
+```bash
+scripts/docker-up.sh --scale worker=2
+```
+
+Do not scale `scheduler` above one instance.
+
+### `scripts/docker-down.sh`
+Stops the Docker Compose stack.
+
+```bash
+scripts/docker-down.sh
+```
+
+### `scripts/docker-logs.sh`
+Follows Docker Compose logs.
+
+```bash
+scripts/docker-logs.sh api worker scheduler
+```
+
+### `scripts/docker-backup.sh`
+Creates a compressed custom-format Postgres backup under `./backups`.
+
+```bash
+scripts/docker-backup.sh
+```
+
+### `scripts/docker-restore-smoke.sh`
+Restores a backup into a temporary Postgres database and runs Postgres validation.
+
+```bash
+scripts/docker-restore-smoke.sh backups/trade_proposer_YYYYMMDDTHHMMSSZ.dump
+```
+
 ## Data Hydration
 
 ### `scripts/hydrate_daily_bars.py`

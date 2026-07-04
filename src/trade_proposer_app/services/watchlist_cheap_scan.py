@@ -159,7 +159,7 @@ class CheapScanSignalService:
             history = self._fetch_from_db(ticker, as_of or datetime.now(timezone.utc), is_replay=is_replay)
             if not history.empty:
                 history_source = "database"
-        if history.empty or len(history) < self.REMOTE_FALLBACK_MIN_BARS:
+        if not is_replay and (history.empty or len(history) < self.REMOTE_FALLBACK_MIN_BARS):
             remote_history, remote_attempt_count, remote_errors = self._fetch_remote_history_with_retry(ticker, period, as_of=as_of)
             if not remote_history.empty and len(remote_history) > len(history):
                 history = remote_history

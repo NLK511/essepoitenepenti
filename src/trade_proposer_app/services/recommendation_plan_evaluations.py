@@ -964,7 +964,8 @@ class RecommendationPlanEvaluationService:
                 )
                 return persisted
             logger.info(
-                "load_price_history persisted history incomplete; falling back to yfinance ticker=%s plan_ids=%s intraday_only=%s rows=%s first=%s last=%s end=%s",
+                "load_price_history persisted history incomplete; %s ticker=%s plan_ids=%s intraday_only=%s rows=%s first=%s last=%s end=%s",
+                "remote fetch disabled" if not allow_remote_fetch else "falling back to yfinance",
                 ticker,
                 plan_ids,
                 intraday_only,

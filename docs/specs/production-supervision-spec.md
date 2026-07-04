@@ -9,6 +9,8 @@ Production startup must keep the operator UI/API available when a background hel
 
 ## Current implementation
 
+This spec covers the host-level `scripts/start-prod.sh` supervisor. Optional Docker Compose deployment is additive and governed by `docker-deployment-spec.md`; it does not replace this implemented path.
+
 `scripts/start-prod.sh` starts and supervises three processes:
 
 - API (`uvicorn`)

@@ -1123,7 +1123,7 @@ class ProposalService:
         context.update(self._build_news_context_base())
         effective_now, start_at, request_mode = self._news_context_window(as_of)
         self._apply_signal_context(context, ticker, start_at=start_at, effective_now=effective_now, request_mode=request_mode)
-        social_scope_breakdown = self._apply_social_context(context, ticker, start_at=start_at, effective_now=effective_now)
+        social_scope_breakdown = self._apply_social_context(context, ticker, start_at=start_at, effective_now=effective_now, request_mode=request_mode)
         if self.news_service is None:
             return self._apply_no_news_service_context(context)
         bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
@@ -1291,8 +1291,14 @@ class ProposalService:
         *,
         start_at: datetime,
         effective_now: datetime,
+        request_mode: str,
     ) -> dict[str, Any]:
         if self.social_service is None:
+            return {}
+        if request_mode == "replay":
+            context.setdefault("social_coverage_insights", []).append("social: replay uses local signal artifacts only; remote social fetch skipped.")
+            context.setdefault("social_query_diagnostics", {})["provider_fetch_skipped"] = True
+            context["social_query_diagnostics"]["provider_fetch_skip_reason"] = "replay uses local signal artifacts only"
             return {}
         social_result = self.social_service.analyze(ticker, start_at=start_at, end_at=effective_now)
         social_sentiment = social_result.get("sentiment", {})

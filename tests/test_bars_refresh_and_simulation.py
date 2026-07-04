@@ -348,34 +348,25 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
         self.assertIn("as_of", cheap_scan_kwargs)
         self.assertIsNone(cheap_scan_kwargs["as_of"])
 
-    def test_cheap_scan_signal_service_lazy_hydration(self) -> None:
+    def test_cheap_scan_signal_service_replay_is_cache_only(self) -> None:
         session = create_session()
         try:
             repository = HistoricalMarketDataRepository(session)
             service = CheapScanSignalService(repository=repository)
-            
-            # 1. Setup: No bars in DB for this ticker
+
             ticker = "LAZY"
             as_of = datetime(2026, 4, 1, tzinfo=timezone.utc)
-            
-            # 2. Mock yfinance to return some data
             mock_df = pd.DataFrame([
                 {"Open": 100.0 + i, "High": 101.0 + i, "Low": 99.0 + i, "Close": 100.5 + i, "Volume": 1000}
                 for i in range(40)
             ], index=[as_of - timedelta(days=40-i) for i in range(40)])
             mock_df.index.name = "Date"
-            
-            with patch("yfinance.download", return_value=mock_df):
-                signal = service.score(ticker, StrategyHorizon.ONE_WEEK, as_of=as_of)
-                
-            # 3. Verify: Remote fallback happened and signal was produced
-            self.assertEqual(signal.ticker, ticker)
-            self.assertEqual(signal.diagnostics["data_source"], "yahoo")
-            
-            # 4. Verify: Data was persisted to DB
-            stored_bars = repository.list_bars(ticker=ticker, timeframe="1d")
-            self.assertGreaterEqual(len(stored_bars), 40)
-            self.assertEqual(stored_bars[0].source, "yahoo_fallback")
-            
+
+            with patch("yfinance.download", return_value=mock_df) as download:
+                with self.assertRaisesRegex(Exception, "no price history available for LAZY"):
+                    service.score(ticker, StrategyHorizon.ONE_WEEK, as_of=as_of)
+
+            download.assert_not_called()
+            self.assertEqual(repository.list_bars(ticker=ticker, timeframe="1d"), [])
         finally:
             session.close()

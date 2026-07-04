@@ -951,7 +951,11 @@ class JobExecutionService:
         resolution_days = int(coverage.get("resolution_days", 5)) if isinstance(coverage, dict) else 5
         resolution_as_of = (replay_as_of + timedelta(days=resolution_days)) if replay_as_of else None
         evaluator = RecommendationPlanEvaluationService(self.runs.session)
-        price_history_cache, price_errors = evaluator._prepare_price_histories(plans, as_of=resolution_as_of)  # noqa: SLF001
+        price_history_cache, price_errors = evaluator._prepare_price_histories(  # noqa: SLF001
+            plans,
+            as_of=resolution_as_of,
+            allow_remote_fetch=False,
+        )
         replay_outcomes = ReplayPlanOutcomeRepository(self.runs.session)
         replay_eligibility = ReplayEligibilityRepository(self.runs.session)
         coverage_by_ticker = self._replay_coverage_by_ticker(coverage)

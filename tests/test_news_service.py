@@ -238,35 +238,7 @@ class NewsIngestionServiceTests(unittest.TestCase):
 
     @patch("trade_proposer_app.services.news.yf.Ticker")
     @patch("trade_proposer_app.services.news.httpx.get")
-    def test_historical_ticker_fetch_prefers_finnhub_and_skips_live_fallbacks(self, mock_get, mock_ticker):
-        finnhub_response = MagicMock()
-        finnhub_response.status_code = 200
-        finnhub_response.json.return_value = [
-            {
-                "headline": "Finnhub historical article",
-                "summary": "Historical company news",
-                "source": "Reuters",
-                "url": "https://example.com/finnhub",
-                "datetime": int(datetime(2026, 3, 26, 12, 0, tzinfo=timezone.utc).timestamp()),
-            }
-        ]
-
-        def side_effect(url, *args, **kwargs):
-            self.assertEqual(url, "https://finnhub.io/api/v1/company-news")
-            self.assertEqual(kwargs["params"]["symbol"], "AAPL")
-            return finnhub_response
-
-        mock_get.side_effect = side_effect
-        mock_ticker.return_value.news = [
-            {
-                "content": {
-                    "title": "Yahoo future article",
-                    "summary": "Should not be used in historical mode",
-                    "pubDate": "2026-03-27T00:00:00Z",
-                }
-            }
-        ]
-
+    def test_historical_ticker_fetch_uses_local_cache_only(self, mock_get, mock_ticker):
         service = NewsIngestionService.from_provider_credentials(
             {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
         )
@@ -277,8 +249,11 @@ class NewsIngestionServiceTests(unittest.TestCase):
             request_mode="replay",
         )
 
-        self.assertEqual([article.title for article in bundle.articles], ["Finnhub historical article"])
-        self.assertEqual(bundle.feeds_used, ["Finnhub"])
+        self.assertEqual(bundle.articles, [])
+        self.assertEqual(bundle.feeds_used, [])
+        self.assertTrue(bundle.query_diagnostics["provider_fetch_skipped"])
+        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "replay uses local historical_news only")
+        mock_get.assert_not_called()
         mock_ticker.assert_not_called()
 
     @patch("trade_proposer_app.services.news.time.sleep", return_value=None)
@@ -450,7 +425,7 @@ class NewsIngestionServiceTests(unittest.TestCase):
             "AAPL",
             start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
             end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
-            request_mode="replay",
+            request_mode="live",
         )
 
         self.assertEqual([article.title for article in bundle.articles], ["In window"])
@@ -595,15 +570,10 @@ class NewsIngestionServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(bundle.articles, [])
-        self.assertTrue(any("no providers eligible" in error for error in bundle.feed_errors))
-        self.assertTrue(any("query_type=topic" in error for error in bundle.feed_errors))
-        self.assertTrue(any("mode=replay" in error for error in bundle.feed_errors))
-        self.assertTrue(any("Finnhub(topic unsupported)" in error for error in bundle.feed_errors))
-        self.assertTrue(any("GoogleNews(replay window unsupported)" in error for error in bundle.feed_errors))
+        self.assertEqual(bundle.feed_errors, [])
         self.assertEqual(bundle.query_diagnostics["query_type"], "topic")
         self.assertTrue(bundle.query_diagnostics["provider_fetch_skipped"])
-        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "no eligible providers")
-        self.assertTrue(any("no providers eligible" in error for error in bundle.query_diagnostics["provider_selection_errors"]))
+        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "replay uses local historical_news only")
 
     def test_replay_fetch_uses_sparse_historical_database_articles(self) -> None:
         class FakeHistoricalNews:
@@ -647,8 +617,8 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual([article.title for article in bundle.articles], ["Sparse database article"])
         self.assertEqual(bundle.feeds_used, ["database"])
         self.assertEqual(bundle.query_diagnostics["database_article_count"], 1)
-        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "no eligible providers")
-        self.assertTrue(any("LiveOnly(replay window unsupported)" in error for error in bundle.feed_errors))
+        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "replay uses local historical_news only")
+        self.assertEqual(bundle.feed_errors, [])
 
     def test_filter_articles_for_window_normalizes_mixed_datetime_awareness(self) -> None:
         articles = [
@@ -709,11 +679,12 @@ class NewsIngestionServiceTests(unittest.TestCase):
         first = service.fetch_topic("inflation", start_at=window_start, end_at=window_end, request_mode="replay")
         second = service.fetch_topic("inflation", start_at=window_start, end_at=window_end, request_mode="replay")
 
-        self.assertEqual(provider.topic_calls, 1)
-        self.assertEqual([article.title for article in first.articles], ["inflation headline"])
-        self.assertEqual([article.title for article in second.articles], ["inflation headline"])
-        self.assertEqual(first.feeds_used, ["CountingTopic"])
-        self.assertEqual(second.feeds_used, ["CountingTopic"])
+        self.assertEqual(provider.topic_calls, 0)
+        self.assertEqual(first.articles, [])
+        self.assertEqual(second.articles, [])
+        self.assertEqual(first.feeds_used, [])
+        self.assertEqual(second.feeds_used, [])
+        self.assertEqual(first.query_diagnostics["provider_fetch_skip_reason"], "replay uses local historical_news only")
 
     def test_fetch_topics_deduplicates_identical_queries(self) -> None:
         class CountingService(NewsIngestionService):
@@ -773,8 +744,9 @@ class NewsIngestionServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(service.topic_calls, 1)
-        self.assertEqual([article.title for article in bundle.articles], ["inflation headline"])
-        self.assertEqual(bundle.feeds_used, ["CountingTopic"])
+        self.assertEqual(bundle.articles, [])
+        self.assertEqual(bundle.feeds_used, [])
+        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "replay uses local historical_news only")
 
     def test_primary_only_filters_supporting_only_providers(self) -> None:
         class PrimaryTopicProvider(NewsProvider):

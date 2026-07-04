@@ -50,15 +50,23 @@ class ObservabilityEventRepository:
         run_id: int | None = None,
         correlation_id: str | None = None,
         severity: str | None = None,
+        source: str | None = None,
+        event_type: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        query = select(ObservabilityEventRecord).order_by(ObservabilityEventRecord.created_at.desc(), ObservabilityEventRecord.id.desc())
+        query = select(ObservabilityEventRecord).order_by(
+            ObservabilityEventRecord.created_at.desc(), ObservabilityEventRecord.id.desc()
+        )
         if run_id is not None:
             query = query.where(ObservabilityEventRecord.run_id == run_id)
         if correlation_id:
             query = query.where(ObservabilityEventRecord.correlation_id == correlation_id.strip())
         if severity:
             query = query.where(ObservabilityEventRecord.severity == severity.strip().lower())
+        if source:
+            query = query.where(ObservabilityEventRecord.source == source.strip())
+        if event_type:
+            query = query.where(ObservabilityEventRecord.event_type == event_type.strip())
         query = query.limit(max(1, min(int(limit), 500)))
         return [self._to_dict(record) for record in self.session.scalars(query).all()]
 
@@ -74,7 +82,9 @@ class ObservabilityEventRepository:
             "source": record.source,
             "message": record.message,
             "payload": loads_json_object(record.payload_json),
-            "created_at": cls._normalize_datetime(record.created_at).isoformat() if cls._normalize_datetime(record.created_at) else None,
+            "created_at": cls._normalize_datetime(record.created_at).isoformat()
+            if cls._normalize_datetime(record.created_at)
+            else None,
         }
 
     @staticmethod

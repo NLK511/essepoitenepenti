@@ -43,6 +43,7 @@ from trade_proposer_app.domain.models import (
     TickerSignalSourceBreakdown,
 )
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord, WorkerHeartbeatRecord
+from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
@@ -3275,6 +3276,56 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsNotNone(refreshed.completed_at)
         self.assertEqual(refreshed.duration_seconds, 3600.0)
         self.assertIn('"strategy": "started_at_timeout"', refreshed.timing_json or "")
+
+    def test_run_repository_recovery_marks_historical_replay_slice_failed(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        replays = HistoricalReplayRepository(session)
+        batch = replays.create_batch(
+            name="Stale replay batch",
+            mode="research",
+            universe_mode="explicit",
+            universe_preset=None,
+            tickers=["AAPL"],
+            entry_timing="next_open",
+            price_provider="yahoo",
+            price_source_tier="research",
+            bar_timeframe="1d",
+            as_of_start=datetime(2026, 3, 24, tzinfo=timezone.utc),
+            as_of_end=datetime(2026, 3, 24, 23, 59, 59, tzinfo=timezone.utc),
+            cadence="daily",
+        )
+        slice_row = replays.create_daily_slices(batch.id or 0)[0]
+        job = jobs.get_or_create_system_job("historical_replay_batch_stale", JobType.HISTORICAL_REPLAY)
+        run = runs.enqueue(job.id or 0, scheduled_for=slice_row.as_of, job_type=JobType.HISTORICAL_REPLAY)
+        replays.attach_slice_run(slice_row.id or 0, job_id=job.id or 0, run_id=run.id or 0, status="running")
+        replays.update_batch_status(batch.id or 0, status="running", job_id=job.id)
+        session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run.id)
+            .values(
+                status="running",
+                started_at=datetime(2026, 3, 24, 11, 0, tzinfo=timezone.utc),
+                worker_id="stale-worker",
+            )
+        )
+        session.commit()
+
+        recovered = runs.recover_stale_running_runs(
+            stale_after_seconds=900,
+            worker_stale_after_seconds=30,
+            now=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(len(recovered), 1)
+        refreshed_slice = replays.get_slice(slice_row.id or 0)
+        self.assertEqual("failed", refreshed_slice.status)
+        self.assertIn("Recovered stale running run", refreshed_slice.error_message or "")
+        self.assertIn("run_stale_recovery_sync", refreshed_slice.timing_json or "")
+        refreshed_batch = replays.get_batch(batch.id or 0)
+        self.assertEqual("failed", refreshed_batch.status)
+        self.assertIn('"failed_count": 1', refreshed_batch.summary_json)
 
     def test_enqueue_job_recovers_stale_running_run_before_active_run_check(self) -> None:
         session = create_session()

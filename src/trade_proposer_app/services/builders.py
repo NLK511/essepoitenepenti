@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
@@ -79,7 +80,7 @@ def _news_service(session: Session, repository: SettingsRepository, article_limi
 def create_historical_replay_service(
     session: Session,
     *,
-    input_access_policy: str = "cache_then_remote",
+    input_access_policy: str | None = None,
 ) -> HistoricalReplayService:
     return HistoricalReplayService(
         historical_replays=HistoricalReplayRepository(session),
@@ -89,7 +90,7 @@ def create_historical_replay_service(
         historical_news=HistoricalNewsRepository(session),
         context_snapshots=ContextSnapshotRepository(session),
         fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
-        input_access_policy=input_access_policy,
+        input_access_policy=input_access_policy or settings.historical_replay_input_access_policy,
     )
 
 
