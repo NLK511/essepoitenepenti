@@ -220,12 +220,12 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - cache-only
   - sequential
   - max concurrency 1 on low resource profile
-- [ ] Add replay progress to workflow read model:
+- [x] Add replay progress to workflow read model:
   - batch ids
   - slice progress
   - active/queued/failed/stale counts
   - linked worker/job run ids
-- [ ] Add comparison metrics against baseline:
+- [x] Add comparison metrics against baseline:
   - Tier A sample count
   - win/loss/no-entry/open counts
   - win-rate delta
@@ -235,15 +235,16 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - data-quality warnings
 - [ ] Add safe actions:
   - resume failed/stale replays
+- [x] Add safe action metadata:
   - stop after current slice
-  - view raw replay detail
+  - view raw replay detail ids
 
 ### Acceptance criteria
 
-- [ ] Candidate replay batches carry scoped config overrides and do not mutate live settings.
-- [ ] Candidate comparison is unavailable until baseline metrics exist.
-- [ ] Tests cover replay queue creation for shortlisted candidates.
-- [ ] Stale/failed replay states surface clearly in workflow API.
+- [x] Candidate replay batches carry scoped config overrides and do not mutate live settings.
+- [x] Candidate comparison is unavailable until baseline metrics exist.
+- [x] Tests cover replay queue creation for shortlisted candidates.
+- [x] Stale/failed replay states surface clearly in workflow API.
 
 ## Phase 7 — Stability validation: walk-forward and holdout — partially implemented
 

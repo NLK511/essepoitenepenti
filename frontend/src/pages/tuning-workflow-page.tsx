@@ -31,6 +31,8 @@ function SectionStatusCard(props: { title: string; section: Record<string, unkno
       {props.section?.reason ? <div className="helper-text top-gap-small">{String(props.section.reason)}</div> : null}
       {Array.isArray(props.section?.blockers) && props.section.blockers.length ? <div className="helper-text top-gap-small">Blocked by: {props.section.blockers.join(", ")}</div> : null}
       {Array.isArray(props.section?.warnings) && props.section.warnings.length ? <div className="helper-text top-gap-small">Warnings: {props.section.warnings.join(", ")}</div> : null}
+      {typeof props.section?.progress === "object" && props.section.progress !== null ? <div className="helper-text top-gap-small">Progress: {String((props.section.progress as Record<string, unknown>).completed_count ?? 0)}/{String((props.section.progress as Record<string, unknown>).slice_count ?? 0)} slices · failed/stale: {String((props.section.progress as Record<string, unknown>).failed_count ?? 0)}/{String((props.section.progress as Record<string, unknown>).stale_count ?? 0)}</div> : null}
+      {typeof props.section?.comparisons === "object" && props.section.comparisons !== null ? <div className="helper-text top-gap-small">Comparisons available for {Object.keys(props.section.comparisons as Record<string, unknown>).length} candidate(s).</div> : null}
     </Card>
   );
 }
@@ -223,6 +225,8 @@ export function TuningWorkflowPage() {
                 <label className="form-field compact-field"><span>Candidate batch id</span><input value={candidateBatchId} onChange={(event) => setCandidateBatchId(event.target.value)} placeholder="23" /></label>
                 <button className="button-subtle" disabled={saving || !candidateBatchId || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/record`, { batch_ids_by_candidate: { [firstShortlistedId]: Number(candidateBatchId) } })}>Record candidate replay</button>
                 <button className="button-subtle" disabled={saving || !shortlistedIds.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/create?enqueue=true`)}>Create candidate replays</button>
+                <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/replay-summaries/refresh`)}>Refresh replay summaries</button>
+                <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/stop-after-current-slice`)}>Stop after current slice</button>
               </div>
               <div className="cluster top-gap-small">
                 <label className="form-field compact-field"><span>Stability status</span><select value={stabilityStatus} onChange={(event) => setStabilityStatus(event.target.value)}><option value="warning">Warning / needs more holdout</option><option value="pass">Pass</option><option value="fail">Fail</option></select></label>

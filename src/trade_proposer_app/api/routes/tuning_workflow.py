@@ -243,6 +243,30 @@ async def bind_tuning_experiment_baseline_replay(
     return {"experiment": experiment}
 
 
+@router.post("/experiments/{experiment_id}/replay-summaries/refresh")
+async def refresh_tuning_experiment_replay_summaries(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).refresh_replay_summaries(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/candidate-replay/stop-after-current-slice")
+async def stop_tuning_experiment_candidate_replay_after_current_slice(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).stop_candidate_replay_after_current_slice(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
 @router.post("/experiments/{experiment_id}/candidate-replay/record")
 async def record_tuning_experiment_candidate_replay(
     experiment_id: int,

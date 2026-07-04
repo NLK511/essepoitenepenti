@@ -8,7 +8,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import PlanGenerationTuningConfigVersion, PlanGenerationTuningEvent
-from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, TuningExperimentRecord
+from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_DEFAULTS, candidate_validation_depth, normalize_plan_generation_tuning_config
@@ -321,6 +321,50 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def refresh_replay_summaries(self, experiment_id: int) -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else None
+        if baseline and baseline.get("batch_id") is not None:
+            batch_id = int(baseline["batch_id"])
+            batch = self.session.get(HistoricalReplayBatchRecord, batch_id)
+            baseline.update({
+                "status": batch.status if batch else baseline.get("status", "missing"),
+                "progress": self._batch_progress(batch_id),
+                "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch_id),
+            })
+        validation = metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else None
+        if validation:
+            candidate_batches = validation.get("candidate_batches") if isinstance(validation.get("candidate_batches"), dict) else {}
+            for candidate_id, payload in candidate_batches.items():
+                if not isinstance(payload, dict) or payload.get("batch_id") is None:
+                    continue
+                batch_id = int(payload["batch_id"])
+                batch = self.session.get(HistoricalReplayBatchRecord, batch_id)
+                payload.update({
+                    "status": batch.status if batch else payload.get("status", "missing"),
+                    "progress": self._batch_progress(batch_id),
+                    "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch_id),
+                })
+            validation["comparisons"] = self._candidate_comparisons(metadata)
+            statuses = [str(payload.get("status")) for payload in candidate_batches.values() if isinstance(payload, dict)]
+            validation["status"] = "complete" if statuses and all(status == "completed" for status in statuses) else ("running" if any(status == "running" for status in statuses) else validation.get("status", "queued"))
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def stop_candidate_replay_after_current_slice(self, experiment_id: int) -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        controls = metadata.setdefault("operator_controls", {})
+        controls["stop_after_current_slice_requested"] = True
+        controls["requested_at"] = datetime.now(timezone.utc).isoformat()
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
     def bind_baseline_replay_batch(self, experiment_id: int, replay_batch_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         batch = self.session.get(HistoricalReplayBatchRecord, replay_batch_id)
@@ -331,7 +375,7 @@ class TuningWorkflowService:
         baseline.update({"source": "existing_replay_batch", "replay_batch_id": replay_batch_id, "status": batch.status, "summary": aggregate})
         record.baseline_json = _json_dumps(baseline)
         metadata = loads_json_object(record.metadata_json)
-        metadata["baseline_replay"] = {"batch_id": replay_batch_id, "status": batch.status, "summary": aggregate}
+        metadata["baseline_replay"] = {"batch_id": replay_batch_id, "status": batch.status, "summary": aggregate, "progress": self._batch_progress(replay_batch_id)}
         record.metadata_json = _json_dumps(metadata)
         self.session.commit()
         self.session.refresh(record)
@@ -350,11 +394,12 @@ class TuningWorkflowService:
             batch = self.session.get(HistoricalReplayBatchRecord, int(batch_id))
             if batch is None:
                 raise TuningWorkflowError(f"replay batch {batch_id} not found")
-            summaries[candidate_id] = {"batch_id": int(batch_id), "status": batch.status, "summary": ReplayValidationAggregateService(self.session).aggregate_batch(int(batch_id))}
+            summaries[candidate_id] = {"batch_id": int(batch_id), "status": batch.status, "summary": ReplayValidationAggregateService(self.session).aggregate_batch(int(batch_id)), "progress": self._batch_progress(int(batch_id))}
         metadata["candidate_replay_validation"] = {
             "status": "complete" if summaries else "missing",
             "label": "replay-validated evidence",
             "candidate_batches": summaries,
+            "comparisons": self._candidate_comparisons({**metadata, "candidate_replay_validation": {"candidate_batches": summaries}}),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         record.metadata_json = _json_dumps(metadata)
@@ -664,6 +709,69 @@ class TuningWorkflowService:
         if self.historical_replay_service is None:
             raise TuningWorkflowError("historical replay service is not configured")
         return self.historical_replay_service
+
+    def _batch_progress(self, batch_id: int) -> dict[str, object]:
+        rows = list(self.session.scalars(select(HistoricalReplaySliceRecord).where(HistoricalReplaySliceRecord.replay_batch_id == batch_id)).all())
+        counts: dict[str, int] = {}
+        failed_slice_ids: list[int] = []
+        active_run_ids: list[int] = []
+        for row in rows:
+            counts[row.status] = counts.get(row.status, 0) + 1
+            if row.status == "failed" and row.id is not None:
+                failed_slice_ids.append(row.id)
+            if row.status in {"queued", "running"} and row.run_id is not None:
+                active_run_ids.append(row.run_id)
+        total = len(rows)
+        completed = counts.get("completed", 0)
+        failed = counts.get("failed", 0)
+        stale_or_failed = failed + counts.get("stale", 0)
+        return {
+            "slice_count": total,
+            "completed_count": completed,
+            "queued_count": counts.get("queued", 0),
+            "running_count": counts.get("running", 0),
+            "failed_count": failed,
+            "stale_count": counts.get("stale", 0),
+            "planned_count": counts.get("planned", 0),
+            "progress_percent": round((completed / max(1, total)) * 100.0, 2),
+            "has_failures_or_stale": stale_or_failed > 0,
+            "failed_slice_ids": failed_slice_ids[:20],
+            "active_run_ids": active_run_ids[:20],
+        }
+
+    def _candidate_comparisons(self, metadata: Mapping[str, object]) -> dict[str, object]:
+        baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {}
+        baseline_summary = baseline.get("summary") if isinstance(baseline.get("summary"), dict) else {}
+        validation = metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else {}
+        candidate_batches = validation.get("candidate_batches") if isinstance(validation.get("candidate_batches"), dict) else {}
+        comparisons: dict[str, object] = {}
+        baseline_win_rate = baseline_summary.get("win_rate_percent")
+        baseline_tier_a = int(baseline_summary.get("tier_a_count") or 0)
+        for candidate_id, payload in candidate_batches.items():
+            if not isinstance(payload, dict):
+                continue
+            summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+            candidate_win_rate = summary.get("win_rate_percent")
+            win_rate_delta = None
+            if isinstance(candidate_win_rate, (int, float)) and isinstance(baseline_win_rate, (int, float)):
+                win_rate_delta = round(float(candidate_win_rate) - float(baseline_win_rate), 2)
+            tier_a_count = int(summary.get("tier_a_count") or 0)
+            comparisons[str(candidate_id)] = {
+                "baseline_batch_id": baseline.get("batch_id"),
+                "candidate_batch_id": payload.get("batch_id"),
+                "baseline_tier_a_count": baseline_tier_a,
+                "candidate_tier_a_count": tier_a_count,
+                "tier_a_sample_delta": tier_a_count - baseline_tier_a,
+                "baseline_win_rate_percent": baseline_win_rate,
+                "candidate_win_rate_percent": candidate_win_rate,
+                "win_rate_delta_percent": win_rate_delta,
+                "baseline_loss_count": baseline_summary.get("loss_count"),
+                "candidate_loss_count": summary.get("loss_count"),
+                "candidate_top_ticker_concentration_percent": summary.get("top_ticker_concentration_percent"),
+                "available": bool(baseline_summary) and bool(summary),
+                "label": "replay comparison; not promotion evidence without holdout/stability gates",
+            }
+        return comparisons
 
     def _window_datetimes(self, windows: Mapping[str, object], prefix: str) -> tuple[datetime, datetime]:
         start = _date_string(windows.get(f"{prefix}_start"))

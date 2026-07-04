@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.config import settings
-from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord
+from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
 
 
@@ -52,6 +52,42 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual(1, detail["replay_settings"]["max_concurrency"])
             self.assertEqual("paper_config", detail["promotion_target"])
             self.assertEqual("discovery-only evidence; not promotion evidence", detail["computation_labels"]["discovery"])
+        finally:
+            session.close()
+
+    def test_refresh_replay_summaries_adds_progress_and_comparison(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment({"name": "Replay summaries"})
+            experiment_id = int(detail["id"])
+            baseline_batch = HistoricalReplayBatchRecord(name="baseline-progress", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            candidate_batch = HistoricalReplayBatchRecord(name="candidate-progress", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            session.add_all([baseline_batch, candidate_batch])
+            session.commit()
+            session.add_all([
+                HistoricalReplaySliceRecord(replay_batch_id=baseline_batch.id or 0, as_of=datetime(2026, 2, 2, tzinfo=timezone.utc), status="completed"),
+                HistoricalReplaySliceRecord(replay_batch_id=baseline_batch.id or 0, as_of=datetime(2026, 2, 3, tzinfo=timezone.utc), status="failed"),
+                HistoricalReplaySliceRecord(replay_batch_id=candidate_batch.id or 0, as_of=datetime(2026, 2, 2, tzinfo=timezone.utc), status="completed"),
+            ])
+            for batch_id, outcome in ((baseline_batch.id or 0, "loss"), (candidate_batch.id or 0, "win")):
+                session.add(ReplayEligibilityRecord(replay_batch_id=batch_id, replay_slice_id=1, recommendation_plan_id=batch_id, ticker="AAPL", tier="tier_a", eligible_for_tuning=True, resolution_source="intraday", outcome=outcome, diagnostics_json="{}"))
+                session.add(ReplayPlanOutcomeRecord(replay_batch_id=batch_id, replay_slice_id=1, recommendation_plan_id=batch_id, resolution_source="intraday", outcome=outcome, status="resolved", evaluated_at=datetime(2026, 2, 5, tzinfo=timezone.utc), outcome_json="{}"))
+            session.commit()
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            service.update_shortlist(experiment_id, [candidate_id])
+            service.bind_baseline_replay_batch(experiment_id, baseline_batch.id or 0)
+            service.record_candidate_replay_validation(experiment_id, {candidate_id: candidate_batch.id or 0})
+
+            detail = service.refresh_replay_summaries(experiment_id)
+
+            baseline = detail["sections"]["baseline_replay"]
+            validation = detail["sections"]["candidate_replay_validation"]
+            self.assertEqual(2, baseline["progress"]["slice_count"])
+            self.assertTrue(baseline["progress"]["has_failures_or_stale"])
+            self.assertEqual(100.0, validation["comparisons"][candidate_id]["candidate_win_rate_percent"])
+            self.assertEqual(100.0, validation["comparisons"][candidate_id]["win_rate_delta_percent"])
         finally:
             session.close()
 
