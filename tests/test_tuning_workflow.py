@@ -13,6 +13,27 @@ from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecor
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
 
 
+class FakeReplayBatch:
+    def __init__(self, batch_id: int, status: str = "planned") -> None:
+        self.id = batch_id
+        self.status = status
+
+
+class FakeReplayService:
+    def __init__(self) -> None:
+        self.created: list[dict[str, object]] = []
+        self.next_id = 100
+
+    def create_batch(self, **kwargs):
+        self.created.append(kwargs)
+        batch = FakeReplayBatch(self.next_id)
+        self.next_id += 1
+        return batch
+
+    def enqueue_batch(self, batch_id: int):
+        return [object(), object()]
+
+
 class TuningWorkflowServiceTests(unittest.TestCase):
     def create_session(self) -> Session:
         engine = create_engine("sqlite:///:memory:", future=True)
@@ -31,6 +52,44 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual(1, detail["replay_settings"]["max_concurrency"])
             self.assertEqual("paper_config", detail["promotion_target"])
             self.assertEqual("discovery-only evidence; not promotion evidence", detail["computation_labels"]["discovery"])
+        finally:
+            session.close()
+
+    def test_create_replay_batches_uses_cache_only_scoped_configs(self) -> None:
+        session = self.create_session()
+        try:
+            fake_replay = FakeReplayService()
+            service = TuningWorkflowService(session, historical_replay_service=fake_replay)
+            detail = service.create_experiment(
+                {
+                    "name": "Replay creation workflow",
+                    "universe": {"tickers": ["AAPL", "MSFT"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-04-01",
+                    },
+                    "baseline": {"source": "rerun_baseline_replay"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            detail = service.run_readiness_audit(experiment_id)
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            service.update_shortlist(experiment_id, [candidate_id])
+
+            detail = service.create_baseline_replay_batch(experiment_id)
+            self.assertEqual("candidate_replay_needed", detail["current_stage"])
+            detail = service.create_candidate_replay_batches(experiment_id)
+
+            self.assertEqual("queued", detail["sections"]["candidate_replay_validation"]["status"])
+            self.assertEqual(2, len(fake_replay.created))
+            self.assertTrue(fake_replay.created[0]["config"]["cache_only"])
+            self.assertEqual("tuning_workflow_candidate_replay", fake_replay.created[1]["config"]["source"])
+            self.assertIn("plan_generation_tuning_config_override", fake_replay.created[1]["config"])
         finally:
             session.close()
 

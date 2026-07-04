@@ -219,8 +219,10 @@ export function TuningWorkflowPage() {
               <div className="cluster top-gap-small">
                 <label className="form-field compact-field"><span>Baseline batch id</span><input value={baselineBatchId} onChange={(event) => setBaselineBatchId(event.target.value)} placeholder="22" /></label>
                 <button className="button-subtle" disabled={saving || !baselineBatchId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/baseline-replay/bind`, { replay_batch_id: Number(baselineBatchId) })}>Bind baseline replay</button>
+                <button className="button-subtle" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/baseline-replay/create?enqueue=true`)}>Create baseline replay</button>
                 <label className="form-field compact-field"><span>Candidate batch id</span><input value={candidateBatchId} onChange={(event) => setCandidateBatchId(event.target.value)} placeholder="23" /></label>
                 <button className="button-subtle" disabled={saving || !candidateBatchId || !firstShortlistedId} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/record`, { batch_ids_by_candidate: { [firstShortlistedId]: Number(candidateBatchId) } })}>Record candidate replay</button>
+                <button className="button-subtle" disabled={saving || !shortlistedIds.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/create?enqueue=true`)}>Create candidate replays</button>
               </div>
               <div className="cluster top-gap-small">
                 <label className="form-field compact-field"><span>Stability status</span><select value={stabilityStatus} onChange={(event) => setStabilityStatus(event.target.value)}><option value="warning">Warning / needs more holdout</option><option value="pass">Pass</option><option value="fail">Fail</option></select></label>

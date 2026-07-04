@@ -40,8 +40,9 @@ class TuningWorkflowError(ValueError):
 
 
 class TuningWorkflowService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, historical_replay_service: object | None = None) -> None:
         self.session = session
+        self.historical_replay_service = historical_replay_service
 
     def list_experiments(self, *, include_archived: bool = False, limit: int = 50) -> list[dict[str, object]]:
         query = select(TuningExperimentRecord).order_by(desc(TuningExperimentRecord.updated_at)).limit(limit)
@@ -161,6 +162,97 @@ class TuningWorkflowService:
         for candidate in metadata.get("candidate_pool", {}).get("candidates", []):
             if isinstance(candidate, dict) and str(candidate.get("id")) in candidate_ids:
                 candidate["status"] = "shortlisted"
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def create_baseline_replay_batch(self, experiment_id: int, *, enqueue: bool = True) -> dict[str, object]:
+        replay_service = self._require_historical_replay_service()
+        record = self.get_experiment(experiment_id)
+        universe = loads_json_object(record.universe_json)
+        windows = loads_json_object(record.windows_json)
+        tickers = self._experiment_tickers(universe)
+        if not tickers:
+            raise TuningWorkflowError("explicit tickers are required to create a baseline replay")
+        start_dt, end_dt = self._window_datetimes(windows, "replay")
+        batch = replay_service.create_batch(
+            name=f"tuning-exp-{record.id}-baseline-{stable_hash({'id': record.id, 'window': [start_dt.isoformat(), end_dt.isoformat()]})[:10]}",
+            mode="research",
+            tickers=tickers,
+            as_of_start=start_dt,
+            as_of_end=end_dt,
+            config={
+                "source": "tuning_workflow_baseline_replay",
+                "tuning_experiment_id": record.id,
+                "cache_only": True,
+            },
+        )
+        queued_runs = replay_service.enqueue_batch(batch.id or 0) if enqueue else []
+        metadata = loads_json_object(record.metadata_json)
+        metadata["baseline_replay"] = {
+            "batch_id": batch.id,
+            "status": "queued" if enqueue else batch.status,
+            "queued_run_count": len(queued_runs),
+            "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch.id or 0),
+        }
+        baseline = loads_json_object(record.baseline_json)
+        baseline.update({"source": "rerun_baseline_replay", "replay_batch_id": batch.id, "status": metadata["baseline_replay"]["status"]})
+        record.baseline_json = _json_dumps(baseline)
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def create_candidate_replay_batches(self, experiment_id: int, *, enqueue: bool = True) -> dict[str, object]:
+        replay_service = self._require_historical_replay_service()
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        if not metadata.get("baseline_replay"):
+            raise TuningWorkflowError("baseline replay is required before candidate replay")
+        shortlist_ids = list(metadata.get("shortlist", {}).get("candidate_ids", []))
+        if not shortlist_ids:
+            raise TuningWorkflowError("shortlist is required before candidate replay")
+        candidates = {str(item.get("id")): item for item in metadata.get("candidate_pool", {}).get("candidates", []) if isinstance(item, dict)}
+        universe = loads_json_object(record.universe_json)
+        windows = loads_json_object(record.windows_json)
+        tickers = self._experiment_tickers(universe)
+        start_dt, end_dt = self._window_datetimes(windows, "replay")
+        created: dict[str, object] = {}
+        for candidate_id in shortlist_ids:
+            candidate = candidates.get(str(candidate_id))
+            if not candidate:
+                raise TuningWorkflowError(f"candidate {candidate_id} not found")
+            config_hash = str(candidate.get("config_hash") or stable_hash(candidate.get("config") or {}))
+            batch = replay_service.create_batch(
+                name=f"tuning-exp-{record.id}-{candidate_id}-{config_hash[:10]}",
+                mode="research",
+                tickers=tickers,
+                as_of_start=start_dt,
+                as_of_end=end_dt,
+                config={
+                    "source": "tuning_workflow_candidate_replay",
+                    "tuning_experiment_id": record.id,
+                    "tuning_candidate_id": candidate_id,
+                    "candidate_config_hash": config_hash,
+                    "plan_generation_tuning_config_override": candidate.get("config") or {},
+                    "candidate_validation_depth": candidate.get("validation_depth"),
+                    "cache_only": True,
+                },
+            )
+            queued_runs = replay_service.enqueue_batch(batch.id or 0) if enqueue else []
+            created[str(candidate_id)] = {
+                "batch_id": batch.id,
+                "status": "queued" if enqueue else batch.status,
+                "queued_run_count": len(queued_runs),
+                "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch.id or 0),
+            }
+        metadata["candidate_replay_validation"] = {
+            "status": "queued" if enqueue else "created",
+            "label": "replay validation queued; not promotable until completed and summarized",
+            "candidate_batches": created,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
         record.metadata_json = _json_dumps(metadata)
         self.session.commit()
         self.session.refresh(record)
@@ -446,6 +538,24 @@ class TuningWorkflowService:
         if windows.get("discovery_end") and windows.get("holdout_start") and str(windows["discovery_end"]) > str(windows["holdout_start"]):
             warnings.append("holdout overlaps discovery window")
         return {"complete": not missing, "missing_fields": missing, "warnings": warnings}
+
+    def _require_historical_replay_service(self) -> object:
+        if self.historical_replay_service is None:
+            raise TuningWorkflowError("historical replay service is not configured")
+        return self.historical_replay_service
+
+    def _window_datetimes(self, windows: Mapping[str, object], prefix: str) -> tuple[datetime, datetime]:
+        start = _date_string(windows.get(f"{prefix}_start"))
+        end = _date_string(windows.get(f"{prefix}_end"))
+        if not start or not end:
+            raise TuningWorkflowError(f"{prefix} window is required")
+        start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
+        return start_dt, end_dt
 
     def _experiment_tickers(self, universe: Mapping[str, object]) -> list[str]:
         raw_tickers = universe.get("tickers")

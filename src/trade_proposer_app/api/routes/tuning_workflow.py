@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
+from trade_proposer_app.services.builders import create_historical_replay_service
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowError, TuningWorkflowService
 
 
@@ -65,6 +66,10 @@ class TuningExperimentPatchPayload(BaseModel):
 
 def _service(session: Session) -> TuningWorkflowService:
     return TuningWorkflowService(session)
+
+
+def _workflow_service_with_replay(session: Session) -> TuningWorkflowService:
+    return TuningWorkflowService(session, historical_replay_service=create_historical_replay_service(session, input_access_policy="cache_only"))
 
 
 def _to_http_error(exc: TuningWorkflowError) -> HTTPException:
@@ -156,6 +161,32 @@ async def update_tuning_experiment_shortlist(
         experiment = _service(session).update_shortlist(experiment_id, payload.candidate_ids)
     except TuningWorkflowError as exc:
         raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/baseline-replay/create")
+async def create_tuning_experiment_baseline_replay(
+    experiment_id: int,
+    enqueue: bool = True,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _workflow_service_with_replay(session).create_baseline_replay_batch(experiment_id, enqueue=enqueue)
+    except (TuningWorkflowError, ValueError) as exc:
+        raise _to_http_error(TuningWorkflowError(str(exc))) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/candidate-replay/create")
+async def create_tuning_experiment_candidate_replays(
+    experiment_id: int,
+    enqueue: bool = True,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _workflow_service_with_replay(session).create_candidate_replay_batches(experiment_id, enqueue=enqueue)
+    except (TuningWorkflowError, ValueError) as exc:
+        raise _to_http_error(TuningWorkflowError(str(exc))) from exc
     return {"experiment": experiment}
 
 

@@ -193,7 +193,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - selected config version
   - existing replay batch
   - rerun baseline replay
-- [ ] Add action to create/enqueue baseline replay for the experiment window/universe.
+- [x] Add action to create/enqueue baseline replay for the experiment window/universe.
 - [x] Add action to bind an existing replay batch as baseline.
 - [ ] Add baseline summary:
   - batch id/status
@@ -203,7 +203,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
   - win rate
   - return/EV metrics
   - concentration warnings
-- [ ] Block candidate replay until baseline is selected and usable.
+- [x] Block candidate replay until baseline is selected and usable.
 
 ### Acceptance criteria
 
@@ -215,7 +215,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 ### Tasks
 
-- [ ] Add action to create/enqueue candidate replay batches from shortlisted candidates.
+- [x] Add action to create/enqueue candidate replay batches from shortlisted candidates.
 - [ ] Default execution:
   - cache-only
   - sequential
@@ -368,7 +368,7 @@ Add API routes under a new workflow namespace, for example `/api/tuning-workflow
 
 - [x] Operator can create an experiment and see incomplete/missing next steps.
 - [x] Operator can move from discovery to shortlist and record replay evidence from one page.
-- [ ] Operator can queue fresh replay batches directly from one page.
+- [x] Operator can queue fresh replay batches directly from one page.
 - [x] UI never labels discovery-only candidates as winners or validated.
 - [x] UI clearly blocks promotion until all required gates pass.
 
