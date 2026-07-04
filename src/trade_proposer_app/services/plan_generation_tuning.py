@@ -118,6 +118,8 @@ class CandidateEvaluation:
     validation_expected_value: float
     validation_ambiguous_count: int
     validation_slice_count: int = 0
+    validation_qualified_slice_count: int = 0
+    validation_slice_win_count: int = 0
     validation_baseline_win_count: int = 0
     validation_ties: int = 0
     validation_average_win_rate_delta: float | None = None
@@ -1791,10 +1793,15 @@ class PlanGenerationTuningService:
             for key, value in config.items()
             if round(float(value), 4) != round(float(baseline_config.get(key, value)), 4)
         ]
-        validation_actionable_count = int(summary.qualified_slices)
-        validation_win_count = int(summary.candidate_wins)
+        qualified_slices = [slice_row for slice_row in summary.slices if slice_row.sample_status == "qualified"]
+        validation_actionable_count = sum(int(slice_row.candidate_actionable_count) for slice_row in qualified_slices)
+        validation_win_count = sum(
+            int(round((float(slice_row.candidate_win_rate_percent or 0.0) / 100.0) * int(slice_row.candidate_actionable_count)))
+            for slice_row in qualified_slices
+        )
         validation_expected_value = float(summary.average_expected_value_delta or 0.0)
-        validation_ambiguous_count = max(0, int(summary.total_slices) - validation_actionable_count)
+        validation_ambiguous_count = sum(int(slice_row.ambiguous_count) for slice_row in qualified_slices)
+        validation_qualified_slice_count = int(summary.qualified_slices)
         return CandidateEvaluation(
             config=config,
             changed_keys=changed_keys,
@@ -1807,6 +1814,8 @@ class PlanGenerationTuningService:
             validation_expected_value=validation_expected_value,
             validation_ambiguous_count=validation_ambiguous_count,
             validation_slice_count=int(summary.total_slices),
+            validation_qualified_slice_count=validation_qualified_slice_count,
+            validation_slice_win_count=int(summary.candidate_wins),
             validation_baseline_win_count=int(summary.baseline_wins),
             validation_ties=int(summary.ties),
             validation_average_win_rate_delta=summary.average_win_rate_delta,
@@ -2324,6 +2333,8 @@ class PlanGenerationTuningService:
             "validation_expected_value": round(item.validation_expected_value, 4),
             "validation_ambiguous_count": item.validation_ambiguous_count,
             "validation_slice_count": item.validation_slice_count,
+            "validation_qualified_slice_count": item.validation_qualified_slice_count,
+            "validation_slice_win_count": item.validation_slice_win_count,
             "validation_baseline_win_count": item.validation_baseline_win_count,
             "validation_ties": item.validation_ties,
             "validation_average_win_rate_delta": item.validation_average_win_rate_delta,
