@@ -69,7 +69,25 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         missing = [ticker for ticker in default_tickers if ticker not in service._taxonomy]
 
         self.assertEqual([], missing)
-        self.assertEqual(750, len(default_tickers))
+        self.assertEqual(735, len(default_tickers))
+        removed_for_bar_quality = {
+            "HOLX",
+            "BAE.L",
+            "BME.MC",
+            "CRH.L",
+            "FAES.MC",
+            "HELN.SW",
+            "IDP.MC",
+            "LUN.CO",
+            "PHNX.L",
+            "RYR.I",
+            "VAR1.DE",
+            "VONTO.SW",
+            "GRI.MC",
+            "068760.KS",
+            "MRX.DE",
+        }
+        self.assertTrue(removed_for_bar_quality.isdisjoint(default_tickers))
 
     def test_default_watchlists_include_us_midday_proposal_jobs(self) -> None:
         self.assertEqual(

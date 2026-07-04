@@ -1,7 +1,7 @@
 """Deploy the curated default watchlists and scheduled jobs.
 
 Design goals for these defaults:
-- 750 total equities split across U.S., Europe, and Asia/Pacific (250 per region)
+- 735 total equities split across U.S., Europe, and Asia/Pacific after removing tickers with insufficient cached bar coverage
 - grouped by compact continent + macro-industry names
 - scheduled in region-appropriate opening windows that are interesting for analysis
 - fully staggered in 10-minute increments to avoid overlapping runs and reduce API quota spikes
@@ -92,7 +92,7 @@ WATCHLIST_SPECS = [
             "4502.T", "4568.T", "4519.T", "4523.T", "4578.T", "4507.T", "4543.T", "7741.T", "7733.T", "4901.T",
             "2269.HK", "1093.HK", "1177.HK", "207940.KS", "068270.KS", "CSL.AX", "RMD.AX", "COH.AX", "2359.HK", "6618.HK",
             "4503.T", "4528.T", "4516.T", "4587.T", "4483.T", "1513.HK", "6160.HK", "0999.HK", "1801.HK", "2196.HK",
-            "300760.SZ", "300015.SZ", "600276.SS", "302440.KS", "068760.KS", "128940.KS", "000100.KS", "1760.TW", "6446.TW", "9938.TW",
+            "300760.SZ", "300015.SZ", "600276.SS", "302440.KS", "128940.KS", "000100.KS", "1760.TW", "6446.TW", "9938.TW",
             "FPH.AX", "SHL.AX", "ANN.AX", "RHC.AX", "REG.AX", "PME.AX", "006280.KS", "008930.KS", "300003.SZ", "300012.SZ"
         ],
     },
@@ -132,10 +132,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Starts at the European cash open so the list catches open-driven repricing in semis, enterprise software, and payment-sensitive names while preserving the 10-minute cadence.",
         "tickers": [
             "ASML.AS", "SAP.DE", "ADYEN.AS", "PRX.AS", "IFX.DE", "NOKIA.HE", "ERIC-B.ST", "STMPA.PA", "BEI.DE", "LOGN.SW",
-            "FAES.MC", "ASM.AS", "WKL.AS", "BAE.L", "DHER.DE", "DSY.PA", "WLN.PA", "TELIA.ST", "KPN.AS", "AMS.MC",
-            "CAP.PA", "RYR.I", "SOI.PA", "IDP.MC", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "UMG.AS", "WISE.L",
-            "MONY.L", "RMV.L", "BME.MC", "VONTO.SW", "OCDO.L", "SGE.L", "AUTO.L", "BT-A.L", "VOD.L", "UBI.PA",
-            "LUN.CO", "DTE.DE", "TEF.MC", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "VAR1.DE", "NDA-FI.HE", "HELN.SW", "SBB-B.ST"
+            "ASM.AS", "WKL.AS", "DHER.DE", "DSY.PA", "WLN.PA", "TELIA.ST", "KPN.AS", "AMS.MC",
+            "CAP.PA", "SOI.PA", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "UMG.AS", "WISE.L",
+            "MONY.L", "RMV.L", "OCDO.L", "SGE.L", "AUTO.L", "BT-A.L", "VOD.L", "UBI.PA",
+            "DTE.DE", "TEF.MC", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "NDA-FI.HE", "SBB-B.ST"
         ],
     },
     {
@@ -162,8 +162,8 @@ WATCHLIST_SPECS = [
             "NOVO-B.CO", "RO.SW", "NOVN.SW", "AZN.L", "GSK.L", "SAN.PA", "BAYN.DE", "ALC.SW", "UCB.BR", "FRE.DE",
             "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "SRT3.DE", "PHIA.AS", "TEMN.SW", "ORNBV.HE", "PROX.BR",
             "AMBU-B.CO", "ZEAL.CO", "VIV.PA", "EVT.DE", "FME.DE", "EMEIS.PA", "IPN.PA", "ERF.PA", "VLA.PA", "BVI.PA",
-            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "OVH.PA", "GRI.MC", "ROVI.MC", "PHM.MC", "SKAN.SW",
-            "EKTA-B.ST", "VITR.ST", "REJL-B.ST", "SGL.DE", "VIRP.PA", "MRX.DE", "NEWA-B.ST", "DIM.PA", "BICO.ST", "GNS.L"
+            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "OVH.PA", "ROVI.MC", "PHM.MC", "SKAN.SW",
+            "EKTA-B.ST", "VITR.ST", "REJL-B.ST", "SGL.DE", "VIRP.PA", "NEWA-B.ST", "DIM.PA", "BICO.ST", "GNS.L"
         ],
     },
     {
@@ -177,7 +177,7 @@ WATCHLIST_SPECS = [
             "RKT.L", "CCH.L", "HEIA.AS", "BN.PA", "FERG.L", "BATS.L", "IMB.L", "ZAL.DE", "AG1.DE", "JDW.L",
             "RMS.PA", "CDA.PA", "RNO.PA", "AC.PA", "ELIOR.PA", "PUM.DE", "HFG.DE", "PAH3.DE", "HM-B.ST", "AXFO.ST",
             "INDU-C.ST", "PNDORA.CO", "CARL-B.CO", "ITX.MC", "AENA.MC", "IAG.L", "EZJ.L", "ATO.PA", "ABF.L", "NXT.L",
-            "JD.L", "PHNX.L", "CPG.L", "BME.L", "FRAS.L", "VGP.BR", "COFB.BR", "WDP.BR", "SOLB.BR", "SW.PA"
+            "JD.L", "CPG.L", "BME.L", "FRAS.L", "VGP.BR", "COFB.BR", "WDP.BR", "SOLB.BR", "SW.PA"
         ],
     },
     {
@@ -187,7 +187,7 @@ WATCHLIST_SPECS = [
         "cron": "40 07 * * MON-FRI",
         "schedule_rationale": "Cyclicals run after the earlier Europe groups because commodity, industrial, and auto names usually react best once the continental macro tape and sector leadership are clearer.",
         "tickers": [
-            "SHEL.L", "BP.L", "TTE.PA", "ENI.MI", "EQNR.OL", "RIO.L", "GLEN.L", "AAL.L", "HOLN.SW", "CRH.L",
+            "SHEL.L", "BP.L", "TTE.PA", "ENI.MI", "EQNR.OL", "RIO.L", "GLEN.L", "AAL.L", "HOLN.SW",
             "HEI.DE", "SY1.DE", "BAS.DE", "SIKA.SW", "AKZA.AS", "VOW3.DE", "MBG.DE", "BMW.DE", "AIR.PA", "SU.PA",
             "REP.MC", "ENG.MC", "ELE.MC", "IBE.MC", "FER.MC", "ACS.MC", "GALP.LS", "EDP.LS", "NHY.OL", "AKRBP.OL",
             "YAR.OL", "MOWI.OL", "ORK.OL", "SKA-B.ST", "VOLV-B.ST", "SAND.ST", "SKF-B.ST", "EPI-B.ST", "BOL.ST", "SSAB-A.ST",
@@ -233,7 +233,7 @@ WATCHLIST_SPECS = [
             "GILD", "BMY", "MDT", "ISRG", "SYK", "BSX", "CI", "CVS", "HCA", "REGN",
             "VRTX", "ZTS", "BIIB", "MRNA", "BDX", "EW", "IDXX", "HUM", "ELV", "CNC",
             "MCK", "COR", "CAH", "ALGN", "DXCM", "IQV", "A", "WAT", "UHS", "TECH",
-            "STE", "HOLX", "RGEN", "WST", "BIO", "RVTY", "MTD", "INCY", "NTRA", "PODD"
+            "STE", "RGEN", "WST", "BIO", "RVTY", "MTD", "INCY", "NTRA", "PODD"
         ],
     },
     {
@@ -475,8 +475,8 @@ def _validate_watchlist_specs(specs: list[dict[str, object]]) -> None:
                 )
             seen[ticker] = spec["name"]
 
-    if total != 750:
-        raise ValueError(f"expected 750 seeded tickers across all default watchlists, found {total}")
+    if total != 735:
+        raise ValueError(f"expected 735 seeded tickers across all default watchlists, found {total}")
 
 
 def _normalize_tickers(tickers: Iterable[str]) -> list[str]:

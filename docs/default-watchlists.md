@@ -10,8 +10,8 @@ That script is the source of truth for the exact seeded ticker lists and jobs. T
 ## Goals
 
 The default watchlist set is designed to:
-1. seed a broad but finite universe of **750 equities**
-2. keep exposure balanced at **250 U.S. / 250 Europe / 250 Asia/Pacific**
+1. seed a broad but finite universe of **735 equities**
+2. keep exposure broadly balanced after removing tickers with insufficient cached bar coverage
 3. divide the universe by **region + macro-industry**
 4. keep names compact and scan-friendly
 5. stagger schedules to reduce API spikes
@@ -167,12 +167,12 @@ The default script seeds:
   - 1 weekly confidence calibration refresh job
   - 1 weekly actionability-floor calibration check
   - 8 weekend fundamental-analysis refresh jobs
-- **750 unique equities total**
+- **735 unique equities total**
 
 Regional split:
-- **U.S.:** 5 watchlists / 250 equities
-- **Europe:** 5 watchlists / 250 equities
-- **Asia/Pacific:** 5 watchlists / 250 equities
+- **U.S.:** 5 watchlists / 249 equities
+- **Europe:** 5 watchlists / 237 equities
+- **Asia/Pacific:** 5 watchlists / 249 equities
 
 ## Operational notes
 
@@ -187,7 +187,7 @@ The script:
 - updates existing seeded watchlists by name
 - creates or updates matching proposal, refresh, evaluation, safety, quality, calibration, and fundamentals jobs
 - rejects duplicate ticker assignment across watchlists
-- validates that the seeded default set still contains exactly **750** tickers
+- validates that the seeded default set still contains exactly **735** tickers
 
 ## Maintenance rule
 
