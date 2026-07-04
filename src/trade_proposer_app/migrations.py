@@ -1,7 +1,7 @@
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from trade_proposer_app.config import settings
 
@@ -97,10 +97,47 @@ def try_repair_partial_sqlite_schema() -> bool:
         engine.dispose()
 
 
+def grant_postgres_app_role_privileges() -> None:
+    """Repair grants when migrations run as owner/superuser but API uses app role.
+
+    Docker deployments can run Alembic with a different database owner than the runtime
+    connection. New tables then exist but the runtime role cannot read them. Keep this
+    best-effort and Postgres-only so SQLite/tests are unaffected.
+    """
+    if not settings.database_url.startswith("postgresql"):
+        return
+    engine = create_engine(settings.database_url, future=True)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'trade_proposer') THEN
+                            GRANT USAGE ON SCHEMA public TO trade_proposer;
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO trade_proposer;
+                            GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO trade_proposer;
+                            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO trade_proposer;
+                            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO trade_proposer;
+                        END IF;
+                    END $$;
+                    """
+                )
+            )
+    except SQLAlchemyError:
+        # Runtime may already be the restricted app role; in that case there is
+        # nothing useful to repair here and migrations should not fail.
+        return
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     normalize_alembic_revision_ids()
     try:
         command.upgrade(get_alembic_config(), "head")
+        grant_postgres_app_role_privileges()
     except OperationalError as exc:
         message = str(exc)
         if (
