@@ -123,6 +123,25 @@ function validationDepthLabel(depth: string | undefined): string {
   return "depth unknown";
 }
 
+function tuningRunAdvice(run: PlanGenerationTuningRun): { title: string; message: string; tone: "ok" | "warning" | "danger" | "info" } {
+  if (run.status !== "completed") {
+    return { title: "Wait for completion", message: `Run is ${run.status}. Refresh after the worker completes it.`, tone: "info" };
+  }
+  const eligible = run.candidates.filter((candidate) => candidate.promotion_eligible && !candidate.is_baseline);
+  if (eligible.length > 0) {
+    return { title: "Candidate needs replay/holdout validation", message: `${eligible.length} candidate(s) passed discovery gates. Open Tuning Workflow, shortlist the best 1–2, then run candidate replay and holdout before any paper promotion.`, tone: "ok" };
+  }
+  const top = run.candidates.find((candidate) => !candidate.is_baseline) ?? null;
+  const reasons = top?.rejection_reasons ?? [];
+  if (reasons.includes("insufficient_validation_actionable_records")) {
+    return { title: "No safe follow-up candidate", message: `The top candidate improved discovery metrics but had only ${candidateMetric(top, "validation_actionable_count") ?? "few"} validation-actionable records. Do not promote. Next useful action is to gather/bind a larger replay validation window in Tuning Workflow, or treat the top candidate as research-only.`, tone: "warning" };
+  }
+  if (run.candidates.length === 0) {
+    return { title: "No candidates produced", message: "The run completed without candidates. Check whether replay artifacts exist for the selected universe/window before running discovery again.", tone: "warning" };
+  }
+  return { title: "Discovery did not find a promotable candidate", message: `Top rejection: ${reasons.join(", ") || "candidate failed promotion gates"}. No promotion or replay follow-up is recommended unless you deliberately create a new workflow experiment with more evidence.`, tone: "warning" };
+}
+
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
   const [portfolio, setPortfolio] = useState<ConfigPortfolioItem[] | null>(null);
@@ -415,7 +434,9 @@ export function PlanGenerationTuningPage() {
           const results = arrayValue(aggregate.results);
           const replayPromotion = objectValue(summary.replay_promotion);
           const sourceMode = s(summary.tuning_source_mode) || (selectedTuningRun.filters.replay_mode ? "point_in_time_replay" : "stored_plan_rescore");
+          const advice = tuningRunAdvice(selectedTuningRun);
           return <div className="stack-page">
+            <div className={`alert alert-${advice.tone === "danger" ? "danger" : advice.tone === "warning" ? "warning" : "info"} top-gap-small`}><strong>{advice.title}.</strong> {advice.message}</div>
             <section className="metrics-grid top-gap-small">
               <StatCard label="Tuning mode" value={sourceMode} helper={`run mode ${selectedTuningRun.mode}`} />
               <StatCard label="Tier A evidence" value={selectedTuningRun.eligible_tier_a_count} helper={`${selectedTuningRun.eligible_record_count} eligible records`} />
