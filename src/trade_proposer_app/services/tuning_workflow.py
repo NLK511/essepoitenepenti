@@ -669,18 +669,25 @@ class TuningWorkflowService:
         return self.experiment_detail(record)
 
     def experiment_summary(self, record: TuningExperimentRecord) -> dict[str, object]:
-        detail = self.experiment_detail(record)
+        universe = loads_json_object(record.universe_json)
+        windows = loads_json_object(record.windows_json)
+        discovery_settings = loads_json_object(record.discovery_settings_json)
+        replay_settings = loads_json_object(record.replay_settings_json)
+        baseline = loads_json_object(record.baseline_json)
+        metadata = loads_json_object(record.metadata_json)
+        setup = self._setup_status(record, universe, windows, discovery_settings, replay_settings, baseline)
+        lifecycle = self._lifecycle(record, setup, metadata)
         return {
-            "id": detail["id"],
-            "name": detail["name"],
-            "status": detail["status"],
-            "current_stage": detail["current_stage"],
-            "next_action": detail["next_action"],
-            "blockers": detail["blockers"],
-            "objective": detail["objective"],
-            "promotion_target": detail["promotion_target"],
-            "created_at": detail["created_at"],
-            "updated_at": detail["updated_at"],
+            "id": record.id,
+            "name": record.name,
+            "status": record.status,
+            "current_stage": lifecycle["current_stage"],
+            "next_action": lifecycle["next_action"],
+            "blockers": lifecycle["blockers"],
+            "objective": record.objective,
+            "promotion_target": record.promotion_target,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
         }
 
     def experiment_detail(self, record: TuningExperimentRecord) -> dict[str, object]:

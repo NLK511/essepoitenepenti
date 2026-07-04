@@ -18,7 +18,7 @@ type ConfigPortfolioItem = {
   config: PlanGenerationTuningConfigVersion;
   is_current: boolean;
   nominal_performance: Record<string, unknown> | null;
-  historical_performance: PerformanceSummary;
+  historical_performance: PerformanceSummary | null;
   active_period_performance: PerformanceSummary | null;
   active_periods: Array<Record<string, unknown>>;
 };
@@ -126,6 +126,7 @@ function validationDepthLabel(depth: string | undefined): string {
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
   const [portfolio, setPortfolio] = useState<ConfigPortfolioItem[] | null>(null);
+  const [portfolioIncludesPerformance, setPortfolioIncludesPerformance] = useState(false);
   const [jobRuns, setJobRuns] = useState<JobRun[] | null>(null);
   const [tuningRuns, setTuningRuns] = useState<PlanGenerationTuningRun[] | null>(null);
   const [jobOffset, setJobOffset] = useState(0);
@@ -150,8 +151,9 @@ export function PlanGenerationTuningPage() {
 
   const pageSize = 20;
 
-  async function loadPortfolio(activeConfigId: number | null = state?.state.active_config_version_id ?? null) {
-    const loadedPortfolio = await getJson<PortfolioResponse>("/api/plan-generation-tuning/configs/portfolio?limit=100");
+  async function loadPortfolio(activeConfigId: number | null = state?.state.active_config_version_id ?? null, includePerformance = false) {
+    const loadedPortfolio = await getJson<PortfolioResponse>(`/api/plan-generation-tuning/configs/portfolio?limit=50&include_performance=${includePerformance ? "true" : "false"}`);
+    setPortfolioIncludesPerformance(includePerformance);
     setPortfolio(loadedPortfolio.items);
     setSelectedConfigId((current) => current ?? activeConfigId ?? loadedPortfolio.items[0]?.config.id ?? null);
   }
@@ -317,7 +319,7 @@ export function PlanGenerationTuningPage() {
           <SectionTitle kicker="Live baseline" title={activeConfig?.config.version_label ?? "No active config"} subtitle="Currently promoted plan-generation config used as the default comparison baseline." />
           <div className="metrics-grid top-gap-small">
             <StatCard label="Config id" value={activeConfig?.config.id ?? "—"} helper="Active version" />
-            <StatCard label="Historical WR" value={formatPercent(activeConfig?.historical_performance.win_rate_percent ?? null)} helper={performanceLine(activeConfig?.historical_performance ?? null)} />
+            <StatCard label="Historical WR" value={formatPercent(activeConfig?.historical_performance?.win_rate_percent ?? null)} helper={portfolioIncludesPerformance ? performanceLine(activeConfig?.historical_performance ?? null) : "Skipped on initial load for speed"} />
             <StatCard label="Active-period WR" value={formatPercent(activeConfig?.active_period_performance?.win_rate_percent ?? null)} helper={performanceLine(activeConfig?.active_period_performance ?? null)} />
             <StatCard label="Active periods" value={activeConfig?.active_periods.length ?? 0} helper="Inferred from promotion events" />
           </div>
@@ -343,7 +345,7 @@ export function PlanGenerationTuningPage() {
         </Card>
       </section>
 
-      <DisclosureCard kicker="Configurations" title="Promoted configuration management" subtitle="Nominal performance comes from the source tuning candidate when available; historical performance rescoring uses all current eligible records.">
+      <DisclosureCard kicker="Configurations" title="Promoted configuration management" subtitle="Initial load skips expensive historical rescoring. Load performance only when needed." actions={<button className="button-subtle" type="button" onClick={() => void loadPortfolio(state?.state.active_config_version_id ?? null, true)}>{portfolioIncludesPerformance ? "Refresh performance" : "Load performance"}</button>}>
         <div className="data-stack top-gap-small">
           {!portfolio ? <LoadingState message="Loading config portfolio…" /> : portfolio.map((item) => (
             <article key={item.config.id ?? item.config.version_label} className={`data-card ${selectedConfig?.config.id === item.config.id ? "data-card-selected" : ""}`}>
@@ -352,7 +354,7 @@ export function PlanGenerationTuningPage() {
                 <div className="cluster"><Badge tone={item.is_current ? "ok" : planGenerationTuningConfigTone(item.config.status)}>{item.is_current ? "live" : item.config.status}</Badge><Badge>{item.config.source}</Badge><Badge>#{item.config.id ?? "?"}</Badge></div>
               </div>
               <div className="metrics-grid top-gap-small">
-                <StatCard label="Historical" value={formatPercent(item.historical_performance.win_rate_percent)} helper={performanceLine(item.historical_performance)} />
+                <StatCard label="Historical" value={formatPercent(item.historical_performance?.win_rate_percent ?? null)} helper={portfolioIncludesPerformance ? performanceLine(item.historical_performance) : "Not loaded"} />
                 <StatCard label="Active period" value={formatPercent(item.active_period_performance?.win_rate_percent ?? null)} helper={performanceLine(item.active_period_performance)} />
                 <StatCard label="Nominal source" value={item.nominal_performance ? `rank ${s((item.nominal_performance.metrics as Record<string, unknown> | undefined)?.rank) || s(item.nominal_performance.rank) || "—"}` : "—"} helper={item.nominal_performance ? "Source candidate data available" : "Baseline/manual config"} />
                 <StatCard label="Periods" value={item.active_periods.length} helper={item.active_periods.map((period) => `${formatDate(s(period.started_at))} → ${period.ended_at ? formatDate(s(period.ended_at)) : "now"}`).join("; ") || "Never active"} />

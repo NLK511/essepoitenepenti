@@ -61,12 +61,15 @@ export function TuningWorkflowPage() {
     promotion_target: "paper_config",
   });
 
-  async function load(selectId?: number) {
+  async function load(selectId?: number, refreshList = true) {
     setLoading(true);
     setError(null);
     try {
-      const list = await getJson<TuningExperimentsResponse>("/api/tuning-workflow/experiments?limit=50");
-      setExperiments(list);
+      let list = experiments;
+      if (refreshList || !list) {
+        list = await getJson<TuningExperimentsResponse>("/api/tuning-workflow/experiments?limit=25");
+        setExperiments(list);
+      }
       const id = selectId ?? selected?.id ?? list.experiments[0]?.id;
       if (id) {
         const detail = await getJson<TuningExperimentResponse>(`/api/tuning-workflow/experiments/${id}`);
@@ -121,7 +124,7 @@ export function TuningWorkflowPage() {
     try {
       const response = await postJson<TuningExperimentResponse>(path, body);
       setSelected(response.experiment);
-      await load(response.experiment.id);
+      void load(response.experiment.id, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Workflow action failed");
     } finally {
@@ -193,7 +196,7 @@ export function TuningWorkflowPage() {
 
             <Card>
               <SectionTitle kicker="Experiments" title="Active workflow list" subtitle="Select an experiment to review lifecycle state and next action." />
-              {experiments?.experiments.length ? <div className="stack top-gap-small">{experiments.experiments.map((experiment) => <button type="button" className="button-subtle" key={experiment.id} onClick={() => void load(experiment.id)}><span>{experiment.name}</span> <Badge tone={stageTone(experiment.current_stage)}>{experiment.current_stage}</Badge></button>)}</div> : <EmptyState message="No active tuning experiments yet." />}
+              {experiments?.experiments.length ? <div className="stack top-gap-small">{experiments.experiments.map((experiment) => <button type="button" className="button-subtle" key={experiment.id} onClick={() => void load(experiment.id, false)}><span>{experiment.name}</span> <Badge tone={stageTone(experiment.current_stage)}>{experiment.current_stage}</Badge></button>)}</div> : <EmptyState message="No active tuning experiments yet." />}
             </Card>
           </section>
         ) : null}

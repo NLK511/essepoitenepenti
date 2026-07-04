@@ -332,12 +332,13 @@ async def list_plan_generation_tuning_job_runs(
 async def list_plan_generation_tuning_config_portfolio(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    include_performance: bool = Query(default=True),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
     service = PlanGenerationTuningService(session)
     repository = service.repository
     configs = repository.list_config_versions(limit=limit, offset=offset)
-    records = service._eligible_records(ticker=None, setup_family=None, limit=None)  # noqa: SLF001
+    records = service._eligible_records(ticker=None, setup_family=None, limit=None) if include_performance else []  # noqa: SLF001
     described_state = service.describe()["state"]
     active_id = described_state.active_config_version_id
     promotion_rows = session.scalars(
@@ -404,9 +405,9 @@ async def list_plan_generation_tuning_config_portfolio(
                 "config": config,
                 "is_current": config.id == active_id,
                 "nominal_performance": nominal,
-                "historical_performance": _score_payload(service, records, normalized),
+                "historical_performance": _score_payload(service, records, normalized) if include_performance else None,
                 "active_period_performance": (
-                    _score_payload(service, active_records, normalized) if active_records else None
+                    _score_payload(service, active_records, normalized) if include_performance and active_records else None
                 ),
                 "active_periods": periods,
             }
