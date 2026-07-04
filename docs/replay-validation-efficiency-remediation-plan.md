@@ -256,11 +256,12 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [ ] Multiple candidate outcomes for the same ticker/as_of reuse loaded bar windows in process.
 - [ ] Missing bar windows produce coverage/eligibility diagnostics.
 
-## Phase 9 — Candidate deduplication and preflight pruning
+## Phase 9 — Candidate deduplication and preflight pruning — partially implemented
 
 ### Tasks
 
-- [ ] Deduplicate candidate configs by normalized config hash.
+- [x] Deduplicate candidate configs by normalized config hash in the reusable `CandidateReplayPlanner` service.
+- [ ] Wire planner deduplication into every replay queue path after existing candidate-order tests are migrated.
 - [ ] Add effective-equivalence preflight over a small frozen artifact sample:
   - identical actionability decisions
   - near-identical generated levels
@@ -276,10 +277,12 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [ ] Preflight can only reject/skip candidates, not promote them.
 - [ ] Candidate amount for replay pass counts only non-skipped candidates.
 
-## Phase 10 — Early rejection / stop conditions
+## Phase 10 — Early rejection / stop conditions — partially implemented
 
 ### Tasks
 
+- [x] Add reusable configurable early-stop policy service for candidate validation aggregates.
+- [ ] Wire early-stop policy into long-running replay execution after operator controls exist.
 - [ ] Add configurable early-stop rules for candidate validation:
   - too few Tier A cases after minimum slice count
   - materially worse win rate/EV than baseline
@@ -295,11 +298,13 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [ ] Early-stopped candidate is not promotable.
 - [ ] Operator can distinguish early statistical rejection from infrastructure failure.
 
-## Phase 11 — Materialized replay/candidate aggregates
+## Phase 11 — Replay/candidate aggregates — partially implemented
 
 ### Tasks
 
-- [ ] Add aggregate service/table keyed by:
+- [x] Add reusable aggregate service over existing replay outcome/eligibility records.
+- [x] Expose replay batch efficiency summary through the plan-generation tuning API.
+- [ ] Add optional materialized aggregate table keyed by:
   - experiment id or replay batch id
   - candidate id/config hash
   - validation depth

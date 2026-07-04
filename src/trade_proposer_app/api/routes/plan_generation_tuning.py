@@ -29,6 +29,7 @@ from trade_proposer_app.services.plan_generation_tuning_parameters import (
 from trade_proposer_app.services.plan_generation_walk_forward import (
     PlanGenerationWalkForwardService,
 )
+from trade_proposer_app.services.replay_validation_efficiency import replay_candidate_efficiency_summary
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
 from trade_proposer_app.utils.json_payloads import loads_json_list as _loads_json_list
 from trade_proposer_app.utils.json_payloads import loads_json_object as _loads_json_object
@@ -567,6 +568,17 @@ async def get_plan_generation_tuning_parameters(
         "parameter_schema_version": state["parameter_schema_version"],
         "parameters": state["parameters"],
     }
+
+
+@router.get("/replay-batches/{replay_batch_id}/efficiency-summary")
+async def replay_batch_efficiency_summary(
+    replay_batch_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    batch_exists = session.scalar(select(func.count()).select_from(HistoricalReplayBatchRecord).where(HistoricalReplayBatchRecord.id == replay_batch_id))
+    if not batch_exists:
+        raise HTTPException(status_code=404, detail="replay batch not found")
+    return replay_candidate_efficiency_summary(session, replay_batch_id)
 
 
 @router.get("/validation")

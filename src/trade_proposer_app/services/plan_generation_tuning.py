@@ -575,6 +575,7 @@ class PlanGenerationTuningService:
         created_batches: list[dict[str, object]] = []
         for candidate in candidates:
             config_hash = stable_hash(candidate.config)
+            depth_payload = candidate_validation_depth(candidate.changed_keys)
             existing = self._existing_replay_candidate_batch(run_id, candidate.id or 0, config_hash)
             if existing is not None:
                 batch_id = existing.id
@@ -593,6 +594,8 @@ class PlanGenerationTuningService:
                         "plan_generation_tuning_candidate_id": candidate.id,
                         "plan_generation_tuning_candidate_rank": candidate.rank,
                         "candidate_config_hash": config_hash,
+                        "candidate_validation_depth": depth_payload["validation_depth"],
+                        "candidate_validation_depth_reason": depth_payload["validation_depth_reason"],
                         "plan_generation_tuning_config_override": candidate.config,
                         "baseline_config_version_id": run.baseline_config_version_id,
                     },
@@ -606,6 +609,8 @@ class PlanGenerationTuningService:
                     "candidate_id": candidate.id,
                     "candidate_rank": candidate.rank,
                     "candidate_config_hash": config_hash,
+                    "validation_depth": depth_payload["validation_depth"],
+                    "validation_depth_reason": depth_payload["validation_depth_reason"],
                     "replay_batch_id": batch_id,
                     "status": status,
                     "queued_run_count": queued_run_count,
