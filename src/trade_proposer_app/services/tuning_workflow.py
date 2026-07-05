@@ -1461,7 +1461,7 @@ class TuningWorkflowService:
         elif status in pending_statuses:
             percent = 0
         else:
-            percent = 75 if status.endswith("ready") else 0
+            percent = 0
         enriched["progress_percent"] = percent
         enriched.setdefault("summary", self._section_summary(key, enriched))
         return enriched
@@ -1480,6 +1480,8 @@ class TuningWorkflowService:
         if key == "shortlist":
             return f"{len(section.get('candidate_ids') or [])}/{int(section.get('max_candidates') or 0)} candidate(s) shortlisted."
         if key in {"baseline_replay", "candidate_replay_validation", "stability_validation"}:
+            if status == "ready":
+                return "Ready to create worker jobs; nothing is running yet."
             batch = section.get("batch_id") or section.get("batch_ids") or section.get("holdout_batch_ids") or "—"
             return f"{status}; batch/run reference: {batch}."
         if key == "promotion_proposal":

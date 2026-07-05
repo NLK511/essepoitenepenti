@@ -435,7 +435,7 @@ Candidate validation must be blocked until the baseline is selected and either c
 
 Shows replay progress and candidate-vs-baseline metrics.
 
-If baseline replay is complete and candidates are shortlisted but candidate replay has not yet been created, the card must show a ready/not-run state, not `blocked`.
+If baseline replay is complete and candidates are shortlisted but candidate replay has not yet been created, the card must show a ready/not-run state, not `blocked`. A ready/not-run phase must not look partially complete: progress must be `0%` and the summary must clearly say that no worker job is running yet.
 
 Must include:
 - replay batch ids
