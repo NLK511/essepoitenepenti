@@ -8,11 +8,11 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import PlanGenerationTuningConfigVersion, PlanGenerationTuningEvent
-from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord, WatchlistRecord
+from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord, WatchlistRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_DEFAULTS, candidate_validation_depth, normalize_plan_generation_tuning_config
-from trade_proposer_app.services.replay_validation_efficiency import ReplayValidationAggregateService
+from trade_proposer_app.services.replay_validation_efficiency import FrozenInputPlanRegenerationService, ReplayValidationAggregateService
 from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
@@ -350,11 +350,23 @@ class TuningWorkflowService:
         tickers = self._experiment_tickers(universe)
         start_dt, end_dt = self._window_datetimes(windows, "replay")
         created: dict[str, object] = {}
+        aggregate_service = ReplayValidationAggregateService(self.session)
         for candidate_id in shortlist_ids:
             candidate = candidates.get(str(candidate_id))
             if not candidate:
                 raise TuningWorkflowError(f"candidate {candidate_id} not found")
             config_hash = str(candidate.get("config_hash") or stable_hash(candidate.get("config") or {}))
+            validation_depth = str(candidate.get("validation_depth") or "full_orchestration_replay")
+            if validation_depth in {"rescore_only", "frozen_input_plan_regeneration"}:
+                created[str(candidate_id)] = self._create_lightweight_candidate_validation(
+                    record,
+                    metadata,
+                    candidate_id=str(candidate_id),
+                    candidate=candidate,
+                    candidate_config_hash=config_hash,
+                    validation_depth=validation_depth,
+                )
+                continue
             batch = replay_service.create_batch(
                 name=f"tuning-exp-{record.id}-{candidate_id}-{config_hash[:10]}",
                 mode="research",
@@ -367,16 +379,18 @@ class TuningWorkflowService:
                     "tuning_candidate_id": candidate_id,
                     "candidate_config_hash": config_hash,
                     "plan_generation_tuning_config_override": candidate.get("config") or {},
-                    "candidate_validation_depth": candidate.get("validation_depth"),
+                    "candidate_validation_depth": validation_depth,
                     "cache_only": True,
                 },
             )
             queued_runs = replay_service.enqueue_batch(batch.id or 0) if enqueue else []
             created[str(candidate_id)] = {
                 "batch_id": batch.id,
+                "logical_batch_id": batch.id,
                 "status": "queued" if enqueue else batch.status,
+                "validation_depth": validation_depth,
                 "queued_run_count": len(queued_runs),
-                "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch.id or 0),
+                "summary": aggregate_service.aggregate_batch(batch.id or 0),
             }
         metadata["candidate_replay_validation"] = {
             "status": "queued" if enqueue else "created",
@@ -409,10 +423,11 @@ class TuningWorkflowService:
                     continue
                 batch_id = int(payload["batch_id"])
                 batch = self.session.get(HistoricalReplayBatchRecord, batch_id)
+                candidate_hash = str(payload.get("candidate_config_hash") or "")
                 payload.update({
-                    "status": batch.status if batch else payload.get("status", "missing"),
+                    "status": payload.get("status") if payload.get("source_frozen_inputs_reused") else (batch.status if batch else payload.get("status", "missing")),
                     "progress": self._batch_progress(batch_id),
-                    "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch_id),
+                    "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch_id, candidate_config_hash=candidate_hash or None),
                 })
             validation["comparisons"] = self._candidate_comparisons(metadata)
             statuses = [str(payload.get("status")) for payload in candidate_batches.values() if isinstance(payload, dict)]
@@ -432,6 +447,142 @@ class TuningWorkflowService:
         self.session.commit()
         self.session.refresh(record)
         return self.experiment_detail(record)
+
+    def _create_lightweight_candidate_validation(
+        self,
+        record: TuningExperimentRecord,
+        metadata: Mapping[str, object],
+        *,
+        candidate_id: str,
+        candidate: Mapping[str, object],
+        candidate_config_hash: str,
+        validation_depth: str,
+    ) -> dict[str, object]:
+        baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {}
+        baseline_batch_id = int(baseline.get("batch_id") or 0)
+        if baseline_batch_id <= 0:
+            raise TuningWorkflowError("baseline replay batch is required for lightweight candidate validation")
+        source_rows = list(
+            self.session.scalars(
+                select(ReplayEligibilityRecord).where(
+                    ReplayEligibilityRecord.replay_batch_id == baseline_batch_id,
+                    ReplayEligibilityRecord.candidate_config_hash == "",
+                )
+            ).all()
+        )
+        if not source_rows:
+            raise TuningWorkflowError("baseline replay has no frozen eligibility records to reuse")
+        source_outcomes = {
+            (row.replay_slice_id, row.recommendation_plan_id): row
+            for row in self.session.scalars(
+                select(ReplayPlanOutcomeRecord).where(
+                    ReplayPlanOutcomeRecord.replay_batch_id == baseline_batch_id,
+                    ReplayPlanOutcomeRecord.candidate_config_hash == "",
+                )
+            ).all()
+        }
+        tuning_config = dict(candidate.get("config") or {})
+        regenerator = FrozenInputPlanRegenerationService()
+        copied_count = 0
+        invalid_geometry_count = 0
+        for source in source_rows:
+            plan = self.session.get(RecommendationPlanRecord, source.recommendation_plan_id)
+            regeneration: dict[str, object] = {"status": "not_required"}
+            if validation_depth == "frozen_input_plan_regeneration" and plan is not None:
+                regeneration = regenerator.regenerate_levels(plan, tuning_config=tuning_config)
+                if regeneration.get("status") == "invalid":
+                    invalid_geometry_count += 1
+            source_outcome = source_outcomes.get((source.replay_slice_id, source.recommendation_plan_id))
+            outcome_record = self.session.scalar(
+                select(ReplayPlanOutcomeRecord).where(
+                    ReplayPlanOutcomeRecord.replay_slice_id == source.replay_slice_id,
+                    ReplayPlanOutcomeRecord.recommendation_plan_id == source.recommendation_plan_id,
+                    ReplayPlanOutcomeRecord.candidate_config_hash == candidate_config_hash,
+                )
+            )
+            if outcome_record is None:
+                outcome_record = ReplayPlanOutcomeRecord(
+                    replay_batch_id=baseline_batch_id,
+                    replay_slice_id=source.replay_slice_id,
+                    recommendation_plan_id=source.recommendation_plan_id,
+                    candidate_config_hash=candidate_config_hash,
+                )
+                self.session.add(outcome_record)
+            outcome_record.run_id = None
+            outcome_record.resolution_source = str(source_outcome.resolution_source if source_outcome else source.resolution_source)
+            outcome_record.outcome = str(source_outcome.outcome if source_outcome else source.outcome)
+            outcome_record.status = str(source_outcome.status if source_outcome else ("resolved" if source.outcome else "open"))
+            outcome_record.evaluated_at = datetime.now(timezone.utc)
+            outcome_payload = loads_json_object(source_outcome.outcome_json if source_outcome else "{}")
+            outcome_payload.update({
+                "validation_depth": validation_depth,
+                "candidate_config_hash": candidate_config_hash,
+                "source_replay_batch_id": baseline_batch_id,
+                "source_replay_plan_outcome_id": source_outcome.id if source_outcome else None,
+                "source_frozen_inputs_reused": True,
+                "remote_fetch_used": False,
+                "regenerated_geometry": regeneration,
+            })
+            outcome_record.outcome_json = _json_dumps(outcome_payload)
+            self.session.flush()
+            eligibility_record = self.session.scalar(
+                select(ReplayEligibilityRecord).where(
+                    ReplayEligibilityRecord.replay_slice_id == source.replay_slice_id,
+                    ReplayEligibilityRecord.recommendation_plan_id == source.recommendation_plan_id,
+                    ReplayEligibilityRecord.candidate_config_hash == candidate_config_hash,
+                )
+            )
+            if eligibility_record is None:
+                eligibility_record = ReplayEligibilityRecord(
+                    replay_batch_id=baseline_batch_id,
+                    replay_slice_id=source.replay_slice_id,
+                    recommendation_plan_id=source.recommendation_plan_id,
+                    candidate_config_hash=candidate_config_hash,
+                )
+                self.session.add(eligibility_record)
+            eligibility_record.run_id = None
+            eligibility_record.replay_plan_outcome_id = outcome_record.id
+            eligibility_record.ticker = source.ticker
+            eligibility_record.eligibility_mode = validation_depth
+            eligibility_record.tier = "tier_c" if regeneration.get("status") == "invalid" else source.tier
+            eligibility_record.eligible_for_tuning = bool(source.eligible_for_tuning and regeneration.get("status") != "invalid")
+            eligibility_record.resolution_source = source.resolution_source
+            eligibility_record.outcome = source.outcome
+            diagnostics = loads_json_object(source.diagnostics_json)
+            diagnostics.update({
+                "validation_depth": validation_depth,
+                "candidate_config_hash": candidate_config_hash,
+                "source_replay_batch_id": baseline_batch_id,
+                "source_replay_eligibility_id": source.id,
+                "source_frozen_inputs_reused": True,
+                "cheap_scan_rerun": False,
+                "deep_analysis_rerun": False,
+                "remote_fetch_used": False,
+                "regenerated_geometry": regeneration,
+            })
+            eligibility_record.diagnostics_json = _json_dumps(diagnostics)
+            eligibility_record.rejection_reasons_json = source.rejection_reasons_json
+            copied_count += 1
+        self.session.commit()
+        return {
+            "batch_id": baseline_batch_id,
+            "logical_batch_id": baseline_batch_id,
+            "status": "completed",
+            "validation_depth": validation_depth,
+            "candidate_config_hash": candidate_config_hash,
+            "queued_run_count": 0,
+            "reused_baseline_replay_batch_id": baseline_batch_id,
+            "source_frozen_inputs_reused": True,
+            "cheap_scan_rerun": False,
+            "deep_analysis_rerun": False,
+            "remote_fetch_used": False,
+            "copied_record_count": copied_count,
+            "invalid_geometry_count": invalid_geometry_count,
+            "summary": ReplayValidationAggregateService(self.session).aggregate_batch(
+                baseline_batch_id,
+                candidate_config_hash=candidate_config_hash,
+            ),
+        }
 
     def bind_baseline_replay_batch(self, experiment_id: int, replay_batch_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)

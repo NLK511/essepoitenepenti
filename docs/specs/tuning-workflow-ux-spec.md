@@ -64,7 +64,7 @@ Allowed depths:
 - `frozen_input_plan_regeneration` — reuse frozen upstream replay evidence and regenerate only downstream plan construction plus outcome resolution. This is the default for plan-generation geometry/framing parameters.
 - `full_orchestration_replay` — rerun cheap scan, deep analysis, signal generation, plan generation, and outcome resolution from local point-in-time inputs. This is required only when a candidate changes upstream selection/evidence behavior.
 
-The UI must explain why each candidate received its depth and what work will be reused.
+The UI must explain why each candidate received its depth and what work will be reused. Candidate validation must route by this depth: rescore-only and frozen-input candidates must not rerun cheap scan or deep analysis; only full-orchestration candidates may queue full replay slices.
 
 Examples:
 

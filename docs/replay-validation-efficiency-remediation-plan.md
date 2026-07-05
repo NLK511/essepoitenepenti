@@ -1,6 +1,6 @@
 # Replay validation efficiency remediation plan
 
-**Status:** planned
+**Status:** partially implemented end-to-end for tuning workflow rescore/frozen-input routing
 
 Canonical specs:
 - `specs/tuning-workflow-ux-spec.md`
@@ -178,7 +178,7 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 ### Tasks
 
 - [x] Create reusable geometry-regeneration service for `frozen_input_plan_regeneration`.
-- [ ] Wire the service into candidate replay execution with canonical outcome resolution.
+- [x] Wire the service into tuning workflow candidate validation routing for rescore-only and frozen-input candidates. Initial implementation reuses frozen baseline replay records and annotates regenerated geometry/provenance; deeper canonical re-resolution remains a follow-up.
 - [x] Inputs:
   - frozen artifact record/reference
   - candidate config override
@@ -186,12 +186,13 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [x] Reuse upstream evidence exactly as stored for setup/context metadata available in stored plan payloads.
 - [x] Invoke shared live plan-framing logic under scoped candidate config.
 - [x] Do not rerun cheap scan, news fetch, social fetch, deep analysis, or signal generation.
-- [ ] Resolve generated candidate plan through canonical outcome resolution.
-- [ ] Persist candidate plan/outcome/eligibility with provenance:
-  - source frozen artifact id
+- [ ] Resolve generated candidate plan through canonical outcome resolution. Current workflow implementation reuses baseline resolved outcome labels while tagging regenerated geometry; this is efficient and avoids upstream reruns, but geometry-sensitive re-resolution remains required for full correctness.
+- [x] Persist candidate outcome/eligibility records with provenance:
+  - source baseline replay batch/eligibility/outcome ids
   - candidate config hash
   - validation depth
-  - code/settings hashes
+  - frozen-input reuse flags
+- [ ] Persist dedicated candidate plan artifacts/code/settings hashes.
 - [ ] Add invalid-geometry diagnostics and rejection reasons.
 
 ### Acceptance criteria

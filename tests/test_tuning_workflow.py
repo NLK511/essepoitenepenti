@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.config import settings
-from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, WatchlistRecord
+from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, WatchlistRecord
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
 
 
@@ -203,6 +203,11 @@ class TuningWorkflowServiceTests(unittest.TestCase):
 
             detail = service.create_baseline_replay_batch(experiment_id)
             self.assertEqual("candidate_replay_needed", detail["current_stage"])
+            metadata_record = service.get_experiment(experiment_id)
+            metadata = __import__("json").loads(metadata_record.metadata_json)
+            metadata["candidate_pool"]["candidates"][0]["validation_depth"] = "full_orchestration_replay"
+            metadata_record.metadata_json = __import__("json").dumps(metadata)
+            session.commit()
             detail = service.create_candidate_replay_batches(experiment_id)
 
             self.assertEqual("queued", detail["sections"]["candidate_replay_validation"]["status"])
@@ -210,6 +215,56 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertTrue(fake_replay.created[0]["config"]["cache_only"])
             self.assertEqual("tuning_workflow_candidate_replay", fake_replay.created[1]["config"]["source"])
             self.assertIn("plan_generation_tuning_config_override", fake_replay.created[1]["config"])
+        finally:
+            session.close()
+
+    def test_lightweight_candidate_validation_reuses_baseline_without_replay_job(self) -> None:
+        session = self.create_session()
+        try:
+            fake_replay = FakeReplayService()
+            service = TuningWorkflowService(session, historical_replay_service=fake_replay)
+            detail = service.create_experiment(
+                {
+                    "name": "Lightweight validation",
+                    "universe": {"tickers": ["AAPL"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-04-01",
+                    },
+                    "baseline": {"source": "existing_replay_batch"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            baseline_batch = HistoricalReplayBatchRecord(name="baseline-lightweight", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            session.add(baseline_batch)
+            session.commit()
+            slice_record = HistoricalReplaySliceRecord(replay_batch_id=baseline_batch.id or 0, as_of=datetime(2026, 2, 2, tzinfo=timezone.utc), status="completed")
+            plan = RecommendationPlanRecord(ticker="AAPL", action="long", confidence_percent=70, entry_price_low=99, entry_price_high=101, stop_loss=95, take_profit=110, evidence_summary_json='{"setup_family":"breakout"}', signal_breakdown_json="{}")
+            session.add_all([slice_record, plan])
+            session.commit()
+            outcome = ReplayPlanOutcomeRecord(replay_batch_id=baseline_batch.id or 0, replay_slice_id=slice_record.id or 0, recommendation_plan_id=plan.id or 0, resolution_source="intraday", outcome="win", status="resolved", outcome_json="{}")
+            session.add(outcome)
+            session.commit()
+            eligibility = ReplayEligibilityRecord(replay_batch_id=baseline_batch.id or 0, replay_slice_id=slice_record.id or 0, replay_plan_outcome_id=outcome.id, recommendation_plan_id=plan.id or 0, ticker="AAPL", tier="tier_a", eligible_for_tuning=True, resolution_source="intraday", outcome="win", diagnostics_json='{"setup_family":"breakout"}')
+            session.add(eligibility)
+            session.commit()
+
+            service.bind_baseline_replay_batch(experiment_id, baseline_batch.id or 0)
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            service.update_shortlist(experiment_id, [candidate_id])
+            detail = service.create_candidate_replay_batches(experiment_id)
+
+            payload = detail["sections"]["candidate_replay_validation"]["candidate_batches"][candidate_id]
+            self.assertEqual("rescore_only", payload["validation_depth"])
+            self.assertEqual(0, payload["queued_run_count"])
+            self.assertTrue(payload["source_frozen_inputs_reused"])
+            self.assertEqual(0, len(fake_replay.created))
+            self.assertEqual(1, payload["summary"]["tier_a_count"])
         finally:
             session.close()
 
