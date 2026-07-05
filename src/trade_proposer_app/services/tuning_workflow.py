@@ -1414,13 +1414,16 @@ class TuningWorkflowService:
         candidate_pool = metadata.get("candidate_pool") if isinstance(metadata.get("candidate_pool"), dict) else {"status": "empty", "candidates": []}
         shortlist = metadata.get("shortlist") if isinstance(metadata.get("shortlist"), dict) else {"candidate_ids": []}
         baseline_replay = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {"status": "missing", "batch_id": None}
+        candidate_replay_default = {"status": "blocked", "reason": "baseline and shortlist are required"}
+        if baseline_replay.get("status") == "completed" and shortlist.get("candidate_ids"):
+            candidate_replay_default = {"status": "ready", "reason": "baseline is complete and shortlist is selected; candidate replay can be created"}
         sections = {
             "setup": {"status": setup_status, "warnings": setup.get("warnings", []), "blockers": setup.get("missing_fields", [])},
             "evidence_readiness": metadata.get("readiness_audit") if isinstance(metadata.get("readiness_audit"), dict) else {"status": "not_run", "cache_only": True, "warnings": []},
             "candidate_pool": {**candidate_pool, "label": "discovery-only evidence"},
             "shortlist": {"status": "selected" if shortlist.get("candidate_ids") else "empty", "candidate_ids": shortlist.get("candidate_ids", []), "max_candidates": loads_json_object(record.replay_settings_json).get("max_candidates", 5)},
             "baseline_replay": baseline_replay,
-            "candidate_replay_validation": metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else {"status": "blocked", "reason": "baseline and shortlist are required"},
+            "candidate_replay_validation": metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else candidate_replay_default,
             "stability_validation": metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else {"status": "not_run", "label": "stability/overfit screen"},
             "promotion_proposal": metadata.get("promotion_proposal") if isinstance(metadata.get("promotion_proposal"), dict) else {"status": "blocked", "reason": "replay and holdout validation are required"},
             "promotion_execution": metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {"status": "not_run"},

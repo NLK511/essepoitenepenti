@@ -421,6 +421,8 @@ Shows baseline config and baseline replay status.
 
 The card must derive live progress from the replay batch and slices, not only from the workflow metadata captured when the batch was queued. If worker runs completed all slices, the phase card must stop showing `queued` after the next page/API refresh.
 
+Replay summaries must count scoreable phantom outcomes: `phantom_win` counts as a win and `phantom_loss` counts as a loss for replay/tuning evidence. `phantom_no_entry`, `phantom_pending`, and `pending` remain non-win-loss outcomes.
+
 Actions:
 - run baseline replay
 - resume baseline replay
@@ -432,6 +434,8 @@ Candidate validation must be blocked until the baseline is selected and either c
 ### Stage 6 — Candidate replay validation
 
 Shows replay progress and candidate-vs-baseline metrics.
+
+If baseline replay is complete and candidates are shortlisted but candidate replay has not yet been created, the card must show a ready/not-run state, not `blocked`.
 
 Must include:
 - replay batch ids

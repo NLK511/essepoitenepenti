@@ -118,3 +118,48 @@ def test_replay_validation_aggregate_and_early_stop_policy() -> None:
         assert decision.reason in {"tier_a_ratio_too_low", "ticker_concentration_too_high", "loss_to_win_ratio_too_high"}
     finally:
         session.close()
+
+
+def test_replay_validation_aggregate_counts_scoreable_phantom_outcomes() -> None:
+    session = create_session()
+    try:
+        now = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        for index, outcome in enumerate(["phantom_win", "phantom_loss", "phantom_no_entry", "pending"], start=1):
+            session.add(
+                ReplayPlanOutcomeRecord(
+                    replay_batch_id=2,
+                    replay_slice_id=1,
+                    recommendation_plan_id=index,
+                    candidate_config_hash="",
+                    resolution_source="intraday" if outcome.startswith("phantom") else "pending",
+                    outcome=outcome,
+                    status="resolved" if outcome in {"phantom_win", "phantom_loss"} else "open",
+                    evaluated_at=now,
+                    outcome_json="{}",
+                )
+            )
+            session.add(
+                ReplayEligibilityRecord(
+                    replay_batch_id=2,
+                    replay_slice_id=1,
+                    recommendation_plan_id=index,
+                    candidate_config_hash="",
+                    ticker=f"T{index}",
+                    tier="tier_a",
+                    eligible_for_tuning=True,
+                    resolution_source="intraday" if outcome.startswith("phantom") else "pending",
+                    outcome=outcome,
+                    diagnostics_json='{"setup_family":"breakout"}',
+                )
+            )
+        session.commit()
+
+        aggregate = ReplayValidationAggregateService(session).aggregate_batch(2)
+
+        assert aggregate["win_count"] == 1
+        assert aggregate["loss_count"] == 1
+        assert aggregate["win_rate_percent"] == 50.0
+        assert aggregate["outcome_counts"]["phantom_no_entry"] == 1
+        assert aggregate["outcome_counts"]["pending"] == 1
+    finally:
+        session.close()

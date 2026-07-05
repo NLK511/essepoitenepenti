@@ -485,8 +485,8 @@ class CandidateReplayPlanner:
 class ReplayValidationAggregateService:
     """Aggregate replay outcomes once for UI/promotion gates without rescanning in callers."""
 
-    WIN_OUTCOMES = {"win", "target_hit", "take_profit_hit"}
-    LOSS_OUTCOMES = {"loss", "stop_loss_hit", "stopped"}
+    WIN_OUTCOMES = {"win", "target_hit", "take_profit_hit", "phantom_win"}
+    LOSS_OUTCOMES = {"loss", "stop_loss_hit", "stopped", "phantom_loss"}
 
     def __init__(self, session: Session) -> None:
         self.session = session
