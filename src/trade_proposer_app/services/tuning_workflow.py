@@ -411,6 +411,14 @@ class TuningWorkflowService:
     def refresh_replay_summaries(self, experiment_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         metadata = loads_json_object(record.metadata_json)
+        self._sync_replay_summaries(metadata)
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def _sync_replay_summaries(self, metadata: dict[str, object]) -> bool:
+        before = _json_dumps(metadata)
         baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else None
         if baseline and baseline.get("batch_id") is not None:
             batch_id = int(baseline["batch_id"])
@@ -437,10 +445,7 @@ class TuningWorkflowService:
             validation["comparisons"] = self._candidate_comparisons(metadata)
             statuses = [str(payload.get("status")) for payload in candidate_batches.values() if isinstance(payload, dict)]
             validation["status"] = "complete" if statuses and all(status == "completed" for status in statuses) else ("running" if any(status == "running" for status in statuses) else validation.get("status", "queued"))
-        record.metadata_json = _json_dumps(metadata)
-        self.session.commit()
-        self.session.refresh(record)
-        return self.experiment_detail(record)
+        return _json_dumps(metadata) != before
 
     def stop_candidate_replay_after_current_slice(self, experiment_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
@@ -1080,6 +1085,11 @@ class TuningWorkflowService:
         baseline = loads_json_object(record.baseline_json)
         advanced_settings = loads_json_object(record.advanced_settings_json)
         metadata = loads_json_object(record.metadata_json)
+        if self._sync_replay_summaries(metadata):
+            record.metadata_json = _json_dumps(metadata)
+            self.session.commit()
+            self.session.refresh(record)
+            metadata = loads_json_object(record.metadata_json)
         setup = self._setup_status(record, universe, windows, discovery_settings, replay_settings, baseline)
         lifecycle = self._lifecycle(record, setup, metadata)
         sections = self._sections(record, setup, lifecycle, metadata)

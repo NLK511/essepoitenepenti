@@ -419,6 +419,8 @@ Actions:
 
 Shows baseline config and baseline replay status.
 
+The card must derive live progress from the replay batch and slices, not only from the workflow metadata captured when the batch was queued. If worker runs completed all slices, the phase card must stop showing `queued` after the next page/API refresh.
+
 Actions:
 - run baseline replay
 - resume baseline replay
