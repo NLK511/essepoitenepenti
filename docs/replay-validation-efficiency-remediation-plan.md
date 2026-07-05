@@ -178,7 +178,7 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 ### Tasks
 
 - [x] Create reusable geometry-regeneration service for `frozen_input_plan_regeneration`.
-- [x] Wire the service into tuning workflow candidate validation routing for rescore-only and frozen-input candidates. Initial implementation reuses frozen baseline replay records and annotates regenerated geometry/provenance; deeper canonical re-resolution remains a follow-up.
+- [x] Wire the service into tuning workflow candidate validation routing for rescore-only and frozen-input candidates. Initial implementation reuses frozen baseline replay records and annotates regenerated geometry/provenance; deeper canonical re-resolution is planned below as Phase 5A.
 - [x] Inputs:
   - frozen artifact record/reference
   - candidate config override
@@ -201,6 +201,268 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [ ] Candidate plan geometry changes when geometry parameters change.
 - [ ] Outcome resolution reruns using local outcome bars.
 - [ ] Live settings are not mutated.
+
+## Phase 5A — Canonical local re-resolution for regenerated candidate plans — planned in detail
+
+### Why this phase matters
+
+The app goal is to find a real, monetizable edge without fooling itself. Reusing a baseline outcome label is valid only when the candidate does not change trade geometry. If a candidate changes entry, stop, take-profit, holding horizon, or actionable/no-entry behavior, the same market path can produce a different win/loss/open result. Promotion evidence must therefore be based on candidate-specific outcomes resolved against the historical bar path that was locally available for that replay window.
+
+This phase keeps the efficiency win from frozen-input validation while removing the main correctness gap:
+
+```text
+reuse frozen upstream evidence → regenerate candidate plan geometry → resolve candidate outcome locally → aggregate/promotion gate
+```
+
+It must not rerun cheap scan, deep analysis, signal generation, news/social/context fetches, or remote bar fetches.
+
+### Scope and non-goals
+
+In scope:
+- candidate-specific outcome resolution for `frozen_input_plan_regeneration`
+- safe baseline-label reuse for `rescore_only` only when plan geometry is unchanged
+- local-only bar-window loading for outcome horizons
+- candidate plan artifact/provenance persistence
+- eligibility/tier updates based on candidate-specific result and invalid geometry
+
+Out of scope:
+- changing discovery ranking semantics
+- live promotion automation
+- using holdout as discovery evidence
+- remote data hydration during replay/candidate validation
+- rerunning upstream evidence steps for plan-only candidates
+
+### Low-level target contract
+
+Add or expose a canonical local outcome resolver that can be called independently of full historical replay orchestration.
+
+Required input DTO:
+
+```text
+CandidateOutcomeResolutionInput
+- replay_batch_id
+- replay_slice_id
+- as_of
+- ticker
+- direction/action
+- entry_price_low
+- entry_price_high
+- stop_loss
+- take_profit
+- max_holding_days / outcome_horizon
+- resolution_source policy, e.g. intraday/daily fallback rules
+- candidate_config_hash
+- validation_depth
+- source_baseline_plan_id
+- source_replay_eligibility_id
+- source_replay_plan_outcome_id, optional
+- local_only=true
+```
+
+Required output DTO:
+
+```text
+CandidateOutcomeResolutionResult
+- status: resolved | open | expired | invalid_geometry | missing_local_bars | insufficient_window | error
+- outcome: win | loss | flat | no_entry | open | unknown
+- resolution_source: intraday | daily | close_to_close | unavailable
+- entry_triggered: bool
+- entry_at, exit_at, optional
+- entry_price, exit_price, optional
+- stop_hit_at, take_profit_hit_at, optional
+- bars_loaded_count
+- local_only: true
+- remote_fetch_used: false
+- diagnostics
+```
+
+Hard rules:
+- The resolver must read only local historical bar stores.
+- Missing local bars must return `missing_local_bars`/`insufficient_window`; it must not fetch or hydrate.
+- The same input plus same local store state must produce deterministic output.
+- Tie-breaking for same-bar stop/take-profit ambiguity must match existing canonical replay rules; if no such rule is centralized today, this phase must first extract one from the current replay outcome path and test it.
+- Candidate outcomes must be written under the candidate config hash and must not overwrite baseline outcomes.
+
+### Candidate plan artifact persistence
+
+Persist enough candidate-specific plan detail to audit and reproduce an outcome without reading mutable live settings.
+
+Preferred implementation:
+- add a compact candidate plan artifact table, or equivalent existing-model-backed repository, keyed by `(replay_slice_id, source_baseline_plan_id, candidate_config_hash)`.
+
+Minimum fields:
+- `id`
+- `replay_batch_id`
+- `replay_slice_id`
+- `ticker`
+- `as_of`
+- `source_baseline_plan_id`
+- `source_replay_eligibility_id`
+- `candidate_config_hash`
+- `validation_depth`
+- `candidate_config_json`
+- `source_plan_payload_json`
+- `candidate_plan_payload_json`
+- regenerated geometry fields: action/direction, entry band, stop, take-profit, horizon
+- `regeneration_status`: regenerated | unchanged | invalid
+- `invalid_geometry_reasons_json`
+- `settings_snapshot_hash`
+- `code_version_hash` or app git SHA when available
+- `created_at`, `updated_at`
+
+Persistence rules:
+- Baseline `RecommendationPlanRecord` rows remain immutable for this purpose.
+- Candidate artifact rows can be upserted by candidate hash for idempotent reruns.
+- Outcome/eligibility rows link to the candidate artifact id in diagnostics at minimum; if schema changes are acceptable, add explicit nullable FK columns later.
+- Store both human-readable diagnostics and machine-readable raw payloads.
+
+### Resolution semantics by validation depth
+
+`rescore_only`:
+- Reuse baseline plan geometry and baseline canonical outcome label.
+- Recompute only score/actionability/eligibility thresholds.
+- Before reusing the label, assert candidate geometry hash equals baseline geometry hash.
+- If geometry differs, fail closed and reclassify/block as `frozen_input_plan_regeneration` or `full_orchestration_replay`.
+
+`frozen_input_plan_regeneration`:
+- Load baseline frozen artifact and baseline plan.
+- Regenerate candidate plan/levels from frozen evidence under candidate config.
+- Validate geometry:
+  - entry band present and positive
+  - `entry_price_low <= entry_price_high`
+  - stop/take-profit on correct side for action/direction
+  - risk distance > minimum tick/epsilon
+  - reward/risk inside configured safety bounds
+  - horizon is supported by local bars
+- If invalid, persist candidate artifact and eligibility as ineligible with explicit rejection reasons; do not reuse baseline outcome.
+- If unchanged from baseline, the baseline outcome may be reused but must still be recorded under the candidate hash with `geometry_unchanged=true`.
+- If changed, run canonical local outcome resolver against cached bars and persist the candidate-specific result.
+
+`full_orchestration_replay`:
+- Continue to use existing full replay path, already local/cache-only for replay inputs.
+- Candidate artifacts may still be generated from resulting plans for consistent reporting, but this is not required for the first 5A implementation.
+
+### Local bar-window loading
+
+Add a repository/service helper for outcome windows:
+
+```text
+get_outcome_bars(ticker, as_of, horizon_days, resolution_source, local_only=True)
+```
+
+Behavior:
+- Query local historical daily/intraday bar tables only.
+- Bound the window to `as_of < bar_time <= as_of + horizon` or the equivalent existing replay convention.
+- Return coverage diagnostics:
+  - expected sessions/bars
+  - loaded sessions/bars
+  - first/last bar timestamp
+  - missing date ranges
+  - whether the window is sufficient for the selected resolver
+- Cache loaded windows in process by `(ticker, as_of_date, horizon, resolution_source)` during one workflow action to avoid repeated DB reads across candidates.
+- Never call Yahoo, Alpaca, or any provider path.
+
+### Outcome write/update rules
+
+For every candidate artifact:
+- upsert a `ReplayPlanOutcomeRecord` using the same candidate hash
+- set `resolution_source` to the resolver output source
+- set `status` from the resolver output status
+- set `outcome` from the resolver output outcome
+- write `outcome_json` containing:
+  - candidate artifact id/reference
+  - source baseline outcome id/reference
+  - resolver version
+  - geometry hash before/after
+  - local bar coverage diagnostics
+  - `remote_fetch_used=false`
+  - invalid/missing data status when applicable
+
+For eligibility:
+- upsert `ReplayEligibilityRecord` under candidate hash
+- preserve source setup/context diagnostics from frozen baseline
+- update tuning eligibility based on candidate-specific status:
+  - valid resolved win/loss/flat and meets tier rules → eligible according to tier logic
+  - invalid geometry → not eligible, tier downgrade/rejection reason
+  - missing bars/insufficient window → not eligible for promotion evidence; visible as data coverage gap
+  - no-entry/open → count according to existing replay aggregate conventions, but never as hidden wins
+
+### Promotion and tuning implications
+
+Promotion proposal must treat this evidence carefully:
+- Discovery/search metrics remain non-promotion evidence.
+- Main replay and holdout aggregates must use candidate-specific outcomes, not copied baseline labels, for geometry-changing candidates.
+- `missing_local_bars`, `invalid_geometry`, and `insufficient_window` must lower confidence or block promotion according to existing minimum sample/data-quality gates.
+- A candidate cannot be promoted if its only geometry-changing validation used copied baseline labels.
+- UI comparison tables must show validation depth and whether outcome labels are canonical candidate outcomes or reused baseline labels.
+
+This protects the app from selecting candidates that look better only because their changed stops/targets were never actually tested.
+
+### Incremental implementation breakdown
+
+1. **Extract/identify canonical outcome resolver**
+   - Locate current full replay outcome-resolution logic.
+   - Extract it behind a service callable with explicit local-only bar windows.
+   - Preserve existing tie-break and horizon behavior.
+   - Add unit tests around unchanged behavior.
+
+2. **Add local outcome bar-window helper**
+   - Implement repository/service function with no provider dependencies.
+   - Add tests with complete, missing, and insufficient windows.
+   - Add instrumentation/diagnostics proving `remote_fetch_used=false`.
+
+3. **Persist candidate plan artifact**
+   - Add migration/model/repository or equivalent existing-table-backed artifact storage.
+   - Upsert by `(replay_slice_id, source_baseline_plan_id, candidate_config_hash)`.
+   - Record candidate config/settings/code hashes and geometry hashes.
+
+4. **Wire frozen-input validation to resolver**
+   - In workflow lightweight candidate path, replace copied baseline outcome for geometry-changing candidates with resolver output.
+   - Keep copied baseline label only for `rescore_only` or `geometry_unchanged=true`.
+   - Persist invalid-geometry and missing-bar cases as explicit non-promotional evidence.
+
+5. **Aggregate and UI correctness**
+   - Ensure `ReplayValidationAggregateService` counts candidate-hash outcomes only.
+   - Add detail fields to workflow comparison payload:
+     - `canonical_candidate_outcomes_count`
+     - `reused_baseline_outcomes_count`
+     - `invalid_geometry_count`
+     - `missing_local_bars_count`
+   - Label non-canonical copied labels as insufficient for promotion.
+
+6. **Promotion gate hardening**
+   - Block promotion proposal when a geometry-changing candidate lacks canonical candidate outcomes.
+   - Block or require manual remediation for excessive missing local bars.
+   - Add clear operator message: hydrate historical bars separately, then rerun validation.
+
+7. **Smoke experiment**
+   - Run one small cache-only experiment with:
+     - one `rescore_only` candidate
+     - one geometry-changing frozen-input candidate
+     - one intentionally invalid geometry candidate
+   - Verify no provider calls, bounded memory, and candidate-specific outcome changes where expected.
+
+### Detailed tests to add before code changes
+
+- `rescore_only` candidate with unchanged geometry reuses baseline outcome and records threshold-only provenance.
+- Geometry-changing candidate with tighter stop changes baseline win to candidate loss when local bars hit stop first.
+- Geometry-changing candidate with wider take-profit changes resolved win to open/expired when target is not hit within horizon.
+- Candidate with invalid long geometry, e.g. stop above entry or take-profit below entry, is ineligible and no outcome label is copied.
+- Missing local outcome bars returns `missing_local_bars`, records diagnostics, and does not call remote providers.
+- Candidate artifact upsert is idempotent for repeated workflow action calls.
+- Baseline outcome and eligibility records are unchanged after candidate validation.
+- Aggregates grouped by `candidate_config_hash` differ from baseline when candidate-specific resolution differs.
+- Promotion proposal blocks a geometry-changing candidate whose outcomes are copied baseline labels rather than canonical candidate outcomes.
+- Mixed candidate config receives deepest required depth and never slips into `rescore_only` if any geometry key is present.
+
+### Acceptance criteria
+
+- [ ] Geometry-changing candidates are resolved against regenerated candidate levels, not baseline labels.
+- [ ] Candidate-specific outcomes use local bars only and expose coverage diagnostics.
+- [ ] Invalid geometry is explicit, ineligible, and visible to the operator.
+- [ ] Baseline records remain unchanged and auditable.
+- [ ] Promotion cannot proceed on non-canonical copied labels for geometry-changing candidates.
+- [ ] Runtime remains much cheaper than full orchestration because upstream evidence is not rerun.
 
 ## Phase 6 — Rescore-only path hardening
 

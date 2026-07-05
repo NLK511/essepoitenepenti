@@ -60,11 +60,11 @@ Every candidate must be assigned the cheapest causally valid validation depth be
 
 Allowed depths:
 
-- `rescore_only` — reuse generated plans and outcomes where candidate changes only a supported final scoring/actionability threshold.
-- `frozen_input_plan_regeneration` — reuse frozen upstream replay evidence and regenerate only downstream plan construction plus outcome resolution. This is the default for plan-generation geometry/framing parameters.
+- `rescore_only` — reuse generated plans and canonical outcomes only where candidate changes a supported final scoring/actionability threshold and plan geometry is unchanged.
+- `frozen_input_plan_regeneration` — reuse frozen upstream replay evidence and regenerate only downstream plan construction plus canonical local outcome resolution. This is the default for plan-generation geometry/framing parameters.
 - `full_orchestration_replay` — rerun cheap scan, deep analysis, signal generation, plan generation, and outcome resolution from local point-in-time inputs. This is required only when a candidate changes upstream selection/evidence behavior.
 
-The UI must explain why each candidate received its depth and what work will be reused. Candidate validation must route by this depth: rescore-only and frozen-input candidates must not rerun cheap scan or deep analysis; only full-orchestration candidates may queue full replay slices.
+The UI must explain why each candidate received its depth and what work will be reused. Candidate validation must route by this depth: rescore-only and frozen-input candidates must not rerun cheap scan or deep analysis; only full-orchestration candidates may queue full replay slices. Geometry-changing candidates must not be promoted from copied baseline outcome labels: their replay/holdout evidence must contain candidate-specific canonical outcomes resolved from regenerated entry/stop/take-profit levels using local cached bars only.
 
 Examples:
 
