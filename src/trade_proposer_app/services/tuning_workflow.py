@@ -1421,6 +1421,10 @@ class TuningWorkflowService:
 
     def _annotate_section(self, key: str, section: Mapping[str, object]) -> dict[str, object]:
         enriched = dict(section)
+        existing_summary = enriched.get("summary")
+        if existing_summary is not None and not isinstance(existing_summary, str):
+            enriched["result_summary"] = existing_summary
+            enriched.pop("summary", None)
         status = str(enriched.get("status") or "unknown")
         progress = enriched.get("progress") if isinstance(enriched.get("progress"), dict) else None
         if progress:
