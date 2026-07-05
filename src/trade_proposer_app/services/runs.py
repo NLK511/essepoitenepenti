@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo
 
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import SessionLocal
@@ -22,6 +23,26 @@ from trade_proposer_app.services.scheduling import (
     normalize_schedule_time,
 )
 from trade_proposer_app.services.watchlist_policy import WatchlistPolicyService
+
+
+_US_MARKET_TIMEZONE = ZoneInfo("America/New_York")
+_US_MARKET_OPEN = time(9, 30)
+_US_MARKET_CLOSE = time(16, 0)
+
+
+def is_regular_us_market_open(value: datetime) -> bool:
+    normalized = normalize_schedule_time(value)
+    local = normalized.astimezone(_US_MARKET_TIMEZONE)
+    if local.weekday() >= 5:
+        return False
+    local_time = local.time().replace(tzinfo=None)
+    return _US_MARKET_OPEN <= local_time < _US_MARKET_CLOSE
+
+
+def _scheduled_job_allowed(job_type: JobType, scheduled_for: datetime) -> bool:
+    if job_type == JobType.BROKER_STEERING:
+        return is_regular_us_market_open(scheduled_for)
+    return True
 
 
 def enqueue_enabled_jobs(now: datetime | None = None) -> int:
@@ -78,6 +99,8 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
             if scheduled_for != normalized_now:
                 continue
             if runs_repository.get_run_for_job_and_scheduled_for(job.id or 0, scheduled_for) is not None:
+                continue
+            if not _scheduled_job_allowed(job.job_type, scheduled_for):
                 continue
             if job.job_type == JobType.PLAN_GENERATION_TUNING and runs_repository.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING) is not None:
                 continue

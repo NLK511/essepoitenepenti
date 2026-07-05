@@ -231,6 +231,28 @@ class WorkerSchedulerTests(unittest.TestCase):
         ]
         self.assertEqual(len(scheduled_runs), 0)
 
+    def test_scheduler_skips_broker_steering_outside_regular_market_hours(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        steering_job = jobs.create(
+            "Broker Steering",
+            [],
+            "0 14 * * *",
+            job_type=JobType.BROKER_STEERING,
+        )
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
+            weekend_count = enqueue_enabled_jobs(now=datetime(2026, 7, 5, 14, 0, tzinfo=timezone.utc))
+            weekend_runs = runs.list_latest_runs(limit=10)
+            market_count = enqueue_enabled_jobs(now=datetime(2026, 7, 6, 14, 0, tzinfo=timezone.utc))
+
+        self.assertEqual(weekend_count, 0)
+        self.assertEqual(weekend_runs, [])
+        self.assertEqual(market_count, 1)
+        runs_by_job = {run.job_id for run in runs.list_latest_runs(limit=10)}
+        self.assertIn(steering_job.id, runs_by_job)
+
     def test_scheduler_enqueues_non_proposal_jobs_with_job_type_metadata(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)

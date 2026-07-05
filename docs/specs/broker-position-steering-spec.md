@@ -285,7 +285,7 @@ All knobs use `steering.*`:
 - filled defaults: max reconciliation age `30` minutes, breakeven trigger `0.75`, min profit lock `0.10`, close confidence `40`, close required signals `3`, hold confidence `50`, deterioration required signals `2`, deterioration cushion `0.35`, weakened TP cushion `0.50`, min TP distance `0.10`
 - dry-run thresholds: `min_reviewed_dry_run_decisions_before_enable=30`, `min_reviewed_dry_run_amendments_before_enable=10`, `min_reviewed_dry_run_close_now_before_enable=10`
 
-`enabled=false` prevents autonomous broker mutation. `dry_run=true` persists decisions without broker calls. Threshold names use historical `reviewed` wording but currently count persisted dry-run decisions.
+`enabled=false` prevents autonomous broker mutation. `dry_run=true` persists decisions without broker mutations. Scheduled dry-run steering may refresh broker state only inside regular market-open windows; it must not poll broker APIs on weekends or other configured market-closed windows. Threshold names use historical `reviewed` wording but currently count persisted dry-run decisions.
 
 ## Architecture and persistence
 
@@ -296,6 +296,7 @@ Components:
 - `BrokerSteeringExecutor`: applies approved Alpaca mutations only when enabled and not dry-run
 - `BrokerSteeringDecisionRepository`: persists audits
 - scheduled/manual job: evaluates open app-owned broker records
+- scheduled broker-steering jobs must not enqueue during weekend or regular US market-closed windows; default automated steering window is US/Eastern weekdays 09:30–16:00. Manual operator-triggered runs remain allowed for investigation.
 
 Decision ledger fields include ids, created/executed timestamps, plan/order/position/ticker, decision, `execute_allowed`, per-decision execution status (`dry_run`, `submitted`, `succeeded`, `failed`, `blocked`), run-level execution status (`dry_run`, `no_action`, `blocked`, `partial_success`, `succeeded`, `failed`), reasons, before/after levels, risk delta, diagnostics, and error.
 
