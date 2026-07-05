@@ -69,7 +69,7 @@ export function WorkerLogsPage() {
     void load();
     const interval = window.setInterval(() => {
       void load();
-    }, 2500);
+    }, 1000);
 
     return () => {
       mounted = false;

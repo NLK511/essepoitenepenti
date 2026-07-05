@@ -1404,7 +1404,7 @@ class TuningWorkflowService:
         candidate_pool = metadata.get("candidate_pool") if isinstance(metadata.get("candidate_pool"), dict) else {"status": "empty", "candidates": []}
         shortlist = metadata.get("shortlist") if isinstance(metadata.get("shortlist"), dict) else {"candidate_ids": []}
         baseline_replay = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {"status": "missing", "batch_id": None}
-        return {
+        sections = {
             "setup": {"status": setup_status, "warnings": setup.get("warnings", []), "blockers": setup.get("missing_fields", [])},
             "evidence_readiness": metadata.get("readiness_audit") if isinstance(metadata.get("readiness_audit"), dict) else {"status": "not_run", "cache_only": True, "warnings": []},
             "candidate_pool": {**candidate_pool, "label": "discovery-only evidence"},
@@ -1417,3 +1417,55 @@ class TuningWorkflowService:
             "rollback": metadata.get("rollback") if isinstance(metadata.get("rollback"), dict) else {"status": "not_run"},
             "post_promotion_monitoring": metadata.get("post_promotion_monitoring") if isinstance(metadata.get("post_promotion_monitoring"), dict) else {"status": "not_applicable"},
         }
+        return {key: self._annotate_section(key, value) for key, value in sections.items()}
+
+    def _annotate_section(self, key: str, section: Mapping[str, object]) -> dict[str, object]:
+        enriched = dict(section)
+        status = str(enriched.get("status") or "unknown")
+        progress = enriched.get("progress") if isinstance(enriched.get("progress"), dict) else None
+        if progress:
+            total = int(progress.get("slice_count") or progress.get("total_count") or 0)
+            completed = int(progress.get("completed_count") or 0)
+            failed = int(progress.get("failed_count") or 0)
+            stale = int(progress.get("stale_count") or 0)
+            enriched["progress_percent"] = 100 if total <= 0 and status in {"complete", "completed", "generated", "selected", "ok", "pass", "paper_config_created"} else min(100, max(0, round(((completed + failed) / total) * 100))) if total > 0 else 0
+            enriched.setdefault("summary", f"{completed}/{total} slices complete; {failed} failed, {stale} stale.")
+            return enriched
+        done_statuses = {"complete", "completed", "generated", "selected", "ok", "pass", "paper_config_created", "proposal_ready", "rolled_back"}
+        pending_statuses = {"not_run", "missing", "empty", "not_applicable"}
+        running_statuses = {"queued", "running", "discovery_job_queued", "reused_active_run"}
+        blocked_statuses = {"blocked", "failed", "rejected"}
+        if status in done_statuses:
+            percent = 100
+        elif status in running_statuses:
+            percent = 50 if status == "running" else 10
+        elif status in blocked_statuses:
+            percent = 0
+        elif status in pending_statuses:
+            percent = 0
+        else:
+            percent = 75 if status.endswith("ready") else 0
+        enriched["progress_percent"] = percent
+        enriched.setdefault("summary", self._section_summary(key, enriched))
+        return enriched
+
+    def _section_summary(self, key: str, section: Mapping[str, object]) -> str:
+        status = str(section.get("status") or "unknown")
+        if key == "setup":
+            blockers = section.get("blockers") if isinstance(section.get("blockers"), list) else []
+            return "Setup complete." if status == "complete" else f"Missing {len(blockers)} required setup field(s)."
+        if key == "evidence_readiness":
+            return f"Readiness {status}; {int(section.get('ticker_count') or 0)} ticker(s) audited."
+        if key == "candidate_pool":
+            retained = int(section.get("retained_candidate_count") or len(section.get("candidates") or []))
+            searched = section.get("searched_candidate_count") or "—"
+            return f"Discovery {status}; searched {searched}, retained {retained}."
+        if key == "shortlist":
+            return f"{len(section.get('candidate_ids') or [])}/{int(section.get('max_candidates') or 0)} candidate(s) shortlisted."
+        if key in {"baseline_replay", "candidate_replay_validation", "stability_validation"}:
+            batch = section.get("batch_id") or section.get("batch_ids") or section.get("holdout_batch_ids") or "—"
+            return f"{status}; batch/run reference: {batch}."
+        if key == "promotion_proposal":
+            blockers = section.get("blockers") if isinstance(section.get("blockers"), list) else []
+            return f"{status}; {len(blockers)} blocker(s)."
+        return f"{status}."

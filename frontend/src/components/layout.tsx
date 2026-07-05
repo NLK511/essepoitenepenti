@@ -323,7 +323,7 @@ export function AppLayout() {
     const interval = setInterval(() => {
       fetchHealth();
       fetchWorkers();
-    }, 30000);
+    }, 5000);
     return () => {
       mounted = false;
       clearInterval(interval);

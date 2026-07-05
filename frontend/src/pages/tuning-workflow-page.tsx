@@ -24,15 +24,22 @@ function stageTone(stage: string): "ok" | "warning" | "danger" | "neutral" | "in
 
 function SectionStatusCard(props: { title: string; section: Record<string, unknown> | undefined; subtitle: string }) {
   const status = String(props.section?.status ?? "unknown");
+  const progressPercent = Math.max(0, Math.min(100, Number(props.section?.progress_percent ?? 0)));
+  const detailEntries = Object.entries(props.section ?? {}).filter(([key]) => !["status", "summary", "progress_percent", "warnings", "blockers", "reason"].includes(key));
   return (
     <Card>
       <SectionTitle kicker="workflow card" title={props.title} subtitle={props.subtitle} />
-      <div className="cluster top-gap-small"><Badge tone={stageTone(status)}>{status}</Badge></div>
+      <div className="cluster top-gap-small"><Badge tone={stageTone(status)}>{status}</Badge><span className="helper-text">{progressPercent}%</span></div>
+      <div className="top-gap-small" aria-label={`${props.title} progress`} style={{ height: 8, borderRadius: 999, background: "rgba(148, 163, 184, 0.22)", overflow: "hidden" }}>
+        <div style={{ width: `${progressPercent}%`, height: "100%", borderRadius: 999, background: "var(--accent)", transition: "width 200ms ease" }} />
+      </div>
+      {props.section?.summary ? <div className="helper-text top-gap-small">{String(props.section.summary)}</div> : null}
       {props.section?.reason ? <div className="helper-text top-gap-small">{String(props.section.reason)}</div> : null}
       {Array.isArray(props.section?.blockers) && props.section.blockers.length ? <div className="helper-text top-gap-small">Blocked by: {props.section.blockers.join(", ")}</div> : null}
       {Array.isArray(props.section?.warnings) && props.section.warnings.length ? <div className="helper-text top-gap-small">Warnings: {props.section.warnings.join(", ")}</div> : null}
       {typeof props.section?.progress === "object" && props.section.progress !== null ? <div className="helper-text top-gap-small">Progress: {String((props.section.progress as Record<string, unknown>).completed_count ?? 0)}/{String((props.section.progress as Record<string, unknown>).slice_count ?? 0)} slices · failed/stale: {String((props.section.progress as Record<string, unknown>).failed_count ?? 0)}/{String((props.section.progress as Record<string, unknown>).stale_count ?? 0)}</div> : null}
       {typeof props.section?.comparisons === "object" && props.section.comparisons !== null ? <div className="helper-text top-gap-small">Comparisons available for {Object.keys(props.section.comparisons as Record<string, unknown>).length} candidate(s).</div> : null}
+      {detailEntries.length ? <details className="top-gap-small"><summary className="helper-text">Details</summary><div className="summary-grid top-gap-small">{detailEntries.slice(0, 12).map(([key, value]) => <div className="summary-item" key={key}><span className="summary-label">{key.replace(/_/g, " ")}</span><span className="summary-value">{fieldText(value)}</span></div>)}</div></details> : null}
     </Card>
   );
 }
@@ -97,6 +104,16 @@ export function TuningWorkflowPage() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    const interval = window.setInterval(() => {
+      getJson<TuningExperimentResponse>(`/api/tuning-workflow/experiments/${selected.id}`)
+        .then((detail) => setSelected(detail.experiment))
+        .catch((err) => console.error("Tuning workflow refresh failed", err));
+    }, selected.current_stage.includes("running") ? 2000 : 10000);
+    return () => window.clearInterval(interval);
+  }, [selected?.id, selected?.current_stage]);
 
   useEffect(() => {
     if (!selected) return;

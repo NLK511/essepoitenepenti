@@ -77,7 +77,7 @@ def _write_worker_heartbeat(worker_id: str, state: WorkerRuntimeState) -> None:
 
 
 def _heartbeat_loop(worker_id: str, state: WorkerRuntimeState, stop_event: threading.Event) -> None:
-    interval_seconds = max(5, int(settings.worker_heartbeat_interval_seconds))
+    interval_seconds = max(2, int(settings.worker_heartbeat_interval_seconds))
     while not stop_event.wait(interval_seconds):
         try:
             _write_worker_heartbeat(worker_id, state)
@@ -114,10 +114,14 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
             if run is None:
                 return False
             state.set_active_run_id(run.id)
+            if worker_id:
+                _write_worker_heartbeat(worker_id, state)
             try:
                 service.execute_claimed_run(run, worker_id=worker_id)
             finally:
                 state.set_active_run_id(None)
+                if worker_id:
+                    _write_worker_heartbeat(worker_id, state)
             return True
         except Exception as exc:
             logger.exception("worker run processing failed: worker_id=%s error=%s", worker_id, exc)
