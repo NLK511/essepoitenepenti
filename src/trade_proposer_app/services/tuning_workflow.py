@@ -31,8 +31,8 @@ LARGE_DISCOVERY_SYSTEM_JOB_NAME = "tuning-workflow-large-discovery"
 SEEDED_DISCOVERY_VARIANT_LIMIT = 10
 
 
-def _json_dumps(payload: Mapping[str, Any]) -> str:
-    return json.dumps(dict(payload), sort_keys=True, separators=(",", ":"), default=str)
+def _json_dumps(payload: Any) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _date_string(value: object) -> str | None:
