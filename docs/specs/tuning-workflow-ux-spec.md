@@ -106,8 +106,8 @@ Human-readable name, for example:
 The ticker universe to test.
 
 Allowed forms:
-- named watchlist
-- explicit ticker list
+- named watchlist / existing watchlist ID (implemented for setup, readiness audit, and replay batch creation)
+- explicit ticker list (implemented)
 - existing replay universe
 - cloned universe from previous experiment
 

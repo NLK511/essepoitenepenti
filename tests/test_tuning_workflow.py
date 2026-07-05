@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.config import settings
-from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
+from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, WatchlistRecord
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
 
 
@@ -52,6 +52,39 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual(1, detail["replay_settings"]["max_concurrency"])
             self.assertEqual("paper_config", detail["promotion_target"])
             self.assertEqual("discovery-only evidence; not promotion evidence", detail["computation_labels"]["discovery"])
+        finally:
+            session.close()
+
+    def test_watchlist_universe_resolves_tickers_for_readiness(self) -> None:
+        session = self.create_session()
+        try:
+            watchlist = WatchlistRecord(name="Core growth", tickers_csv="AAPL, MSFT", default_horizon="1w")
+            session.add(watchlist)
+            session.commit()
+            session.add_all([
+                HistoricalMarketBarRecord(ticker="AAPL", timeframe="1d", bar_time=datetime(2026, 2, 2, tzinfo=timezone.utc), open_price=1, high_price=1, low_price=1, close_price=1, volume=1),
+                HistoricalMarketBarRecord(ticker="MSFT", timeframe="1d", bar_time=datetime(2026, 2, 2, tzinfo=timezone.utc), open_price=1, high_price=1, low_price=1, close_price=1, volume=1),
+            ])
+            session.commit()
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment(
+                {
+                    "name": "Watchlist universe",
+                    "universe": {"watchlist_id": watchlist.id, "watchlist_name": watchlist.name},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-02",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-03-03",
+                    },
+                    "baseline": {"source": "current_active_config"},
+                }
+            )
+            detail = service.run_readiness_audit(int(detail["id"]))
+            self.assertEqual(2, detail["sections"]["evidence_readiness"]["ticker_count"])
+            self.assertEqual("candidate_discovery_needed", detail["current_stage"])
         finally:
             session.close()
 

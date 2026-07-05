@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson, postJson } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { TuningExperiment, TuningExperimentResponse, TuningExperimentsResponse } from "../types";
+import type { TuningExperiment, TuningExperimentResponse, TuningExperimentsResponse, Watchlist } from "../types";
 
 const specDoc = "/docs?doc=specs-tuning-workflow-ux-spec";
 
@@ -39,6 +39,7 @@ function SectionStatusCard(props: { title: string; section: Record<string, unkno
 
 export function TuningWorkflowPage() {
   const [experiments, setExperiments] = useState<TuningExperimentsResponse | null>(null);
+  const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [selected, setSelected] = useState<TuningExperiment | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +50,8 @@ export function TuningWorkflowPage() {
   const [form, setForm] = useState({
     name: "",
     hypothesis: "",
+    universe_mode: "watchlist",
+    watchlist_id: "",
     tickers: "AAPL,MSFT,NVDA",
     discovery_start: "",
     discovery_end: "",
@@ -67,8 +70,14 @@ export function TuningWorkflowPage() {
     try {
       let list = experiments;
       if (refreshList || !list) {
-        list = await getJson<TuningExperimentsResponse>("/api/tuning-workflow/experiments?limit=25");
+        const [experimentList, watchlistList] = await Promise.all([
+          getJson<TuningExperimentsResponse>("/api/tuning-workflow/experiments?limit=25"),
+          getJson<Watchlist[]>("/api/watchlists"),
+        ]);
+        list = experimentList;
         setExperiments(list);
+        setWatchlists(watchlistList);
+        setForm((current) => current.watchlist_id || !watchlistList[0]?.id ? current : { ...current, watchlist_id: String(watchlistList[0].id) });
       }
       const id = selectId ?? selected?.id ?? list.experiments[0]?.id;
       if (id) {
@@ -91,10 +100,13 @@ export function TuningWorkflowPage() {
     setSaving(true);
     setError(null);
     try {
+      const universe = form.universe_mode === "watchlist"
+        ? { watchlist_id: Number(form.watchlist_id), watchlist_name: watchlists.find((item) => String(item.id) === form.watchlist_id)?.name }
+        : { tickers: form.tickers.split(",").map((ticker) => ticker.trim().toUpperCase()).filter(Boolean) };
       const response = await postJson<TuningExperimentResponse>("/api/tuning-workflow/experiments", {
         name: form.name,
         hypothesis: form.hypothesis,
-        universe: { tickers: form.tickers.split(",").map((ticker) => ticker.trim().toUpperCase()).filter(Boolean) },
+        universe,
         windows: {
           discovery_start: form.discovery_start,
           discovery_end: form.discovery_end,
@@ -185,7 +197,9 @@ export function TuningWorkflowPage() {
               <form className="form-grid top-gap-small" onSubmit={(event) => void createExperiment(event)}>
                 <label className="form-field"><span>Name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required placeholder="July US plan tuning" /></label>
                 <label className="form-field"><span>Hypothesis</span><input value={form.hypothesis} onChange={(event) => setForm({ ...form, hypothesis: event.target.value })} placeholder="Improve Tier A win rate via stricter geometry" /></label>
-                <label className="form-field"><span>Universe tickers</span><input value={form.tickers} onChange={(event) => setForm({ ...form, tickers: event.target.value })} /></label>
+                <label className="form-field"><span>Universe source</span><select value={form.universe_mode} onChange={(event) => setForm({ ...form, universe_mode: event.target.value })}><option value="watchlist">Existing watchlist</option><option value="tickers">Explicit tickers</option></select></label>
+                {form.universe_mode === "watchlist" ? <label className="form-field"><span>Watchlist</span><select value={form.watchlist_id} onChange={(event) => setForm({ ...form, watchlist_id: event.target.value })} required><option value="">Select watchlist…</option>{watchlists.map((watchlist) => <option key={watchlist.id ?? watchlist.name} value={String(watchlist.id)}>{watchlist.name} · {watchlist.tickers.length} tickers</option>)}</select></label> : null}
+                {form.universe_mode === "tickers" ? <label className="form-field"><span>Universe tickers</span><input value={form.tickers} onChange={(event) => setForm({ ...form, tickers: event.target.value })} /></label> : null}
                 <label className="form-field"><span>Objective</span><select value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })}><option value="balanced_score">Balanced score</option><option value="tier_a_win_rate">Tier A win rate</option><option value="expected_value">Expected value</option><option value="average_5d_return">Average 5d return</option><option value="loss_severity">Minimize loss severity</option></select></label>
                 {["discovery_start", "discovery_end", "replay_start", "replay_end", "holdout_start", "holdout_end"].map((key) => <label className="form-field" key={key}><span>{key.replace(/_/g, " ")}</span><input type="date" value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}
                 <label className="form-field"><span>Baseline</span><select value={form.baseline_source} onChange={(event) => setForm({ ...form, baseline_source: event.target.value })}><option value="current_active_config">Current active config</option><option value="selected_config_version">Selected config version</option><option value="existing_replay_batch">Existing replay batch</option><option value="rerun_baseline_replay">Rerun baseline replay</option></select></label>

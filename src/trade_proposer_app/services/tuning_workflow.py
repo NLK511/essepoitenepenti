@@ -8,7 +8,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import PlanGenerationTuningConfigVersion, PlanGenerationTuningEvent
-from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord
+from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord, WatchlistRecord
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_DEFAULTS, candidate_validation_depth, normalize_plan_generation_tuning_config
@@ -940,10 +940,19 @@ class TuningWorkflowService:
         return start_dt, end_dt
 
     def _experiment_tickers(self, universe: Mapping[str, object]) -> list[str]:
+        tickers: set[str] = set()
         raw_tickers = universe.get("tickers")
-        if not isinstance(raw_tickers, list):
-            return []
-        return sorted({str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip()})
+        if isinstance(raw_tickers, list):
+            tickers.update(str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip())
+        watchlist_id = universe.get("watchlist_id")
+        if watchlist_id not in (None, ""):
+            try:
+                record = self.session.get(WatchlistRecord, int(watchlist_id))
+            except (TypeError, ValueError):
+                record = None
+            if record is not None:
+                tickers.update(ticker.strip().upper() for ticker in record.tickers_csv.split(",") if ticker.strip())
+        return sorted(tickers)
 
     def _lifecycle(self, record: TuningExperimentRecord, setup: Mapping[str, object], metadata: Mapping[str, object]) -> dict[str, object]:
         if record.status == "archived":
