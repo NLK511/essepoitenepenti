@@ -114,13 +114,21 @@ class TuningWorkflowService:
         record = self.get_experiment(experiment_id)
         baseline_config = normalize_plan_generation_tuning_config({})
         variants: list[tuple[str, dict[str, float], list[str], str]] = []
+        discovery_settings = loads_json_object(record.discovery_settings_json)
+        target_count = max(1, min(25, int(discovery_settings.get("candidate_count") or 8)))
         variants.append(("strict_actionability_floor", {"global.actionable_confidence_floor_percent": baseline_config["global.actionable_confidence_floor_percent"] + 5.0}, ["global.actionable_confidence_floor_percent"], "strict quality-gate variant"))
+        variants.append(("very_strict_actionability_floor", {"global.actionable_confidence_floor_percent": baseline_config["global.actionable_confidence_floor_percent"] + 8.0}, ["global.actionable_confidence_floor_percent"], "strict quality-gate variant"))
         variants.append(("wider_entry_band", {"global.entry_band_risk_fraction": baseline_config["global.entry_band_risk_fraction"] + 0.05}, ["global.entry_band_risk_fraction"], "risk/reward geometry variant"))
+        variants.append(("narrower_entry_band", {"global.entry_band_risk_fraction": max(0.01, baseline_config["global.entry_band_risk_fraction"] - 0.03)}, ["global.entry_band_risk_fraction"], "risk/reward geometry variant"))
         variants.append(("tighter_breakout_stop", {"setup_family.breakout.stop_distance_multiplier": max(0.1, baseline_config["setup_family.breakout.stop_distance_multiplier"] - 0.1)}, ["setup_family.breakout.stop_distance_multiplier"], "risk/reward geometry variant"))
+        variants.append(("looser_breakout_stop", {"setup_family.breakout.stop_distance_multiplier": baseline_config["setup_family.breakout.stop_distance_multiplier"] + 0.1}, ["setup_family.breakout.stop_distance_multiplier"], "risk/reward geometry variant"))
         variants.append(("larger_breakout_reward", {"setup_family.breakout.take_profit_distance_multiplier": baseline_config["setup_family.breakout.take_profit_distance_multiplier"] + 0.1}, ["setup_family.breakout.take_profit_distance_multiplier"], "risk/reward geometry variant"))
+        variants.append(("larger_mean_reversion_reward", {"setup_family.mean_reversion.take_profit_distance_multiplier": baseline_config["setup_family.mean_reversion.take_profit_distance_multiplier"] + 0.1}, ["setup_family.mean_reversion.take_profit_distance_multiplier"], "risk/reward geometry variant"))
+        variants.append(("tighter_reversal_stop", {"setup_family.mean_reversion.stop_distance_multiplier": max(0.1, baseline_config["setup_family.mean_reversion.stop_distance_multiplier"] - 0.1)}, ["setup_family.mean_reversion.stop_distance_multiplier"], "risk/reward geometry variant"))
+        variants.append(("wide_reward_combo", {"global.entry_band_risk_fraction": baseline_config["global.entry_band_risk_fraction"] + 0.03, "setup_family.breakout.take_profit_distance_multiplier": baseline_config["setup_family.breakout.take_profit_distance_multiplier"] + 0.1}, ["global.entry_band_risk_fraction", "setup_family.breakout.take_profit_distance_multiplier"], "combined risk/reward variant"))
         candidates: list[dict[str, object]] = []
         seen_hashes: set[str] = set()
-        for index, (label, overrides, changed_keys, source) in enumerate(variants, start=1):
+        for index, (label, overrides, changed_keys, source) in enumerate(variants[:target_count], start=1):
             config = normalize_plan_generation_tuning_config({**baseline_config, **overrides})
             config_hash = stable_hash(config)
             if config_hash in seen_hashes:
@@ -640,8 +648,6 @@ class TuningWorkflowService:
 
     def update_experiment(self, experiment_id: int, payload: Mapping[str, object]) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
-        if record.status == "archived":
-            raise TuningWorkflowError("archived experiments cannot be edited")
         current = self._record_payload(record)
         merged = {**current, **dict(payload)}
         normalized = self._normalize_payload(merged, partial=False)
@@ -667,6 +673,64 @@ class TuningWorkflowService:
         self.session.commit()
         self.session.refresh(record)
         return self.experiment_detail(record)
+
+    def delete_experiment(self, experiment_id: int) -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        self.session.delete(record)
+        self.session.commit()
+        return {"deleted": True, "experiment_id": experiment_id}
+
+    def run_autonomous_until_wait(self, experiment_id: int) -> dict[str, object]:
+        actions: list[str] = []
+        for _ in range(8):
+            record = self.get_experiment(experiment_id)
+            detail = self.experiment_detail(record)
+            stage = str(detail.get("current_stage") or "")
+            if stage == "readiness_needed":
+                detail = self.run_readiness_audit(experiment_id)
+                actions.append("readiness_audit")
+                continue
+            if stage == "candidate_discovery_needed":
+                detail = self.generate_candidate_pool(experiment_id)
+                actions.append("candidate_pool_generated")
+                continue
+            if stage == "shortlist_needed":
+                candidates = detail.get("sections", {}).get("candidate_pool", {}).get("candidates", []) if isinstance(detail.get("sections"), dict) else []
+                max_candidates = int(detail.get("replay_settings", {}).get("max_candidates") or 5) if isinstance(detail.get("replay_settings"), dict) else 5
+                candidate_ids = [str(item.get("id")) for item in candidates if isinstance(item, dict) and item.get("status") != "rejected"][:max_candidates]
+                if not candidate_ids:
+                    return {"experiment": detail, "actions": actions, "status": "blocked", "reason": "no candidates available for shortlist"}
+                detail = self.update_shortlist(experiment_id, candidate_ids)
+                actions.append(f"shortlisted_{len(candidate_ids)}")
+                continue
+            if stage == "baseline_needed":
+                detail = self.create_baseline_replay_batch(experiment_id, enqueue=True)
+                actions.append("baseline_replay_queued")
+                return {"experiment": detail, "actions": actions, "status": "waiting_for_worker", "reason": "baseline replay queued"}
+            if stage == "candidate_replay_needed":
+                detail = self.create_candidate_replay_batches(experiment_id, enqueue=True)
+                actions.append("candidate_replays_queued")
+                return {"experiment": detail, "actions": actions, "status": "waiting_for_worker", "reason": "candidate replay queued"}
+            if stage == "stability_validation_needed":
+                sections = detail.get("sections", {}) if isinstance(detail.get("sections"), dict) else {}
+                shortlist = sections.get("shortlist", {}) if isinstance(sections.get("shortlist"), dict) else {}
+                candidate_ids = [str(item) for item in shortlist.get("candidate_ids", [])]
+                if not candidate_ids:
+                    return {"experiment": detail, "actions": actions, "status": "blocked", "reason": "no shortlisted candidate for holdout"}
+                detail = self.create_holdout_replay_batches(experiment_id, candidate_ids[0], enqueue=True)
+                actions.append("holdout_replays_queued")
+                return {"experiment": detail, "actions": actions, "status": "waiting_for_worker", "reason": "holdout replay queued"}
+            if stage == "promotion_proposal_needed":
+                sections = detail.get("sections", {}) if isinstance(detail.get("sections"), dict) else {}
+                shortlist = sections.get("shortlist", {}) if isinstance(sections.get("shortlist"), dict) else {}
+                candidate_ids = [str(item) for item in shortlist.get("candidate_ids", [])]
+                if not candidate_ids:
+                    return {"experiment": detail, "actions": actions, "status": "blocked", "reason": "no candidate for promotion proposal"}
+                detail = self.create_promotion_proposal(experiment_id, candidate_ids[0])
+                actions.append("promotion_proposal_created")
+                return {"experiment": detail, "actions": actions, "status": "manual_review_required", "reason": "promotion execution requires operator approval"}
+            return {"experiment": detail, "actions": actions, "status": "stopped", "reason": f"stage {stage} requires worker completion or manual review"}
+        return {"experiment": self.experiment_detail(self.get_experiment(experiment_id)), "actions": actions, "status": "stopped", "reason": "autonomous step limit reached"}
 
     def experiment_summary(self, record: TuningExperimentRecord) -> dict[str, object]:
         universe = loads_json_object(record.universe_json)

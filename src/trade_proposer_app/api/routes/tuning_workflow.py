@@ -149,6 +149,28 @@ async def update_tuning_experiment(
     return {"experiment": experiment}
 
 
+@router.delete("/experiments/{experiment_id}")
+async def delete_tuning_experiment(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        return _service(session).delete_experiment(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+
+
+@router.post("/experiments/{experiment_id}/autonomous-run")
+async def run_tuning_experiment_autonomously(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        return _workflow_service_with_replay(session).run_autonomous_until_wait(experiment_id)
+    except (TuningWorkflowError, ValueError) as exc:
+        raise _to_http_error(TuningWorkflowError(str(exc))) from exc
+
+
 @router.post("/experiments/{experiment_id}/readiness-audit")
 async def run_tuning_experiment_readiness_audit(
     experiment_id: int,

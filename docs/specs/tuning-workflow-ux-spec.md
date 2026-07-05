@@ -33,7 +33,7 @@ Raw replay batches, job runs, config versions, and search artifacts may remain o
 
 ### Tuning experiment
 
-A tuning experiment is the parent context for all tuning evidence and decisions.
+A tuning experiment is the parent context for all tuning evidence and decisions. Experiments remain editable after creation, including archived experiments, so operators can correct windows, universe, notes, objectives, and budget settings. Experiments can also be deleted when they are only workflow metadata; deleting an experiment must not delete replay batches or run history.
 
 It should group:
 - experiment name and notes
@@ -135,7 +135,7 @@ Rules:
 
 ### Candidate discovery search size
 
-The operator must define the discovery budget.
+The operator must define the discovery budget, and the UI must show it separately from replay validation size.
 
 Recommended presets:
 - `small` — safe default for VPS use
@@ -150,6 +150,8 @@ Custom fields:
 - maximum step distance from baseline
 
 Default UX guidance:
+- discovery candidate count means how many candidate configs are generated/imported before shortlist
+- replay candidate count means how many shortlisted candidates get expensive replay validation
 - prefer small candidate sets
 - avoid brute-force sweeps on the small VPS
 - large searches are discovery-only and not promotion evidence
@@ -165,6 +167,8 @@ Fields:
 
 Default:
 - `5` candidates
+
+The workflow may provide an autonomous run button. Autonomous mode must advance only through safe steps: readiness audit, candidate pool generation, shortlist, baseline replay queueing, candidate replay queueing, replay summary refresh, holdout queueing, and promotion-proposal creation. It must stop and report why whenever it reaches an asynchronous replay wait, failed/stale replay, missing evidence, promotion execution, or any live-trading step.
 
 Allowed range should normally guide the operator toward `5–10` candidates unless the deployment has more resources.
 

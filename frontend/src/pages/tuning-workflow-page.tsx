@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getJson, postJson } from "../api";
+import { deleteJson, getJson, patchJson, postJson } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { TuningExperiment, TuningExperimentResponse, TuningExperimentsResponse, Watchlist } from "../types";
 
@@ -60,6 +60,8 @@ export function TuningWorkflowPage() {
     holdout_start: "",
     holdout_end: "",
     objective: "balanced_score",
+    discovery_candidate_count: "8",
+    replay_candidate_count: "5",
     baseline_source: "current_active_config",
     promotion_target: "paper_config",
   });
@@ -79,7 +81,7 @@ export function TuningWorkflowPage() {
         setWatchlists(watchlistList);
         setForm((current) => current.watchlist_id || !watchlistList[0]?.id ? current : { ...current, watchlist_id: String(watchlistList[0].id) });
       }
-      const id = selectId ?? selected?.id ?? list.experiments[0]?.id;
+      const id = selectId ?? (refreshList ? list.experiments[0]?.id : selected?.id ?? list.experiments[0]?.id);
       if (id) {
         const detail = await getJson<TuningExperimentResponse>(`/api/tuning-workflow/experiments/${id}`);
         setSelected(detail.experiment);
@@ -94,6 +96,29 @@ export function TuningWorkflowPage() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    setForm((current) => ({
+      ...current,
+      name: selected.name,
+      hypothesis: selected.hypothesis ?? "",
+      universe_mode: selected.universe.watchlist_id ? "watchlist" : "tickers",
+      watchlist_id: selected.universe.watchlist_id ? String(selected.universe.watchlist_id) : current.watchlist_id,
+      tickers: Array.isArray(selected.universe.tickers) ? selected.universe.tickers.join(",") : current.tickers,
+      discovery_start: String(selected.windows.discovery_start ?? ""),
+      discovery_end: String(selected.windows.discovery_end ?? ""),
+      replay_start: String(selected.windows.replay_start ?? ""),
+      replay_end: String(selected.windows.replay_end ?? ""),
+      holdout_start: String(selected.windows.holdout_start ?? ""),
+      holdout_end: String(selected.windows.holdout_end ?? ""),
+      objective: selected.objective,
+      discovery_candidate_count: String(selected.discovery_settings.candidate_count ?? current.discovery_candidate_count),
+      replay_candidate_count: String(selected.replay_settings.max_candidates ?? current.replay_candidate_count),
+      baseline_source: String(selected.baseline.source ?? current.baseline_source),
+      promotion_target: selected.promotion_target,
+    }));
+  }, [selected?.id]);
 
   async function createExperiment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,7 +143,8 @@ export function TuningWorkflowPage() {
         objective: form.objective,
         baseline: { source: form.baseline_source },
         promotion_target: form.promotion_target,
-        replay_settings: { max_candidates: 5, max_concurrency: 1, cache_only: true },
+        discovery_settings: { search_size: "small", candidate_count: Number(form.discovery_candidate_count) },
+        replay_settings: { max_candidates: Number(form.replay_candidate_count), max_concurrency: 1, cache_only: true },
       });
       setForm((current) => ({ ...current, name: "", hypothesis: "" }));
       await load(response.experiment.id);
@@ -139,6 +165,54 @@ export function TuningWorkflowPage() {
       void load(response.experiment.id, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Workflow action failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateSelectedFromForm() {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const universe = form.universe_mode === "watchlist"
+        ? { watchlist_id: Number(form.watchlist_id), watchlist_name: watchlists.find((item) => String(item.id) === form.watchlist_id)?.name }
+        : { tickers: form.tickers.split(",").map((ticker) => ticker.trim().toUpperCase()).filter(Boolean) };
+      const response = await patchJson<TuningExperimentResponse>(`/api/tuning-workflow/experiments/${selected.id}`, {
+        name: form.name || selected.name,
+        hypothesis: form.hypothesis,
+        universe,
+        windows: {
+          discovery_start: form.discovery_start,
+          discovery_end: form.discovery_end,
+          replay_start: form.replay_start,
+          replay_end: form.replay_end,
+          holdout_start: form.holdout_start,
+          holdout_end: form.holdout_end,
+        },
+        objective: form.objective,
+        baseline: { source: form.baseline_source },
+        promotion_target: form.promotion_target,
+        discovery_settings: { search_size: "small", candidate_count: Number(form.discovery_candidate_count) },
+        replay_settings: { max_candidates: Number(form.replay_candidate_count), max_concurrency: 1, cache_only: true },
+      });
+      await load(response.experiment.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update experiment");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteSelected() {
+    if (!selected || !confirm(`Delete experiment ${selected.name}? Replay batches and run history are not deleted.`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteJson(`/api/tuning-workflow/experiments/${selected.id}`);
+      await load(undefined, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete experiment");
     } finally {
       setSaving(false);
     }
@@ -201,6 +275,8 @@ export function TuningWorkflowPage() {
                 {form.universe_mode === "watchlist" ? <label className="form-field"><span>Watchlist</span><select value={form.watchlist_id} onChange={(event) => setForm({ ...form, watchlist_id: event.target.value })} required><option value="">Select watchlist…</option>{watchlists.map((watchlist) => <option key={watchlist.id ?? watchlist.name} value={String(watchlist.id)}>{watchlist.name} · {watchlist.tickers.length} tickers</option>)}</select></label> : null}
                 {form.universe_mode === "tickers" ? <label className="form-field"><span>Universe tickers</span><input value={form.tickers} onChange={(event) => setForm({ ...form, tickers: event.target.value })} /></label> : null}
                 <label className="form-field"><span>Objective</span><select value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })}><option value="balanced_score">Balanced score</option><option value="tier_a_win_rate">Tier A win rate</option><option value="expected_value">Expected value</option><option value="average_5d_return">Average 5d return</option><option value="loss_severity">Minimize loss severity</option></select></label>
+                <label className="form-field"><span>Discovery candidates</span><input type="number" min="1" max="25" value={form.discovery_candidate_count} onChange={(event) => setForm({ ...form, discovery_candidate_count: event.target.value })} /><small>Generated/imported before shortlist. Discovery evidence is not promotion evidence.</small></label>
+                <label className="form-field"><span>Replay candidates</span><input type="number" min="1" max="10" value={form.replay_candidate_count} onChange={(event) => setForm({ ...form, replay_candidate_count: event.target.value })} /><small>Shortlisted candidates queued for expensive replay; 5 is the VPS-safe default.</small></label>
                 {["discovery_start", "discovery_end", "replay_start", "replay_end", "holdout_start", "holdout_end"].map((key) => <label className="form-field" key={key}><span>{key.replace(/_/g, " ")}</span><input type="date" value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}
                 <label className="form-field"><span>Baseline</span><select value={form.baseline_source} onChange={(event) => setForm({ ...form, baseline_source: event.target.value })}><option value="current_active_config">Current active config</option><option value="selected_config_version">Selected config version</option><option value="existing_replay_batch">Existing replay batch</option><option value="rerun_baseline_replay">Rerun baseline replay</option></select></label>
                 <label className="form-field"><span>Promotion target</span><select value={form.promotion_target} onChange={(event) => setForm({ ...form, promotion_target: event.target.value })}><option value="research_only">Research only</option><option value="paper_config">Paper config</option><option value="live_guarded_config">Live guarded config</option><option value="live_full_autonomy" disabled>Live full autonomy disabled</option></select></label>
@@ -218,7 +294,7 @@ export function TuningWorkflowPage() {
         {selected ? (
           <>
             <Card>
-              <SectionTitle kicker="Lifecycle banner" title={selected.name} subtitle={selected.next_action} actions={<><Badge tone={stageTone(selected.current_stage)}>{selected.current_stage}</Badge><button className="button-subtle" onClick={() => void archiveSelected()} disabled={saving}>Archive</button></>} />
+              <SectionTitle kicker="Lifecycle banner" title={selected.name} subtitle={selected.next_action} actions={<><Badge tone={stageTone(selected.current_stage)}>{selected.current_stage}</Badge><button className="button-secondary" onClick={() => void updateSelectedFromForm()} disabled={saving}>Update from setup form</button><button className="button-subtle" onClick={() => void archiveSelected()} disabled={saving}>Archive</button><button className="button-subtle" onClick={() => void deleteSelected()} disabled={saving}>Delete</button></>} />
               <section className="metrics-grid top-gap-small">
                 <StatCard label="Candidate pool" value={funnel.pool} helper="Discovery-only until replay validated" />
                 <StatCard label="Shortlist" value={funnel.shortlist} helper="Replay pass capped at 5 by default" />
@@ -231,7 +307,8 @@ export function TuningWorkflowPage() {
             <Card>
               <SectionTitle kicker="Recommended next action" title={selected.next_action} subtitle="Use the guided control below only when it matches the current stage. Full controls are collapsed to keep the workflow readable." />
               <div className="cluster top-gap-small">
-                {selected.current_stage === "readiness_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button> : null}
+                <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/autonomous-run`)}>Run autonomously until wait/manual gate</button>
+                {selected.current_stage === "readiness_needed" ? <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button> : null}
                 {selected.current_stage === "candidate_discovery_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate candidate pool</button> : null}
                 {selected.current_stage === "shortlist_needed" ? <button className="button" disabled={saving || !candidates.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/shortlist`, { candidate_ids: candidates.slice(0, Number(selected.sections.shortlist?.max_candidates ?? 5)).map((candidate) => String(candidate.id)) })}>Shortlist top candidates</button> : null}
                 {selected.current_stage === "baseline_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/baseline-replay/create?enqueue=true`)}>Create baseline replay</button> : null}
