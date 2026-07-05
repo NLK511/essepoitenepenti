@@ -1482,6 +1482,11 @@ class TuningWorkflowService:
         if key in {"baseline_replay", "candidate_replay_validation", "stability_validation"}:
             if status == "ready":
                 return "Ready to create worker jobs; nothing is running yet."
+            if key == "candidate_replay_validation" and isinstance(section.get("candidate_batches"), dict):
+                batches = section.get("candidate_batches") if isinstance(section.get("candidate_batches"), dict) else {}
+                worker_runs = sum(int(payload.get("queued_run_count") or 0) for payload in batches.values() if isinstance(payload, dict))
+                lightweight = sum(1 for payload in batches.values() if isinstance(payload, dict) and payload.get("source_frozen_inputs_reused"))
+                return f"{status}; {len(batches)} candidate(s), {worker_runs} worker run(s) queued, {lightweight} lightweight validation(s)."
             batch = section.get("batch_id") or section.get("batch_ids") or section.get("holdout_batch_ids") or "—"
             return f"{status}; batch/run reference: {batch}."
         if key == "promotion_proposal":
