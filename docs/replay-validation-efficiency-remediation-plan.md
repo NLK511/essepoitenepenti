@@ -202,7 +202,7 @@ Default for broad plan-generation tuning should be `frozen_input_plan_regenerati
 - [ ] Outcome resolution reruns using local outcome bars.
 - [ ] Live settings are not mutated.
 
-## Phase 5A — Canonical local re-resolution for regenerated candidate plans — planned in detail
+## Phase 5A — Canonical local re-resolution for regenerated candidate plans — implemented for workflow frozen-input validation
 
 ### Why this phase matters
 
@@ -400,47 +400,13 @@ This protects the app from selecting candidates that look better only because th
 
 ### Incremental implementation breakdown
 
-1. **Extract/identify canonical outcome resolver**
-   - Locate current full replay outcome-resolution logic.
-   - Extract it behind a service callable with explicit local-only bar windows.
-   - Preserve existing tie-break and horizon behavior.
-   - Add unit tests around unchanged behavior.
-
-2. **Add local outcome bar-window helper**
-   - Implement repository/service function with no provider dependencies.
-   - Add tests with complete, missing, and insufficient windows.
-   - Add instrumentation/diagnostics proving `remote_fetch_used=false`.
-
-3. **Persist candidate plan artifact**
-   - Add migration/model/repository or equivalent existing-table-backed artifact storage.
-   - Upsert by `(replay_slice_id, source_baseline_plan_id, candidate_config_hash)`.
-   - Record candidate config/settings/code hashes and geometry hashes.
-
-4. **Wire frozen-input validation to resolver**
-   - In workflow lightweight candidate path, replace copied baseline outcome for geometry-changing candidates with resolver output.
-   - Keep copied baseline label only for `rescore_only` or `geometry_unchanged=true`.
-   - Persist invalid-geometry and missing-bar cases as explicit non-promotional evidence.
-
-5. **Aggregate and UI correctness**
-   - Ensure `ReplayValidationAggregateService` counts candidate-hash outcomes only.
-   - Add detail fields to workflow comparison payload:
-     - `canonical_candidate_outcomes_count`
-     - `reused_baseline_outcomes_count`
-     - `invalid_geometry_count`
-     - `missing_local_bars_count`
-   - Label non-canonical copied labels as insufficient for promotion.
-
-6. **Promotion gate hardening**
-   - Block promotion proposal when a geometry-changing candidate lacks canonical candidate outcomes.
-   - Block or require manual remediation for excessive missing local bars.
-   - Add clear operator message: hydrate historical bars separately, then rerun validation.
-
-7. **Smoke experiment**
-   - Run one small cache-only experiment with:
-     - one `rescore_only` candidate
-     - one geometry-changing frozen-input candidate
-     - one intentionally invalid geometry candidate
-   - Verify no provider calls, bounded memory, and candidate-specific outcome changes where expected.
+1. **Extract/identify canonical outcome resolver** — implemented by calling the existing `PlanResolutionEngine` through `LocalCandidateOutcomeResolver` with explicit local-only bar windows.
+2. **Add local outcome bar-window helper** — implemented for daily cached `historical_market_bars`; no provider dependency is present in the resolver path.
+3. **Persist candidate plan artifact** — implemented with `candidate_plan_artifacts` and migration `0054_candidate_plan_artifacts.py`.
+4. **Wire frozen-input validation to resolver** — implemented in tuning workflow lightweight candidate validation. Geometry-changing candidates now receive candidate-specific resolved outcomes; unchanged geometry/rescore-only can still reuse baseline labels with provenance.
+5. **Aggregate and UI correctness** — implemented in workflow payload/comparison counters for canonical/reused/invalid/missing-bar candidate outcomes.
+6. **Promotion gate hardening** — implemented in workflow promotion proposal blockers for non-canonical geometry-changing evidence, invalid geometry, and missing local outcome bars.
+7. **Smoke experiment** — not yet run on live data after implementation.
 
 ### Detailed tests to add before code changes
 
@@ -457,12 +423,12 @@ This protects the app from selecting candidates that look better only because th
 
 ### Acceptance criteria
 
-- [ ] Geometry-changing candidates are resolved against regenerated candidate levels, not baseline labels.
-- [ ] Candidate-specific outcomes use local bars only and expose coverage diagnostics.
-- [ ] Invalid geometry is explicit, ineligible, and visible to the operator.
-- [ ] Baseline records remain unchanged and auditable.
-- [ ] Promotion cannot proceed on non-canonical copied labels for geometry-changing candidates.
-- [ ] Runtime remains much cheaper than full orchestration because upstream evidence is not rerun.
+- [x] Geometry-changing candidates are resolved against regenerated candidate levels, not baseline labels, in tuning workflow frozen-input validation.
+- [x] Candidate-specific outcomes use local bars only and expose coverage diagnostics.
+- [x] Invalid geometry is explicit, ineligible, and visible in persisted diagnostics/counters.
+- [x] Baseline records remain unchanged and auditable.
+- [x] Promotion cannot proceed on non-canonical copied labels for geometry-changing candidates in the tuning workflow promotion proposal gate.
+- [x] Runtime remains much cheaper than full orchestration because upstream evidence is not rerun.
 
 ## Phase 6 — Rescore-only path hardening
 

@@ -5,7 +5,7 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from trade_proposer_app.config import settings
 
-HEAD_REVISION = "0051_news_ingested_at"
+HEAD_REVISION = "0054_candidate_plan_artifacts"
 LEGACY_REVISION_MAP = {
     "0003_recommendation_diagnostics_fields": "0003_rec_diag_fields",
     "0004_jobs_watchlists_and_run_errors": "0004_jobs_watchlists_run_errs",

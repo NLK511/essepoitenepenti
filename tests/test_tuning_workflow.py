@@ -1,3 +1,4 @@
+import json
 import unittest
 from datetime import datetime, timezone
 
@@ -204,9 +205,9 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             detail = service.create_baseline_replay_batch(experiment_id)
             self.assertEqual("candidate_replay_needed", detail["current_stage"])
             metadata_record = service.get_experiment(experiment_id)
-            metadata = __import__("json").loads(metadata_record.metadata_json)
+            metadata = json.loads(metadata_record.metadata_json)
             metadata["candidate_pool"]["candidates"][0]["validation_depth"] = "full_orchestration_replay"
-            metadata_record.metadata_json = __import__("json").dumps(metadata)
+            metadata_record.metadata_json = json.dumps(metadata)
             session.commit()
             detail = service.create_candidate_replay_batches(experiment_id)
 
@@ -265,6 +266,66 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertTrue(payload["source_frozen_inputs_reused"])
             self.assertEqual(0, len(fake_replay.created))
             self.assertEqual(1, payload["summary"]["tier_a_count"])
+        finally:
+            session.close()
+
+    def test_frozen_input_candidate_resolves_against_regenerated_geometry(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session, historical_replay_service=FakeReplayService())
+            detail = service.create_experiment(
+                {
+                    "name": "Frozen outcome resolution",
+                    "universe": {"tickers": ["AAPL"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-04-01",
+                    },
+                    "baseline": {"source": "existing_replay_batch"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            baseline_batch = HistoricalReplayBatchRecord(name="baseline-frozen", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            session.add(baseline_batch)
+            session.commit()
+            slice_record = HistoricalReplaySliceRecord(replay_batch_id=baseline_batch.id or 0, as_of=datetime(2026, 2, 2, tzinfo=timezone.utc), status="completed")
+            plan = RecommendationPlanRecord(ticker="AAPL", action="long", confidence_percent=70, entry_price_low=100, entry_price_high=100, stop_loss=95, take_profit=110, holding_period_days=5, evidence_summary_json='{"setup_family":"breakout"}', signal_breakdown_json="{}", computed_at=datetime(2026, 2, 2, tzinfo=timezone.utc))
+            session.add_all([slice_record, plan])
+            session.commit()
+            outcome = ReplayPlanOutcomeRecord(replay_batch_id=baseline_batch.id or 0, replay_slice_id=slice_record.id or 0, recommendation_plan_id=plan.id or 0, resolution_source="daily", outcome="win", status="resolved", outcome_json='{"outcome":"win","status":"resolved"}')
+            session.add(outcome)
+            session.commit()
+            eligibility = ReplayEligibilityRecord(replay_batch_id=baseline_batch.id or 0, replay_slice_id=slice_record.id or 0, replay_plan_outcome_id=outcome.id, recommendation_plan_id=plan.id or 0, ticker="AAPL", tier="tier_a", eligible_for_tuning=True, resolution_source="daily", outcome="win", diagnostics_json='{"setup_family":"breakout"}')
+            bar = HistoricalMarketBarRecord(ticker="AAPL", timeframe="1d", bar_time=datetime(2026, 2, 3, tzinfo=timezone.utc), available_at=datetime(2026, 2, 3, tzinfo=timezone.utc), open_price=100, high_price=101, low_price=95.4, close_price=96, volume=1000)
+            session.add_all([eligibility, bar])
+            session.commit()
+
+            service.bind_baseline_replay_batch(experiment_id, baseline_batch.id or 0)
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            record = service.get_experiment(experiment_id)
+            metadata = json.loads(record.metadata_json)
+            metadata["candidate_pool"]["candidates"][0]["validation_depth"] = "frozen_input_plan_regeneration"
+            metadata["candidate_pool"]["candidates"][0]["config"] = {"setup_family.breakout.stop_distance_multiplier": 0.85}
+            metadata["candidate_pool"]["candidates"][0]["config_hash"] = "frozen-stop-tight"
+            record.metadata_json = json.dumps(metadata)
+            session.commit()
+            service.update_shortlist(experiment_id, [candidate_id])
+            detail = service.create_candidate_replay_batches(experiment_id)
+
+            payload = detail["sections"]["candidate_replay_validation"]["candidate_batches"][candidate_id]
+            self.assertEqual("frozen_input_plan_regeneration", payload["validation_depth"])
+            self.assertEqual(1, payload["canonical_candidate_outcomes_count"])
+            self.assertEqual(0, payload["reused_baseline_outcomes_count"])
+            candidate_outcome = session.query(ReplayPlanOutcomeRecord).filter_by(candidate_config_hash="frozen-stop-tight").one()
+            self.assertEqual("loss", candidate_outcome.outcome)
+            self.assertEqual("resolved", candidate_outcome.status)
+            self.assertTrue(json.loads(candidate_outcome.outcome_json)["canonical_candidate_outcome"])
+            self.assertEqual("win", session.get(ReplayPlanOutcomeRecord, outcome.id).outcome)
         finally:
             session.close()
 

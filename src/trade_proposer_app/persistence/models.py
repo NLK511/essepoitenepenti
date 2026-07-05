@@ -663,6 +663,44 @@ class FundamentalAnalysisSnapshotRecord(Base, TimestampMixin):
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
 
 
+class CandidatePlanArtifactRecord(Base, TimestampMixin):
+    __tablename__ = "candidate_plan_artifacts"
+    __table_args__ = (
+        UniqueConstraint(
+            "replay_slice_id",
+            "source_baseline_plan_id",
+            "candidate_config_hash",
+            name="uq_candidate_plan_artifacts_slice_plan_candidate",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    replay_batch_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_batches.id"), index=True)
+    replay_slice_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_slices.id"), index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    as_of: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    source_baseline_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    source_replay_eligibility_id: Mapped[int | None] = mapped_column(ForeignKey("replay_eligibility_records.id"), nullable=True, index=True)
+    candidate_config_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
+    validation_depth: Mapped[str] = mapped_column(String(64), default="", index=True)
+    candidate_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    source_plan_payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    candidate_plan_payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    action: Mapped[str] = mapped_column(String(32), default="")
+    entry_price_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    entry_price_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    holding_period_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    geometry_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
+    source_geometry_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
+    regeneration_status: Mapped[str] = mapped_column(String(32), default="regenerated", index=True)
+    invalid_geometry_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+    settings_snapshot_hash: Mapped[str] = mapped_column(String(128), default="")
+    code_version_hash: Mapped[str] = mapped_column(String(128), default="")
+    diagnostics_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
 class ReplayEligibilityRecord(Base, TimestampMixin):
     __tablename__ = "replay_eligibility_records"
     __table_args__ = (

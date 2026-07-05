@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
+import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.persistence.models import RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
+from trade_proposer_app.domain.models import RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.persistence.models import CandidatePlanArtifactRecord, HistoricalMarketBarRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
+from trade_proposer_app.services.plan_resolution_engine import PlanResolutionEngine
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import candidate_validation_depth
@@ -33,6 +37,33 @@ class CandidateReplayPlan:
             "validation_depth_reason": self.validation_depth_reason,
             "replay_required": self.replay_required,
             "skip_reason": self.skip_reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateOutcomeResolutionResult:
+    status: str
+    outcome_label: str
+    resolution_source: str
+    entry_triggered: bool | None
+    evaluated_at: datetime
+    bars_loaded_count: int
+    local_only: bool
+    remote_fetch_used: bool
+    diagnostics: dict[str, object]
+    plan_outcome: RecommendationPlanOutcome | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "outcome": self.outcome_label,
+            "resolution_source": self.resolution_source,
+            "entry_triggered": self.entry_triggered,
+            "evaluated_at": self.evaluated_at.isoformat(),
+            "bars_loaded_count": self.bars_loaded_count,
+            "local_only": self.local_only,
+            "remote_fetch_used": self.remote_fetch_used,
+            "diagnostics": self.diagnostics,
         }
 
 
@@ -134,6 +165,272 @@ class FrozenInputPlanRegenerationService:
             if take_profit <= midpoint:
                 return ["long take-profit must be above entry"]
         return []
+
+
+class CandidatePlanArtifactService:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def upsert_artifact(
+        self,
+        *,
+        replay_batch_id: int,
+        replay_slice_id: int,
+        as_of: datetime,
+        source_plan: RecommendationPlanRecord,
+        source_replay_eligibility_id: int | None,
+        candidate_config_hash: str,
+        validation_depth: str,
+        candidate_config: Mapping[str, object],
+        regeneration: Mapping[str, object],
+    ) -> CandidatePlanArtifactRecord:
+        source_geometry = self.geometry_payload(source_plan)
+        candidate_geometry = {
+            "action": str(source_plan.action),
+            "entry_price_low": self._float_or_none(regeneration.get("entry_price_low")) if regeneration.get("entry_price_low") is not None else source_plan.entry_price_low,
+            "entry_price_high": self._float_or_none(regeneration.get("entry_price_high")) if regeneration.get("entry_price_high") is not None else source_plan.entry_price_high,
+            "stop_loss": self._float_or_none(regeneration.get("stop_loss")) if regeneration.get("stop_loss") is not None else source_plan.stop_loss,
+            "take_profit": self._float_or_none(regeneration.get("take_profit")) if regeneration.get("take_profit") is not None else source_plan.take_profit,
+            "holding_period_days": source_plan.holding_period_days,
+        }
+        geometry_hash = stable_hash(candidate_geometry)
+        source_geometry_hash = stable_hash(source_geometry)
+        record = self.session.scalar(
+            select(CandidatePlanArtifactRecord).where(
+                CandidatePlanArtifactRecord.replay_slice_id == replay_slice_id,
+                CandidatePlanArtifactRecord.source_baseline_plan_id == (source_plan.id or 0),
+                CandidatePlanArtifactRecord.candidate_config_hash == candidate_config_hash,
+            )
+        )
+        if record is None:
+            record = CandidatePlanArtifactRecord(
+                replay_batch_id=replay_batch_id,
+                replay_slice_id=replay_slice_id,
+                ticker=source_plan.ticker,
+                as_of=as_of,
+                source_baseline_plan_id=source_plan.id or 0,
+                source_replay_eligibility_id=source_replay_eligibility_id,
+                candidate_config_hash=candidate_config_hash,
+            )
+            self.session.add(record)
+        record.replay_batch_id = replay_batch_id
+        record.ticker = source_plan.ticker
+        record.as_of = as_of
+        record.source_replay_eligibility_id = source_replay_eligibility_id
+        record.validation_depth = validation_depth
+        record.candidate_config_json = self._json(candidate_config)
+        record.source_plan_payload_json = self._json(self.plan_payload(source_plan))
+        record.candidate_plan_payload_json = self._json({**self.plan_payload(source_plan), **candidate_geometry})
+        record.action = str(candidate_geometry["action"])
+        record.entry_price_low = candidate_geometry["entry_price_low"]  # type: ignore[assignment]
+        record.entry_price_high = candidate_geometry["entry_price_high"]  # type: ignore[assignment]
+        record.stop_loss = candidate_geometry["stop_loss"]  # type: ignore[assignment]
+        record.take_profit = candidate_geometry["take_profit"]  # type: ignore[assignment]
+        record.holding_period_days = candidate_geometry["holding_period_days"]  # type: ignore[assignment]
+        record.geometry_hash = geometry_hash
+        record.source_geometry_hash = source_geometry_hash
+        record.regeneration_status = "invalid" if regeneration.get("status") == "invalid" else ("unchanged" if geometry_hash == source_geometry_hash else "regenerated")
+        record.invalid_geometry_reasons_json = self._json(regeneration.get("rejection_reasons") or [])
+        record.settings_snapshot_hash = stable_hash(candidate_config)
+        record.code_version_hash = "runtime"
+        record.diagnostics_json = self._json({
+            "regeneration": dict(regeneration),
+            "geometry_unchanged": geometry_hash == source_geometry_hash,
+            "remote_fetch_used": False,
+        })
+        self.session.flush()
+        return record
+
+    @staticmethod
+    def geometry_payload(plan: RecommendationPlanRecord) -> dict[str, object]:
+        return {
+            "action": plan.action,
+            "entry_price_low": plan.entry_price_low,
+            "entry_price_high": plan.entry_price_high,
+            "stop_loss": plan.stop_loss,
+            "take_profit": plan.take_profit,
+            "holding_period_days": plan.holding_period_days,
+        }
+
+    @staticmethod
+    def plan_payload(plan: RecommendationPlanRecord) -> dict[str, object]:
+        return {
+            "id": plan.id,
+            "ticker": plan.ticker,
+            "horizon": plan.horizon,
+            "action": plan.action,
+            "status": plan.status,
+            "confidence_percent": plan.confidence_percent,
+            "entry_price_low": plan.entry_price_low,
+            "entry_price_high": plan.entry_price_high,
+            "stop_loss": plan.stop_loss,
+            "take_profit": plan.take_profit,
+            "holding_period_days": plan.holding_period_days,
+            "risk_reward_ratio": plan.risk_reward_ratio,
+            "evidence_summary": loads_json_object(plan.evidence_summary_json),
+            "signal_breakdown": loads_json_object(plan.signal_breakdown_json),
+            "computed_at": plan.computed_at.isoformat() if isinstance(plan.computed_at, datetime) else None,
+        }
+
+    @staticmethod
+    def _json(value: object) -> str:
+        import json
+
+        return json.dumps(value, sort_keys=True, default=str)
+
+    @staticmethod
+    def _float_or_none(value: object) -> float | None:
+        try:
+            return None if value is None else float(value)
+        except (TypeError, ValueError):
+            return None
+
+
+class LocalCandidateOutcomeResolver:
+    def __init__(self, session: Session, *, engine: PlanResolutionEngine | None = None) -> None:
+        self.session = session
+        self.engine = engine or PlanResolutionEngine()
+        self._bar_cache: dict[tuple[str, str, int, str], tuple[pd.DataFrame, dict[str, object]]] = {}
+
+    def resolve_artifact(self, artifact: CandidatePlanArtifactRecord, *, run_id: int | None = None) -> CandidateOutcomeResolutionResult:
+        if artifact.regeneration_status == "invalid":
+            import json
+
+            try:
+                invalid_reasons = json.loads(artifact.invalid_geometry_reasons_json or "[]")
+            except (TypeError, ValueError):
+                invalid_reasons = []
+            diagnostics = {
+                "invalid_geometry_reasons": invalid_reasons if isinstance(invalid_reasons, list) else [],
+                "local_only": True,
+                "remote_fetch_used": False,
+            }
+            now = datetime.now(timezone.utc)
+            return CandidateOutcomeResolutionResult(
+                status="invalid_geometry",
+                outcome_label="unknown",
+                resolution_source="unavailable",
+                entry_triggered=None,
+                evaluated_at=now,
+                bars_loaded_count=0,
+                local_only=True,
+                remote_fetch_used=False,
+                diagnostics=diagnostics,
+            )
+        plan = self._artifact_to_plan(artifact)
+        horizon_days = int(artifact.holding_period_days or 7)
+        bars, coverage = self.get_outcome_bars(artifact.ticker, artifact.as_of, horizon_days, resolution_source="daily")
+        if bars.empty:
+            now = datetime.now(timezone.utc)
+            return CandidateOutcomeResolutionResult(
+                status="missing_local_bars",
+                outcome_label="unknown",
+                resolution_source="unavailable",
+                entry_triggered=None,
+                evaluated_at=now,
+                bars_loaded_count=0,
+                local_only=True,
+                remote_fetch_used=False,
+                diagnostics={"bar_coverage": coverage, "local_only": True, "remote_fetch_used": False},
+            )
+        outcome = self.engine.evaluate_plan(plan, bars, intended_action=plan.action, run_id=run_id, as_of=artifact.as_of)
+        diagnostics = {
+            "bar_coverage": coverage,
+            "resolver_version": "plan_resolution_engine_v1",
+            "candidate_plan_artifact_id": artifact.id,
+            "geometry_hash": artifact.geometry_hash,
+            "source_geometry_hash": artifact.source_geometry_hash,
+            "geometry_unchanged": artifact.geometry_hash == artifact.source_geometry_hash,
+            "local_only": True,
+            "remote_fetch_used": False,
+        }
+        return CandidateOutcomeResolutionResult(
+            status=outcome.status,
+            outcome_label=outcome.outcome,
+            resolution_source="daily",
+            entry_triggered=outcome.entry_touched,
+            evaluated_at=outcome.evaluated_at,
+            bars_loaded_count=len(bars),
+            local_only=True,
+            remote_fetch_used=False,
+            diagnostics=diagnostics,
+            plan_outcome=outcome,
+        )
+
+    def get_outcome_bars(self, ticker: str, as_of: datetime, horizon_days: int, *, resolution_source: str) -> tuple[pd.DataFrame, dict[str, object]]:
+        normalized_as_of = self._normalize(as_of)
+        key = (ticker.upper(), normalized_as_of.date().isoformat(), horizon_days, resolution_source)
+        if key in self._bar_cache:
+            return self._bar_cache[key]
+        end_at = normalized_as_of + timedelta(days=max(1, horizon_days))
+        rows = list(
+            self.session.scalars(
+                select(HistoricalMarketBarRecord)
+                .where(
+                    HistoricalMarketBarRecord.ticker == ticker.upper(),
+                    HistoricalMarketBarRecord.timeframe == "1d",
+                    HistoricalMarketBarRecord.bar_time > normalized_as_of,
+                    HistoricalMarketBarRecord.bar_time <= end_at,
+                )
+                .order_by(HistoricalMarketBarRecord.bar_time.asc())
+            ).all()
+        )
+        frame = pd.DataFrame(
+            [
+                {
+                    "bar_time": self._normalize(row.bar_time),
+                    "Open": row.open_price,
+                    "High": row.high_price,
+                    "Low": row.low_price,
+                    "Close": row.close_price,
+                    "Volume": row.volume,
+                    "available_at": self._normalize(row.available_at or row.bar_time),
+                }
+                for row in rows
+            ]
+        )
+        if not frame.empty:
+            frame = frame.set_index("bar_time")
+        coverage = {
+            "ticker": ticker.upper(),
+            "timeframe": "1d",
+            "as_of": normalized_as_of.isoformat(),
+            "window_end": end_at.isoformat(),
+            "horizon_days": horizon_days,
+            "loaded_bars": len(rows),
+            "first_bar_time": self._normalize(rows[0].bar_time).isoformat() if rows else None,
+            "last_bar_time": self._normalize(rows[-1].bar_time).isoformat() if rows else None,
+            "sufficient": bool(rows),
+            "remote_fetch_used": False,
+        }
+        self._bar_cache[key] = (frame, coverage)
+        return frame, coverage
+
+    def _artifact_to_plan(self, artifact: CandidatePlanArtifactRecord) -> RecommendationPlan:
+        payload = loads_json_object(artifact.candidate_plan_payload_json)
+        return RecommendationPlan(
+            id=artifact.source_baseline_plan_id,
+            ticker=artifact.ticker,
+            horizon=str(payload.get("horizon") or "1w"),
+            action=artifact.action,
+            status=str(payload.get("status") or "ok"),
+            confidence_percent=float(payload.get("confidence_percent") or 0.0),
+            entry_price_low=artifact.entry_price_low,
+            entry_price_high=artifact.entry_price_high,
+            stop_loss=artifact.stop_loss,
+            take_profit=artifact.take_profit,
+            holding_period_days=artifact.holding_period_days,
+            risk_reward_ratio=payload.get("risk_reward_ratio"),
+            evidence_summary=payload.get("evidence_summary") if isinstance(payload.get("evidence_summary"), dict) else {},
+            signal_breakdown=payload.get("signal_breakdown") if isinstance(payload.get("signal_breakdown"), dict) else {},
+            computed_at=artifact.as_of,
+        )
+
+    @staticmethod
+    def _normalize(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 class CandidateReplayPlanner:

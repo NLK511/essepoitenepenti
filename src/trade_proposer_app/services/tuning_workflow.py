@@ -12,8 +12,8 @@ from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, His
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_DEFAULTS, candidate_validation_depth, normalize_plan_generation_tuning_config
-from trade_proposer_app.services.replay_validation_efficiency import FrozenInputPlanRegenerationService, ReplayValidationAggregateService
-from trade_proposer_app.utils.json_payloads import loads_json_object
+from trade_proposer_app.services.replay_validation_efficiency import CandidatePlanArtifactService, FrozenInputPlanRegenerationService, LocalCandidateOutcomeResolver, ReplayValidationAggregateService
+from trade_proposer_app.utils.json_payloads import loads_json_list, loads_json_object
 
 
 OBJECTIVES = {
@@ -483,15 +483,42 @@ class TuningWorkflowService:
         }
         tuning_config = dict(candidate.get("config") or {})
         regenerator = FrozenInputPlanRegenerationService()
+        artifact_service = CandidatePlanArtifactService(self.session)
+        resolver = LocalCandidateOutcomeResolver(self.session)
         copied_count = 0
+        canonical_candidate_outcomes_count = 0
+        reused_baseline_outcomes_count = 0
         invalid_geometry_count = 0
+        missing_local_bars_count = 0
         for source in source_rows:
             plan = self.session.get(RecommendationPlanRecord, source.recommendation_plan_id)
+            slice_record = self.session.get(HistoricalReplaySliceRecord, source.replay_slice_id)
             regeneration: dict[str, object] = {"status": "not_required"}
-            if validation_depth == "frozen_input_plan_regeneration" and plan is not None:
+            artifact = None
+            resolution = None
+            if validation_depth == "frozen_input_plan_regeneration" and plan is not None and slice_record is not None:
                 regeneration = regenerator.regenerate_levels(plan, tuning_config=tuning_config)
-                if regeneration.get("status") == "invalid":
+                artifact = artifact_service.upsert_artifact(
+                    replay_batch_id=baseline_batch_id,
+                    replay_slice_id=source.replay_slice_id,
+                    as_of=slice_record.as_of,
+                    source_plan=plan,
+                    source_replay_eligibility_id=source.id,
+                    candidate_config_hash=candidate_config_hash,
+                    validation_depth=validation_depth,
+                    candidate_config=tuning_config,
+                    regeneration=regeneration,
+                )
+                if artifact.regeneration_status == "invalid":
                     invalid_geometry_count += 1
+                    resolution = resolver.resolve_artifact(artifact)
+                elif artifact.geometry_hash == artifact.source_geometry_hash:
+                    reused_baseline_outcomes_count += 1
+                else:
+                    resolution = resolver.resolve_artifact(artifact)
+                    canonical_candidate_outcomes_count += 1
+                    if resolution.status in {"missing_local_bars", "insufficient_window"}:
+                        missing_local_bars_count += 1
             source_outcome = source_outcomes.get((source.replay_slice_id, source.recommendation_plan_id))
             outcome_record = self.session.scalar(
                 select(ReplayPlanOutcomeRecord).where(
@@ -509,19 +536,31 @@ class TuningWorkflowService:
                 )
                 self.session.add(outcome_record)
             outcome_record.run_id = None
-            outcome_record.resolution_source = str(source_outcome.resolution_source if source_outcome else source.resolution_source)
-            outcome_record.outcome = str(source_outcome.outcome if source_outcome else source.outcome)
-            outcome_record.status = str(source_outcome.status if source_outcome else ("resolved" if source.outcome else "open"))
-            outcome_record.evaluated_at = datetime.now(timezone.utc)
-            outcome_payload = loads_json_object(source_outcome.outcome_json if source_outcome else "{}")
+            if resolution is not None:
+                outcome_record.resolution_source = resolution.resolution_source
+                outcome_record.outcome = resolution.outcome_label
+                outcome_record.status = resolution.status
+                outcome_record.evaluated_at = resolution.evaluated_at
+                base_payload = resolution.plan_outcome.model_dump(mode="json") if resolution.plan_outcome is not None else {}
+            else:
+                outcome_record.resolution_source = str(source_outcome.resolution_source if source_outcome else source.resolution_source)
+                outcome_record.outcome = str(source_outcome.outcome if source_outcome else source.outcome)
+                outcome_record.status = str(source_outcome.status if source_outcome else ("resolved" if source.outcome else "open"))
+                outcome_record.evaluated_at = datetime.now(timezone.utc)
+                base_payload = loads_json_object(source_outcome.outcome_json if source_outcome else "{}")
+            outcome_payload = dict(base_payload)
             outcome_payload.update({
                 "validation_depth": validation_depth,
                 "candidate_config_hash": candidate_config_hash,
                 "source_replay_batch_id": baseline_batch_id,
                 "source_replay_plan_outcome_id": source_outcome.id if source_outcome else None,
+                "candidate_plan_artifact_id": artifact.id if artifact is not None else None,
+                "canonical_candidate_outcome": resolution is not None and resolution.plan_outcome is not None,
+                "reused_baseline_outcome_label": resolution is None,
                 "source_frozen_inputs_reused": True,
                 "remote_fetch_used": False,
                 "regenerated_geometry": regeneration,
+                "resolution_diagnostics": resolution.diagnostics if resolution is not None else {},
             })
             outcome_record.outcome_json = _json_dumps(outcome_payload)
             self.session.flush()
@@ -544,24 +583,32 @@ class TuningWorkflowService:
             eligibility_record.replay_plan_outcome_id = outcome_record.id
             eligibility_record.ticker = source.ticker
             eligibility_record.eligibility_mode = validation_depth
-            eligibility_record.tier = "tier_c" if regeneration.get("status") == "invalid" else source.tier
-            eligibility_record.eligible_for_tuning = bool(source.eligible_for_tuning and regeneration.get("status") != "invalid")
-            eligibility_record.resolution_source = source.resolution_source
-            eligibility_record.outcome = source.outcome
+            non_promotional = outcome_record.status in {"invalid_geometry", "missing_local_bars", "insufficient_window", "error"}
+            eligibility_record.tier = "tier_c" if non_promotional else source.tier
+            eligibility_record.eligible_for_tuning = bool(source.eligible_for_tuning and not non_promotional)
+            eligibility_record.resolution_source = outcome_record.resolution_source
+            eligibility_record.outcome = outcome_record.outcome
             diagnostics = loads_json_object(source.diagnostics_json)
             diagnostics.update({
                 "validation_depth": validation_depth,
                 "candidate_config_hash": candidate_config_hash,
                 "source_replay_batch_id": baseline_batch_id,
                 "source_replay_eligibility_id": source.id,
+                "candidate_plan_artifact_id": artifact.id if artifact is not None else None,
+                "canonical_candidate_outcome": resolution is not None and resolution.plan_outcome is not None,
+                "reused_baseline_outcome_label": resolution is None,
                 "source_frozen_inputs_reused": True,
                 "cheap_scan_rerun": False,
                 "deep_analysis_rerun": False,
                 "remote_fetch_used": False,
                 "regenerated_geometry": regeneration,
+                "resolution_diagnostics": resolution.diagnostics if resolution is not None else {},
             })
             eligibility_record.diagnostics_json = _json_dumps(diagnostics)
-            eligibility_record.rejection_reasons_json = source.rejection_reasons_json
+            rejection_reasons = loads_json_list(source.rejection_reasons_json)
+            if non_promotional:
+                rejection_reasons = [*rejection_reasons, outcome_record.status]
+            eligibility_record.rejection_reasons_json = _json_dumps(rejection_reasons)
             copied_count += 1
         self.session.commit()
         return {
@@ -577,7 +624,10 @@ class TuningWorkflowService:
             "deep_analysis_rerun": False,
             "remote_fetch_used": False,
             "copied_record_count": copied_count,
+            "canonical_candidate_outcomes_count": canonical_candidate_outcomes_count,
+            "reused_baseline_outcomes_count": reused_baseline_outcomes_count,
             "invalid_geometry_count": invalid_geometry_count,
+            "missing_local_bars_count": missing_local_bars_count,
             "summary": ReplayValidationAggregateService(self.session).aggregate_batch(
                 baseline_batch_id,
                 candidate_config_hash=candidate_config_hash,
@@ -755,6 +805,19 @@ class TuningWorkflowService:
             blockers.append("baseline replay is required")
         if not metadata.get("candidate_replay_validation"):
             blockers.append("candidate replay validation is required")
+        validation = metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else {}
+        candidate_batches = validation.get("candidate_batches") if isinstance(validation.get("candidate_batches"), dict) else {}
+        candidate_validation = candidate_batches.get(candidate_id) if isinstance(candidate_batches.get(candidate_id), dict) else {}
+        if (
+            candidate_validation.get("validation_depth") == "frozen_input_plan_regeneration"
+            and int(candidate_validation.get("canonical_candidate_outcomes_count") or 0) == 0
+            and int(candidate_validation.get("reused_baseline_outcomes_count") or 0) > 0
+        ):
+            blockers.append("geometry-changing candidate lacks canonical candidate outcome resolution")
+        if int(candidate_validation.get("invalid_geometry_count") or 0) > 0:
+            blockers.append("candidate validation contains invalid regenerated geometry")
+        if int(candidate_validation.get("missing_local_bars_count") or 0) > 0:
+            blockers.append("candidate validation has missing local outcome bars")
         stability = metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else None
         if not stability:
             blockers.append("holdout/stability validation is required")
@@ -1136,6 +1199,16 @@ class TuningWorkflowService:
                 "baseline_loss_count": baseline_summary.get("loss_count"),
                 "candidate_loss_count": summary.get("loss_count"),
                 "candidate_top_ticker_concentration_percent": summary.get("top_ticker_concentration_percent"),
+                "validation_depth": payload.get("validation_depth"),
+                "canonical_candidate_outcomes_count": payload.get("canonical_candidate_outcomes_count"),
+                "reused_baseline_outcomes_count": payload.get("reused_baseline_outcomes_count"),
+                "invalid_geometry_count": payload.get("invalid_geometry_count"),
+                "missing_local_bars_count": payload.get("missing_local_bars_count"),
+                "promotion_capable_outcomes": not (
+                    payload.get("validation_depth") == "frozen_input_plan_regeneration"
+                    and int(payload.get("canonical_candidate_outcomes_count") or 0) == 0
+                    and int(payload.get("reused_baseline_outcomes_count") or 0) > 0
+                ),
                 "available": bool(baseline_summary) and bool(summary),
                 "label": "replay comparison; not promotion evidence without holdout/stability gates",
             }
