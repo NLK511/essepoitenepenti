@@ -138,22 +138,23 @@ Rules:
 The operator must define the discovery budget, and the UI must show it separately from replay validation size.
 
 Recommended presets:
-- `small` — safe default for VPS use
-- `medium` — still bounded; requires operator confirmation
+- `seeded` — small built-in candidate variants for smoke tests and quick workflow setup
+- `large discovery` — queues the plan-generation tuning large-search worker job; suitable for thousands/tens of thousands of cheap discovery candidates
 - `custom` — advanced only
 
 Custom fields:
-- coarse candidate count
+- discovery candidates searched / coarse candidate count; may be large because this is cheap discovery, not replay
 - fine/refinement candidate count
+- candidates retained / imported into the workflow
 - random seed, if any stochastic source is used
 - maximum changed keys per candidate
 - maximum step distance from baseline
 
 Default UX guidance:
-- discovery candidate count means how many candidate configs are generated/imported before shortlist
+- discovery candidate count means how many candidate configs are searched before shortlist; large values must queue a worker discovery job rather than run in the API request
+- retained candidate count means how many top discovery results are imported/displayed in the workflow
 - replay candidate count means how many shortlisted candidates get expensive replay validation
-- prefer small candidate sets
-- avoid brute-force sweeps on the small VPS
+- prefer small replay sets even when discovery is large
 - large searches are discovery-only and not promotion evidence
 
 ### Candidate amount for replay pass

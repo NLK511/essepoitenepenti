@@ -7,9 +7,12 @@ from typing import Any, Mapping
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import PlanGenerationTuningConfigVersion, PlanGenerationTuningEvent
-from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord, WatchlistRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord
+from trade_proposer_app.persistence.models import HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, TuningExperimentRecord, WatchlistRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, RunRecord
+from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
+from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.input_access import stable_hash
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_DEFAULTS, candidate_validation_depth, normalize_plan_generation_tuning_config
 from trade_proposer_app.services.replay_validation_efficiency import CandidatePlanArtifactService, FrozenInputPlanRegenerationService, LocalCandidateOutcomeResolver, ReplayValidationAggregateService
@@ -24,6 +27,8 @@ OBJECTIVES = {
     "balanced_score",
 }
 PROMOTION_TARGETS = {"research_only", "paper_config", "live_guarded_config", "live_full_autonomy"}
+LARGE_DISCOVERY_SYSTEM_JOB_NAME = "tuning-workflow-large-discovery"
+SEEDED_DISCOVERY_VARIANT_LIMIT = 10
 
 
 def _json_dumps(payload: Mapping[str, Any]) -> str:
@@ -115,7 +120,7 @@ class TuningWorkflowService:
         baseline_config = normalize_plan_generation_tuning_config({})
         variants: list[tuple[str, dict[str, float], list[str], str]] = []
         discovery_settings = loads_json_object(record.discovery_settings_json)
-        target_count = max(1, min(25, int(discovery_settings.get("candidate_count") or 8)))
+        target_count = max(1, int(discovery_settings.get("candidate_pool_keep_count") or discovery_settings.get("candidate_count") or 8))
         variants.append(("strict_actionability_floor", {"global.actionable_confidence_floor_percent": baseline_config["global.actionable_confidence_floor_percent"] + 5.0}, ["global.actionable_confidence_floor_percent"], "strict quality-gate variant"))
         variants.append(("very_strict_actionability_floor", {"global.actionable_confidence_floor_percent": baseline_config["global.actionable_confidence_floor_percent"] + 8.0}, ["global.actionable_confidence_floor_percent"], "strict quality-gate variant"))
         variants.append(("wider_entry_band", {"global.entry_band_risk_fraction": baseline_config["global.entry_band_risk_fraction"] + 0.05}, ["global.entry_band_risk_fraction"], "risk/reward geometry variant"))
@@ -150,7 +155,7 @@ class TuningWorkflowService:
                 "computation_label": "discovery-only evidence; requires replay and holdout before promotion",
             })
         metadata = loads_json_object(record.metadata_json)
-        metadata["candidate_pool"] = {"status": "generated", "candidates": candidates, "generated_at": datetime.now(timezone.utc).isoformat()}
+        metadata["candidate_pool"] = {"status": "generated", "candidates": candidates, "generated_at": datetime.now(timezone.utc).isoformat(), "discovery_mode": "seeded_variants", "searched_candidate_count": len(variants), "retained_candidate_count": len(candidates)}
         metadata.setdefault("shortlist", {"candidate_ids": []})
         record.metadata_json = _json_dumps(metadata)
         self.session.commit()
@@ -880,6 +885,93 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def queue_large_discovery_search(self, experiment_id: int) -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        discovery_settings = loads_json_object(record.discovery_settings_json)
+        requested = max(1, min(1_000_000, int(discovery_settings.get("candidate_count") or 20_000)))
+        keep_count = max(1, min(500, int(discovery_settings.get("candidate_pool_keep_count") or 100)))
+        fine_candidates = max(0, min(500_000, int(discovery_settings.get("fine_candidate_count") or max(0, requested // 4))))
+        runs = RunRepository(self.session)
+        metadata = loads_json_object(record.metadata_json)
+        existing_run = runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
+        if existing_run is not None:
+            metadata["discovery_job"] = {"status": "reused_active_run", "run_id": existing_run.id, "requested_candidate_count": requested, "candidate_pool_keep_count": keep_count, "updated_at": datetime.now(timezone.utc).isoformat()}
+            record.metadata_json = _json_dumps(metadata)
+            self.session.commit()
+            self.session.refresh(record)
+            return self.experiment_detail(record)
+        jobs = JobRepository(self.session)
+        job = jobs.get_or_create_system_job(LARGE_DISCOVERY_SYSTEM_JOB_NAME, JobType.PLAN_GENERATION_TUNING)
+        queued = runs.enqueue(job.id or 0, job_type=JobType.PLAN_GENERATION_TUNING)
+        request = {
+            "search_kind": "large",
+            "mode": "large_tuning_search",
+            "apply": False,
+            "coarse_candidates": requested,
+            "fine_candidates": fine_candidates,
+            "top_k": keep_count,
+            "fine_seeds": max(1, min(100, int(discovery_settings.get("fine_seed_count") or 20))),
+            "seed": max(1, int(discovery_settings.get("seed") or 20260614)),
+            "limit": discovery_settings.get("record_limit"),
+            "min_validation_actionable": max(1, min(500, int(discovery_settings.get("min_validation_actionable") or 50))),
+            "batch_log_interval": 1000,
+            "tuning_experiment_id": record.id,
+            "candidate_pool_keep_count": keep_count,
+            "artifact_path": f"artifacts/tuning-workflow-exp-{record.id}-large-search-run-{queued.id or 'queued'}.json",
+            "cache_path": f"artifacts/tuning-workflow-exp-{record.id}-large-search-run-{queued.id or 'queued'}.cache.jsonl",
+        }
+        runs.set_artifact(queued.id or 0, {"plan_generation_tuning_request": request})
+        metadata["discovery_job"] = {"status": "queued", "run_id": queued.id, "job_id": job.id, "requested_candidate_count": requested, "candidate_pool_keep_count": keep_count, "fine_candidate_count": fine_candidates, "queued_at": datetime.now(timezone.utc).isoformat()}
+        metadata["candidate_pool"] = {"status": "discovery_job_queued", "candidates": [], "searched_candidate_count": requested, "retained_candidate_count": 0, "label": "large discovery job queued; import top candidates after worker completion"}
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
+    def import_discovery_job_candidates(self, experiment_id: int) -> dict[str, object]:
+        record = self.get_experiment(experiment_id)
+        metadata = loads_json_object(record.metadata_json)
+        discovery_job = metadata.get("discovery_job") if isinstance(metadata.get("discovery_job"), dict) else {}
+        run_id = int(discovery_job.get("run_id") or 0)
+        if run_id <= 0:
+            raise TuningWorkflowError("no discovery job is linked to this experiment")
+        run = self.session.get(RunRecord, run_id)
+        if run is None:
+            raise TuningWorkflowError(f"discovery run {run_id} not found")
+        if run.status != "completed":
+            discovery_job["status"] = run.status
+            metadata["discovery_job"] = discovery_job
+            record.metadata_json = _json_dumps(metadata)
+            self.session.commit()
+            self.session.refresh(record)
+            return self.experiment_detail(record)
+        artifact = loads_json_object(run.artifact_json)
+        summary = artifact.get("large_plan_generation_tuning_search") if isinstance(artifact, dict) else {}
+        top_candidates = summary.get("top_candidates") if isinstance(summary, dict) else []
+        if not isinstance(top_candidates, list) or not top_candidates:
+            raise TuningWorkflowError("completed discovery job has no top candidates to import")
+        keep_count = max(1, min(500, int(discovery_job.get("candidate_pool_keep_count") or len(top_candidates))))
+        candidates: list[dict[str, object]] = []
+        for index, item in enumerate(top_candidates[:keep_count], start=1):
+            if not isinstance(item, dict):
+                continue
+            config = normalize_plan_generation_tuning_config(dict(item.get("config") or {}))
+            changed_keys = [str(key) for key in item.get("changed_keys", [])] if isinstance(item.get("changed_keys"), list) else []
+            depth = candidate_validation_depth(changed_keys)
+            candidates.append({"id": f"large-{run_id}-{index}", "label": f"large discovery #{index}", "source": "large_plan_generation_tuning_search", "status": "discovered", "rank": index, "config": config, "config_hash": stable_hash(config), "changed_keys": changed_keys, "validation_depth": depth["validation_depth"], "validation_depth_reason": depth["validation_depth_reason"], "promotion_capable": False, "computation_label": "large discovery candidate; requires replay and holdout before promotion", "discovery_metrics": {key: value for key, value in item.items() if key != "config"}})
+        requested = summary.get("requested", {}) if isinstance(summary, dict) else {}
+        evaluated = summary.get("evaluated", {}) if isinstance(summary, dict) else {}
+        metadata["candidate_pool"] = {"status": "generated", "candidates": candidates, "generated_at": datetime.now(timezone.utc).isoformat(), "discovery_mode": "large_search", "discovery_run_id": run_id, "searched_candidate_count": requested.get("coarse_candidates") if isinstance(requested, dict) else None, "evaluated": evaluated, "retained_candidate_count": len(candidates), "label": "large discovery candidates imported; discovery evidence only"}
+        discovery_job["status"] = "imported"
+        discovery_job["imported_candidate_count"] = len(candidates)
+        discovery_job["imported_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["discovery_job"] = discovery_job
+        metadata.setdefault("shortlist", {"candidate_ids": []})
+        record.metadata_json = _json_dumps(metadata)
+        self.session.commit()
+        self.session.refresh(record)
+        return self.experiment_detail(record)
+
     def archive_experiment(self, experiment_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         record.status = "archived"
@@ -904,7 +996,19 @@ class TuningWorkflowService:
                 detail = self.run_readiness_audit(experiment_id)
                 actions.append("readiness_audit")
                 continue
+            if stage == "discovery_running":
+                detail = self.import_discovery_job_candidates(experiment_id)
+                actions.append("discovery_import_checked")
+                if detail.get("current_stage") == "discovery_running":
+                    return {"experiment": detail, "actions": actions, "status": "waiting_for_worker", "reason": "large discovery still running"}
+                continue
             if stage == "candidate_discovery_needed":
+                discovery_settings = detail.get("discovery_settings", {}) if isinstance(detail.get("discovery_settings"), dict) else {}
+                requested = int(discovery_settings.get("candidate_count") or 8)
+                if requested > SEEDED_DISCOVERY_VARIANT_LIMIT:
+                    detail = self.queue_large_discovery_search(experiment_id)
+                    actions.append("large_discovery_queued")
+                    return {"experiment": detail, "actions": actions, "status": "waiting_for_worker", "reason": "large discovery job queued"}
                 detail = self.generate_candidate_pool(experiment_id)
                 actions.append("candidate_pool_generated")
                 continue
@@ -1020,7 +1124,9 @@ class TuningWorkflowService:
             raise TuningWorkflowError(f"unsupported promotion target: {promotion_target}")
         universe = dict(payload.get("universe") or {})
         windows = dict(payload.get("windows") or {})
-        discovery_settings = {"search_size": "small", "candidate_count": 25, **dict(payload.get("discovery_settings") or {})}
+        discovery_settings = {"search_size": "small", "candidate_count": 25, "candidate_pool_keep_count": 25, **dict(payload.get("discovery_settings") or {})}
+        discovery_settings["candidate_count"] = max(1, min(1_000_000, int(discovery_settings.get("candidate_count") or 25)))
+        discovery_settings["candidate_pool_keep_count"] = max(1, min(500, int(discovery_settings.get("candidate_pool_keep_count") or 25)))
         replay_settings = {"max_candidates": 5, "max_concurrency": 1, "cache_only": True, **dict(payload.get("replay_settings") or {})}
         replay_settings["cache_only"] = True
         replay_settings["max_concurrency"] = max(1, min(1, int(replay_settings.get("max_concurrency") or 1)))
@@ -1262,8 +1368,11 @@ class TuningWorkflowService:
         if readiness.get("status") == "blocked":
             return {"current_stage": "readiness_blocked", "next_action": "Fix hard readiness blockers or adjust the experiment.", "blockers": list(readiness.get("blockers") or [])}
         candidate_pool = metadata.get("candidate_pool") if isinstance(metadata.get("candidate_pool"), dict) else {}
+        discovery_job = metadata.get("discovery_job") if isinstance(metadata.get("discovery_job"), dict) else {}
+        if candidate_pool.get("status") == "discovery_job_queued" or discovery_job.get("status") in {"queued", "running", "reused_active_run"}:
+            return {"current_stage": "discovery_running", "next_action": "Wait for large discovery to complete, then import top candidates.", "blockers": ["large discovery job"]}
         if not candidate_pool.get("candidates"):
-            return {"current_stage": "candidate_discovery_needed", "next_action": "Generate or import a small candidate pool.", "blockers": []}
+            return {"current_stage": "candidate_discovery_needed", "next_action": "Generate/import candidate discovery results.", "blockers": []}
         shortlist = metadata.get("shortlist") if isinstance(metadata.get("shortlist"), dict) else {}
         if not shortlist.get("candidate_ids"):
             return {"current_stage": "shortlist_needed", "next_action": "Select a small replay shortlist.", "blockers": []}

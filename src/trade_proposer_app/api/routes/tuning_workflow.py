@@ -195,6 +195,30 @@ async def generate_tuning_experiment_candidate_pool(
     return {"experiment": experiment}
 
 
+@router.post("/experiments/{experiment_id}/discovery/queue-large")
+async def queue_tuning_experiment_large_discovery(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).queue_large_discovery_search(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
+@router.post("/experiments/{experiment_id}/discovery/import")
+async def import_tuning_experiment_discovery_candidates(
+    experiment_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        experiment = _service(session).import_discovery_job_candidates(experiment_id)
+    except TuningWorkflowError as exc:
+        raise _to_http_error(exc) from exc
+    return {"experiment": experiment}
+
+
 @router.post("/experiments/{experiment_id}/candidate-pool/manual")
 async def add_tuning_experiment_manual_candidate(
     experiment_id: int,

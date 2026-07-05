@@ -60,7 +60,8 @@ export function TuningWorkflowPage() {
     holdout_start: "",
     holdout_end: "",
     objective: "balanced_score",
-    discovery_candidate_count: "8",
+    discovery_candidate_count: "1000",
+    retained_candidate_count: "50",
     replay_candidate_count: "5",
     baseline_source: "current_active_config",
     promotion_target: "paper_config",
@@ -114,6 +115,7 @@ export function TuningWorkflowPage() {
       holdout_end: String(selected.windows.holdout_end ?? ""),
       objective: selected.objective,
       discovery_candidate_count: String(selected.discovery_settings.candidate_count ?? current.discovery_candidate_count),
+      retained_candidate_count: String(selected.discovery_settings.candidate_pool_keep_count ?? current.retained_candidate_count),
       replay_candidate_count: String(selected.replay_settings.max_candidates ?? current.replay_candidate_count),
       baseline_source: String(selected.baseline.source ?? current.baseline_source),
       promotion_target: selected.promotion_target,
@@ -143,7 +145,7 @@ export function TuningWorkflowPage() {
         objective: form.objective,
         baseline: { source: form.baseline_source },
         promotion_target: form.promotion_target,
-        discovery_settings: { search_size: "small", candidate_count: Number(form.discovery_candidate_count) },
+        discovery_settings: { search_size: "large", candidate_count: Number(form.discovery_candidate_count), candidate_pool_keep_count: Number(form.retained_candidate_count) },
         replay_settings: { max_candidates: Number(form.replay_candidate_count), max_concurrency: 1, cache_only: true },
       });
       setForm((current) => ({ ...current, name: "", hypothesis: "" }));
@@ -193,7 +195,7 @@ export function TuningWorkflowPage() {
         objective: form.objective,
         baseline: { source: form.baseline_source },
         promotion_target: form.promotion_target,
-        discovery_settings: { search_size: "small", candidate_count: Number(form.discovery_candidate_count) },
+        discovery_settings: { search_size: "large", candidate_count: Number(form.discovery_candidate_count), candidate_pool_keep_count: Number(form.retained_candidate_count) },
         replay_settings: { max_candidates: Number(form.replay_candidate_count), max_concurrency: 1, cache_only: true },
       });
       await load(response.experiment.id);
@@ -275,8 +277,9 @@ export function TuningWorkflowPage() {
                 {form.universe_mode === "watchlist" ? <label className="form-field"><span>Watchlist</span><select value={form.watchlist_id} onChange={(event) => setForm({ ...form, watchlist_id: event.target.value })} required><option value="">Select watchlist…</option>{watchlists.map((watchlist) => <option key={watchlist.id ?? watchlist.name} value={String(watchlist.id)}>{watchlist.name} · {watchlist.tickers.length} tickers</option>)}</select></label> : null}
                 {form.universe_mode === "tickers" ? <label className="form-field"><span>Universe tickers</span><input value={form.tickers} onChange={(event) => setForm({ ...form, tickers: event.target.value })} /></label> : null}
                 <label className="form-field"><span>Objective</span><select value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })}><option value="balanced_score">Balanced score</option><option value="tier_a_win_rate">Tier A win rate</option><option value="expected_value">Expected value</option><option value="average_5d_return">Average 5d return</option><option value="loss_severity">Minimize loss severity</option></select></label>
-                <label className="form-field"><span>Discovery candidates</span><input type="number" min="1" max="25" value={form.discovery_candidate_count} onChange={(event) => setForm({ ...form, discovery_candidate_count: event.target.value })} /><small>Generated/imported before shortlist. Discovery evidence is not promotion evidence.</small></label>
-                <label className="form-field"><span>Replay candidates</span><input type="number" min="1" max="10" value={form.replay_candidate_count} onChange={(event) => setForm({ ...form, replay_candidate_count: event.target.value })} /><small>Shortlisted candidates queued for expensive replay; 5 is the VPS-safe default.</small></label>
+                <label className="form-field"><span>Discovery candidates searched</span><input type="number" min="1" max="1000000" value={form.discovery_candidate_count} onChange={(event) => setForm({ ...form, discovery_candidate_count: event.target.value })} /><small>Cheap discovery/search budget. Large values queue a worker discovery job and are not promotion evidence.</small></label>
+                <label className="form-field"><span>Candidates retained</span><input type="number" min="1" max="500" value={form.retained_candidate_count} onChange={(event) => setForm({ ...form, retained_candidate_count: event.target.value })} /><small>Top candidates imported into this workflow after discovery.</small></label>
+                <label className="form-field"><span>Replay candidates</span><input type="number" min="1" max="10" value={form.replay_candidate_count} onChange={(event) => setForm({ ...form, replay_candidate_count: event.target.value })} /><small>Shortlisted candidates queued for expensive replay; capped at 10.</small></label>
                 {["discovery_start", "discovery_end", "replay_start", "replay_end", "holdout_start", "holdout_end"].map((key) => <label className="form-field" key={key}><span>{key.replace(/_/g, " ")}</span><input type="date" value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}
                 <label className="form-field"><span>Baseline</span><select value={form.baseline_source} onChange={(event) => setForm({ ...form, baseline_source: event.target.value })}><option value="current_active_config">Current active config</option><option value="selected_config_version">Selected config version</option><option value="existing_replay_batch">Existing replay batch</option><option value="rerun_baseline_replay">Rerun baseline replay</option></select></label>
                 <label className="form-field"><span>Promotion target</span><select value={form.promotion_target} onChange={(event) => setForm({ ...form, promotion_target: event.target.value })}><option value="research_only">Research only</option><option value="paper_config">Paper config</option><option value="live_guarded_config">Live guarded config</option><option value="live_full_autonomy" disabled>Live full autonomy disabled</option></select></label>
@@ -309,7 +312,8 @@ export function TuningWorkflowPage() {
               <div className="cluster top-gap-small">
                 <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/autonomous-run`)}>Run autonomously until wait/manual gate</button>
                 {selected.current_stage === "readiness_needed" ? <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button> : null}
-                {selected.current_stage === "candidate_discovery_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate candidate pool</button> : null}
+                {selected.current_stage === "candidate_discovery_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(Number(selected.discovery_settings.candidate_count ?? 0) > 10 ? `/api/tuning-workflow/experiments/${selected.id}/discovery/queue-large` : `/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>{Number(selected.discovery_settings.candidate_count ?? 0) > 10 ? "Queue large discovery" : "Generate candidate pool"}</button> : null}
+                {selected.current_stage === "discovery_running" ? <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/discovery/import`)}>Import completed discovery</button> : null}
                 {selected.current_stage === "shortlist_needed" ? <button className="button" disabled={saving || !candidates.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/shortlist`, { candidate_ids: candidates.slice(0, Number(selected.sections.shortlist?.max_candidates ?? 5)).map((candidate) => String(candidate.id)) })}>Shortlist top candidates</button> : null}
                 {selected.current_stage === "baseline_needed" ? <button className="button" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/baseline-replay/create?enqueue=true`)}>Create baseline replay</button> : null}
                 {selected.current_stage === "candidate_replay_needed" ? <button className="button" disabled={saving || !shortlistedIds.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-replay/create?enqueue=true`)}>Create candidate replays</button> : null}
@@ -321,7 +325,9 @@ export function TuningWorkflowPage() {
             <DisclosureCard kicker="Advanced controls" title="All workflow actions" subtitle="Use these only when binding existing batches or correcting workflow state manually.">
               <div className="cluster top-gap-small">
                 <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/readiness-audit`)}>Run readiness audit</button>
-                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate candidate pool</button>
+                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/candidate-pool/generate`)}>Generate seeded pool</button>
+                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/discovery/queue-large`)}>Queue large discovery</button>
+                <button className="button-secondary" disabled={saving} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/discovery/import`)}>Import discovery candidates</button>
                 <button className="button-secondary" disabled={saving || !candidates.length} onClick={() => void workflowAction(`/api/tuning-workflow/experiments/${selected.id}/shortlist`, { candidate_ids: candidates.slice(0, Number(selected.sections.shortlist?.max_candidates ?? 5)).map((candidate) => String(candidate.id)) })}>Shortlist top candidates</button>
               </div>
               <div className="cluster top-gap-small">

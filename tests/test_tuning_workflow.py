@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.config import settings
-from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, WatchlistRecord
+from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, RunRecord, WatchlistRecord
 from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
 
 
@@ -86,6 +86,39 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             detail = service.run_readiness_audit(int(detail["id"]))
             self.assertEqual(2, detail["sections"]["evidence_readiness"]["ticker_count"])
             self.assertEqual("candidate_discovery_needed", detail["current_stage"])
+        finally:
+            session.close()
+
+    def test_large_discovery_queues_worker_job_and_imports_top_candidates(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment({"name": "Large discovery", "discovery_settings": {"candidate_count": 50000, "candidate_pool_keep_count": 2}})
+            experiment_id = int(detail["id"])
+            detail = service.queue_large_discovery_search(experiment_id)
+            self.assertEqual("discovery_job_queued", detail["sections"]["candidate_pool"]["status"])
+            record = service.get_experiment(experiment_id)
+            run_id = int(json.loads(record.metadata_json)["discovery_job"]["run_id"])
+            run_record = session.get(RunRecord, run_id)
+            self.assertIsNotNone(run_record)
+            assert run_record is not None
+            run_record.status = "completed"
+            run_record.artifact_json = json.dumps({
+                "large_plan_generation_tuning_search": {
+                    "requested": {"coarse_candidates": 50000},
+                    "evaluated": {"coarse": 50000},
+                    "top_candidates": [
+                        {"changed_keys": ["global.actionable_confidence_floor_percent"], "config": {"global.actionable_confidence_floor_percent": 66.0}, "validation_win_rate_percent": 55.0},
+                        {"changed_keys": ["setup_family.breakout.take_profit_distance_multiplier"], "config": {"setup_family.breakout.take_profit_distance_multiplier": 1.2}, "validation_win_rate_percent": 52.0},
+                    ],
+                }
+            })
+            session.commit()
+            detail = service.import_discovery_job_candidates(experiment_id)
+            pool = detail["sections"]["candidate_pool"]
+            self.assertEqual("generated", pool["status"])
+            self.assertEqual(2, len(pool["candidates"]))
+            self.assertEqual("large_search", pool["discovery_mode"])
         finally:
             session.close()
 
