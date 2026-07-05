@@ -1438,7 +1438,12 @@ class PlanGenerationTuningService:
         records = self._build_eligible_records_from_sources(ticker=None, limit=None)
         self.session.query(PlanGenerationTuningEligibleRecordRecord).delete(synchronize_session=False)
         cache_watermark = source_updated_at or datetime.now(timezone.utc)
+        seen_plan_ids: set[int] = set()
         for record in records:
+            plan_id = int(getattr(record.plan, "id", 0) or 0)
+            if plan_id <= 0 or plan_id in seen_plan_ids:
+                continue
+            seen_plan_ids.add(plan_id)
             self._upsert_cached_eligible_record(record, source_updated_at=cache_watermark)
         self.session.commit()
 
