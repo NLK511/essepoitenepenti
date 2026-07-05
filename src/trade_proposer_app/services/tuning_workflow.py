@@ -445,6 +445,42 @@ class TuningWorkflowService:
             validation["comparisons"] = self._candidate_comparisons(metadata)
             statuses = [str(payload.get("status")) for payload in candidate_batches.values() if isinstance(payload, dict)]
             validation["status"] = "complete" if statuses and all(status == "completed" for status in statuses) else ("running" if any(status == "running" for status in statuses) else validation.get("status", "queued"))
+        holdout = metadata.get("holdout_validation") if isinstance(metadata.get("holdout_validation"), dict) else None
+        stability = metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else None
+        if holdout:
+            baseline_id = int(holdout.get("baseline_batch_id") or 0)
+            candidate_id = int(holdout.get("candidate_batch_id") or 0)
+            baseline_batch = self.session.get(HistoricalReplayBatchRecord, baseline_id) if baseline_id else None
+            candidate_batch = self.session.get(HistoricalReplayBatchRecord, candidate_id) if candidate_id else None
+            baseline_progress = self._batch_progress(baseline_id) if baseline_id else {}
+            candidate_progress = self._batch_progress(candidate_id) if candidate_id else {}
+            statuses = [batch.status for batch in (baseline_batch, candidate_batch) if batch is not None]
+            holdout_status = "complete" if statuses and all(status == "completed" for status in statuses) else ("running" if any(status == "running" for status in statuses) else holdout.get("status", "queued"))
+            holdout.update({
+                "status": holdout_status,
+                "baseline_progress": baseline_progress,
+                "candidate_progress": candidate_progress,
+                "baseline_summary": ReplayValidationAggregateService(self.session).aggregate_batch(baseline_id) if baseline_id else {},
+                "candidate_summary": ReplayValidationAggregateService(self.session).aggregate_batch(candidate_id) if candidate_id else {},
+            })
+            if stability:
+                total_slices = int(baseline_progress.get("slice_count") or 0) + int(candidate_progress.get("slice_count") or 0)
+                completed_slices = int(baseline_progress.get("completed_count") or 0) + int(candidate_progress.get("completed_count") or 0)
+                failed_slices = int(baseline_progress.get("failed_count") or 0) + int(candidate_progress.get("failed_count") or 0)
+                stale_slices = int(baseline_progress.get("stale_count") or 0) + int(candidate_progress.get("stale_count") or 0)
+                stability.update({
+                    "status": holdout_status,
+                    "holdout_validation": holdout,
+                    "progress": {
+                        "slice_count": total_slices,
+                        "completed_count": completed_slices,
+                        "failed_count": failed_slices,
+                        "stale_count": stale_slices,
+                        "queued_count": int(baseline_progress.get("queued_count") or 0) + int(candidate_progress.get("queued_count") or 0),
+                        "running_count": int(baseline_progress.get("running_count") or 0) + int(candidate_progress.get("running_count") or 0),
+                        "planned_count": int(baseline_progress.get("planned_count") or 0) + int(candidate_progress.get("planned_count") or 0),
+                    },
+                })
         return _json_dumps(metadata) != before
 
     def stop_candidate_replay_after_current_slice(self, experiment_id: int) -> dict[str, object]:
@@ -1390,8 +1426,11 @@ class TuningWorkflowService:
             return {"current_stage": "baseline_needed", "next_action": "Bind or run a baseline replay before comparing candidates.", "blockers": ["baseline replay"]}
         if not metadata.get("candidate_replay_validation"):
             return {"current_stage": "candidate_replay_needed", "next_action": "Run candidate replay validation for shortlisted configs.", "blockers": []}
-        if not metadata.get("stability_validation"):
+        stability = metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else {}
+        if not stability:
             return {"current_stage": "stability_validation_needed", "next_action": "Run walk-forward or holdout validation for the leading candidate.", "blockers": []}
+        if stability.get("status") in {"queued", "running"}:
+            return {"current_stage": "stability_validation_running", "next_action": "Wait for holdout/walk-forward validation to finish, then review the result.", "blockers": ["holdout/walk-forward validation"]}
         if not metadata.get("promotion_proposal"):
             return {"current_stage": "promotion_proposal_needed", "next_action": "Create a promotion proposal with gate table.", "blockers": []}
         execution = metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {}

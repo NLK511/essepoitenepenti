@@ -458,6 +458,8 @@ Actions:
 
 Includes walk-forward and holdout checks.
 
+Holdout/walk-forward status must be derived from the underlying replay batches on every experiment detail refresh. If both holdout baseline and candidate replay batches are complete, the card must not remain `queued` or partially complete.
+
 Walk-forward must be labeled as a stability/overfit screen, not promotion proof by itself when it does not regenerate plans.
 
 Holdout replay must be labeled as stronger promotion evidence because it regenerates plans on a separate window.
