@@ -46,11 +46,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     defaultHeaders.Authorization = `Bearer ${token}`;
   }
   const response = await fetch(path, {
+    ...init,
     headers: {
       ...defaultHeaders,
       ...(init?.headers ?? {}),
     },
-    ...init,
   });
 
   if (!response.ok) {
