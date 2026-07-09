@@ -35,8 +35,11 @@ services:
   api:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./.prod-run/workers:/app/.prod-run/workers
+      - ${PI_AGENT_HOST_DIR:-/home/tradeapp/.pi/agent}:/home/appuser/.pi/agent:rw
     env_file:
       - path: .env.docker
         required: false
@@ -48,8 +51,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health >/dev/null || exit 1"]
       interval: 30s
@@ -62,8 +63,11 @@ services:
     restart: unless-stopped
     mem_limit: ${WORKER_MEM_LIMIT:-1536m}
     cpus: ${WORKER_CPUS:-1.50}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./.prod-run/workers:/app/.prod-run/workers
+      - ${PI_AGENT_HOST_DIR:-/home/tradeapp/.pi/agent}:/home/appuser/.pi/agent:rw
     env_file:
       - path: .env.docker
         required: false
@@ -73,12 +77,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
   scheduler:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${PI_AGENT_HOST_DIR:-/home/tradeapp/.pi/agent}:/home/appuser/.pi/agent:rw
     env_file:
       - path: .env.docker
         required: false
@@ -89,8 +95,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
 volumes:
   postgres_data:

@@ -140,9 +140,7 @@ class DashboardTrendService:
             limit=5000, computed_after=day_start, computed_before=day_end
         )
 
-        news_processed = self._count_records(
-            HistoricalNewsRecord, HistoricalNewsRecord.published_at, day_start, day_end
-        )
+        news_processed = self._count_news_processed(day_start, day_end)
         bars_stored = self._count_records(
             HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, day_start, day_end
         )
@@ -360,6 +358,19 @@ class DashboardTrendService:
             query = query.where(column >= computed_after)
         if computed_before is not None:
             query = query.where(column < computed_before)
+        return int(self.session.scalar(query) or 0)
+
+    def _count_news_processed(self, computed_after: datetime | None, computed_before: datetime | None) -> int:
+        processed_at = func.coalesce(
+            HistoricalNewsRecord.ingested_at,
+            HistoricalNewsRecord.created_at,
+            HistoricalNewsRecord.published_at,
+        )
+        query = select(func.count()).select_from(HistoricalNewsRecord)
+        if computed_after is not None:
+            query = query.where(processed_at >= computed_after)
+        if computed_before is not None:
+            query = query.where(processed_at < computed_before)
         return int(self.session.scalar(query) or 0)
 
     @staticmethod

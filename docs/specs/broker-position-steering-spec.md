@@ -77,6 +77,7 @@ Immediate close is allowed only by the severe-invalidation rule. If direction, o
 The steering state per app-owned broker record includes:
 - plan id, ticker, intended direction, entry/stop/take-profit, horizon/expiration, rationale
 - broker order/position status, quantity, side, average entry, current exits
+- current post-entry thesis evidence. `direction` remains the original broker exposure direction (`long`/`short`) derived from the app-owned plan/order/position, but `actionability`, `analysis_direction`, and current confidence must prefer fresh ticker-signal/steering evidence over the original plan action. Stale or missing thesis evidence must not create autonomous close-now decisions; it should be visible in diagnostics and only original broker/lifecycle gates may force manual review.
 - current price or latest stored daily close proxy
 - volatility proxy when available
 - latest ticker analysis/news/market-intelligence evidence
@@ -259,6 +260,14 @@ Linked protective orders are not the same as the final filled exit order. For ev
 Defaults: `keep_position_exits` or `manual_review_required`.
 
 ## Decision priority
+
+Close-now and deterioration decisions must be driven by current evidence, not by echoing the original plan action. A fresh ticker signal for the same ticker may contribute:
+- `actionability`: latest actionable state (`long`, `short`, `no_action`, `watchlist`, or `neutral`)
+- `analysis_direction`: latest directional thesis (`long`/`bullish`, `short`/`bearish`, or `neutral`)
+- current confidence/calibrated confidence when present
+- severe invalidation warning/conflict flags
+
+If evidence is stale or absent, the state diagnostics must say so and the engine must not treat the original plan action as current confirmation. Broker reconciliation uncertainty, expired holding period, or missing active protective orders still fail closed before close-now.
 
 Evaluate in order:
 1. broker/reconciliation safety and freshness

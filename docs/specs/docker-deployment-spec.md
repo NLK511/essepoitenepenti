@@ -53,7 +53,7 @@ The single Compose file should define at least these services:
 ### `api`
 
 - Runs only the FastAPI/uvicorn API process.
-- Depends on healthy Postgres.
+- Depends on healthy Postgres, but must not depend on a one-shot migration container for Docker-daemon reboot restart.
 - Uses the production app image, not `pip install -e .` at startup.
 - Exposes the configured HTTP port.
 - Has a healthcheck that calls the minimal health endpoint.
@@ -62,7 +62,7 @@ The single Compose file should define at least these services:
 ### `worker`
 
 - Runs only `trade_proposer_app.workers.tasks`.
-- Depends on healthy Postgres.
+- Depends on healthy Postgres, but must not depend on a one-shot migration container for Docker-daemon reboot restart.
 - Uses the same production app image as `api`.
 - Uses `restart: unless-stopped`.
 - Writes a per-worker log file under the shared `.prod-run/workers` mount using the runtime worker id.
@@ -81,7 +81,7 @@ Constraints:
 ### `scheduler`
 
 - Runs only `trade_proposer_app.scheduler`.
-- Depends on healthy Postgres.
+- Depends on healthy Postgres, but must not depend on a one-shot migration container for Docker-daemon reboot restart.
 - Uses the same production app image as `api`.
 - Uses `restart: unless-stopped`.
 - Must not be scaled above one instance.
@@ -107,7 +107,7 @@ Semantics:
 - restart after Docker daemon/host reboot
 - remain stopped after an explicit operator stop
 
-One-shot jobs, if added later, must use:
+One-shot jobs must use:
 
 ```yaml
 restart: "no"
@@ -120,6 +120,8 @@ Examples:
 - restore smoke test
 - production preflight
 
+The Docker startup helper must run migrations explicitly before starting long-lived app services. Long-lived services must not use `depends_on: condition: service_completed_successfully` against the migration service, because Docker daemon restart after a host reboot does not rerun Compose dependency ordering and can leave startup behavior inconsistent.
+
 ## Image/build requirements
 
 The Docker deployment must use a built app image instead of installing the package on every container start.
@@ -128,6 +130,7 @@ Required behavior:
 
 - `Dockerfile` installs Python dependencies at build time.
 - frontend assets are built or copied in a deterministic way if the API serves frontend assets.
+- runtime containers include the `pi` CLI when the default `summary_backend=pi_agent` is used, so macro/industry summaries do not silently degrade to digest because the command is missing.
 - runtime containers start directly with their process command.
 - no source-code bind mount is required for the production-style Docker path.
 - `.env.example` is not used as the runtime env file.
@@ -143,6 +146,8 @@ Required:
 - `DATABASE_URL` points to the Compose Postgres service
 - app auth/session/encryption settings are explicit
 - broker/provider credentials remain write-only/redacted through existing app mechanisms
+- when `summary_backend=pi_agent`, the operator-provided pi agent auth/settings directory is mounted into app containers through `PI_AGENT_HOST_DIR`; the mount must be writable because pi creates lock/session files and may refresh auth; missing pi auth must surface as an explicit summary warning rather than falling back invisibly
+- when Nitter/social sentiment is enabled and Nitter is published on the Docker host, app containers must be able to resolve `host.docker.internal` to the host gateway so `social_nitter_base_url` can use the host-published Nitter URL instead of broken container-local `127.0.0.1`
 
 Recommended local single-host pattern:
 

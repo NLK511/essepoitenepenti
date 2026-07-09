@@ -1,7 +1,7 @@
 import unittest
 
 from trade_proposer_app.services.alpaca_paper_client import AlpacaOrderSubmissionResult
-from trade_proposer_app.services.brokers import BrokerAdapterResultStatus, BrokerOrderRequest
+from trade_proposer_app.services.brokers import BrokerAdapterResultStatus, BrokerOrderRequest, BrokerProtectionAmendRequest
 from trade_proposer_app.services.brokers.alpaca import AlpacaPaperBrokerAdapter
 
 
@@ -32,6 +32,10 @@ class StubAlpacaClient:
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
         self.calls.append(("cancel_order", order_id))
         return AlpacaOrderSubmissionResult(200, {"id": order_id, "status": "canceled"})
+
+    def amend_order(self, order_id: str, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
+        self.calls.append(("amend_order", {"order_id": order_id, "payload": payload}))
+        return AlpacaOrderSubmissionResult(200, {"id": order_id, "status": "accepted"})
 
     def close_position(self, symbol: str) -> AlpacaOrderSubmissionResult:
         self.calls.append(("close_position", symbol))
@@ -105,6 +109,57 @@ class AlpacaAdapterRegressionTests(unittest.TestCase):
         self.assertEqual(submitted["limit_price"], 597.29)
         self.assertEqual(submitted["stop_loss"], {"stop_price": 578.17})
         self.assertEqual(submitted["take_profit"], {"limit_price": 630.11})
+
+    def test_alpaca_submit_normalizes_fallback_prices_as_final_guard(self) -> None:
+        client = StubAlpacaClient()
+        adapter = AlpacaPaperBrokerAdapter(client=client)  # type: ignore[arg-type]
+
+        adapter.submit_order(
+            BrokerOrderRequest(
+                client_order_id="client-1",
+                symbol="AMAT",
+                side="buy",
+                order_type="limit",
+                quantity=1,
+                time_in_force="gtc",
+                stop_loss=578.1666,
+                take_profit=630.1101,
+                payload={"limit_price": 597.2911},
+            )
+        )
+
+        submitted = client.calls[0][1]
+        assert isinstance(submitted, dict)
+        self.assertEqual(submitted["limit_price"], 597.29)
+        self.assertEqual(submitted["stop_loss"], {"stop_price": 578.17})
+        self.assertEqual(submitted["take_profit"], {"limit_price": 630.11})
+
+    def test_alpaca_amend_normalizes_protective_prices_as_final_guard(self) -> None:
+        client = StubAlpacaClient()
+        adapter = AlpacaPaperBrokerAdapter(client=client)  # type: ignore[arg-type]
+
+        adapter.amend_position_protection(
+            BrokerProtectionAmendRequest(
+                broker_order_id="order-1",
+                client_order_id="client-1",
+                stop_loss=578.1666,
+                take_profit=630.1101,
+            )
+        )
+
+        amended = client.calls[0][1]
+        assert isinstance(amended, dict)
+        self.assertEqual(
+            amended,
+            {
+                "order_id": "order-1",
+                "payload": {
+                    "client_order_id": "client-1",
+                    "stop_loss": {"stop_price": 578.17},
+                    "take_profit": {"limit_price": 630.11},
+                },
+            },
+        )
 
     def test_alpaca_lookup_cancel_close_and_snapshots_normalize(self) -> None:
         client = StubAlpacaClient()

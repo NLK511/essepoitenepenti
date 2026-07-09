@@ -19,6 +19,7 @@ from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
 from trade_proposer_app.repositories.broker_steering_decisions import (
     BrokerSteeringDecisionRepository,
 )
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -62,6 +63,7 @@ class BrokerSteeringStateBuilder:
         self.positions = BrokerPositionRepository(session)
         self.snapshots = BrokerReconciliationSnapshotRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
+        self.context_snapshots = ContextSnapshotRepository(session)
         self.settings = SettingsRepository(session).get_steering_config()
         self.evidence_builder = BrokerSteeringEvidenceBuilder()
         self._price_cache: dict[str, float | None] = {}
@@ -150,7 +152,12 @@ class BrokerSteeringStateBuilder:
                 position=position,
             )
         )
-        steering_evidence = self.evidence_builder.build(plan, now=now)
+        latest_signal = self._latest_signal(plan.ticker)
+        steering_evidence = self.evidence_builder.build(plan, now=now, latest_signal=latest_signal)
+        current_actionability = self._fresh_evidence_text(steering_evidence, "actionability")
+        current_analysis_direction = self._fresh_evidence_text(steering_evidence, "analysis_direction")
+        current_confidence = self._fresh_evidence_float(steering_evidence, "confidence_percent")
+        current_calibrated_confidence = self._fresh_evidence_float(steering_evidence, "calibrated_confidence_percent")
         return BrokerSteeringState(
             recommendation_plan_id=plan.id or 0,
             ticker=plan.ticker,
@@ -163,13 +170,20 @@ class BrokerSteeringStateBuilder:
             original_take_profit=plan.take_profit,
             current_stop_loss=current_stop_loss,
             current_take_profit=current_take_profit,
-            confidence_percent=plan.confidence_percent,
-            calibrated_confidence_percent=self._calibrated_confidence(plan),
-            actionability=plan.action,
-            analysis_direction=plan.action if direction in {"long", "short"} else None,
+            confidence_percent=current_confidence if current_confidence is not None else plan.confidence_percent,
+            calibrated_confidence_percent=current_calibrated_confidence,
+            actionability=current_actionability,
+            analysis_direction=current_analysis_direction,
             severe_negative_news=self._has_severe_negative_news(
                 plan, now=now, evidence=steering_evidence
             ),
+            original_plan_action=plan.action,
+            evidence_source=str(steering_evidence.get("source") or ""),
+            evidence_freshness_status=str(steering_evidence.get("freshness_status") or ""),
+            evidence_computed_at=str(steering_evidence.get("computed_at") or ""),
+            ticker_signal_snapshot_id=int(steering_evidence["ticker_signal_snapshot_id"])
+            if isinstance(steering_evidence.get("ticker_signal_snapshot_id"), int)
+            else None,
             price_chase_percent=None,
             volatility_percent=None,
             has_pending_order=order is not None and not is_position,
@@ -188,6 +202,23 @@ class BrokerSteeringStateBuilder:
             expiration_at=expiration_at,
             now=now,
         )
+
+    def _latest_signal(self, ticker: str):
+        return next(iter(self.context_snapshots.list_ticker_signal_snapshots(ticker=ticker, limit=1)), None)
+
+    @staticmethod
+    def _fresh_evidence_text(evidence: dict[str, object], key: str) -> str | None:
+        if str(evidence.get("freshness_status") or "").strip().lower() != "fresh":
+            return None
+        value = evidence.get(key)
+        return str(value).strip().lower() if value is not None and str(value).strip() else None
+
+    @staticmethod
+    def _fresh_evidence_float(evidence: dict[str, object], key: str) -> float | None:
+        if str(evidence.get("freshness_status") or "").strip().lower() != "fresh":
+            return None
+        value = evidence.get(key)
+        return float(value) if isinstance(value, (int, float)) else None
 
     @classmethod
     def _linked_protective_orders_missing(cls, position: BrokerPosition | None) -> bool:

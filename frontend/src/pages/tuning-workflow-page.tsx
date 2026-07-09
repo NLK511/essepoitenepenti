@@ -14,6 +14,10 @@ function fieldText(value: unknown): string {
   return String(value);
 }
 
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
 function stageTone(stage: string): "ok" | "warning" | "danger" | "neutral" | "info" {
   if (stage.includes("complete") || stage.includes("promoted")) return "ok";
   if (stage.includes("blocked") || stage.includes("incomplete")) return "warning";
@@ -22,10 +26,17 @@ function stageTone(stage: string): "ok" | "warning" | "danger" | "neutral" | "in
   return "neutral";
 }
 
-function SectionStatusCard(props: { title: string; section: Record<string, unknown> | undefined; subtitle: string }) {
+interface WorkflowPhase {
+  key: string;
+  title: string;
+  subtitle: string;
+  section: Record<string, unknown> | undefined;
+}
+
+function SectionStatusCard(props: WorkflowPhase & { active: boolean; onViewDetails: () => void }) {
   const status = String(props.section?.status ?? "unknown");
   const progressPercent = Math.max(0, Math.min(100, Number(props.section?.progress_percent ?? 0)));
-  const detailEntries = Object.entries(props.section ?? {}).filter(([key]) => !["status", "summary", "progress_percent", "warnings", "blockers", "reason"].includes(key));
+  const hasDetails = Object.keys(props.section ?? {}).length > 0;
   return (
     <Card>
       <SectionTitle kicker="workflow card" title={props.title} subtitle={props.subtitle} />
@@ -39,7 +50,40 @@ function SectionStatusCard(props: { title: string; section: Record<string, unkno
       {Array.isArray(props.section?.warnings) && props.section.warnings.length ? <div className="helper-text top-gap-small">Warnings: {props.section.warnings.join(", ")}</div> : null}
       {typeof props.section?.progress === "object" && props.section.progress !== null ? <div className="helper-text top-gap-small">Progress: {String((props.section.progress as Record<string, unknown>).completed_count ?? 0)}/{String((props.section.progress as Record<string, unknown>).slice_count ?? 0)} slices · failed/stale: {String((props.section.progress as Record<string, unknown>).failed_count ?? 0)}/{String((props.section.progress as Record<string, unknown>).stale_count ?? 0)}</div> : null}
       {typeof props.section?.comparisons === "object" && props.section.comparisons !== null ? <div className="helper-text top-gap-small">Comparisons available for {Object.keys(props.section.comparisons as Record<string, unknown>).length} candidate(s).</div> : null}
-      {detailEntries.length ? <details className="top-gap-small"><summary className="helper-text">Details</summary><div className="summary-grid top-gap-small">{detailEntries.slice(0, 12).map(([key, value]) => <div className="summary-item" key={key}><span className="summary-label">{key.replace(/_/g, " ")}</span><span className="summary-value">{fieldText(value)}</span></div>)}</div></details> : null}
+      <div className="cluster top-gap-small">
+        <button type="button" className={props.active ? "button-secondary" : "button-subtle"} disabled={!hasDetails} onClick={props.onViewDetails}>{props.active ? "Details open" : "View details"}</button>
+      </div>
+    </Card>
+  );
+}
+
+function DetailValue(props: { value: unknown }) {
+  if (props.value === null || props.value === undefined || props.value === "") return <span className="summary-value">—</span>;
+  if (typeof props.value === "object") return <pre className="code-block tuning-workflow-detail-json">{prettyJson(props.value)}</pre>;
+  return <span className="summary-value">{String(props.value)}</span>;
+}
+
+function WorkflowPhaseInspector(props: { phase: WorkflowPhase | null; onClose: () => void }) {
+  if (!props.phase) return null;
+  const section = props.phase.section ?? {};
+  const status = String(section.status ?? "unknown");
+  const summaryEntries = Object.entries(section).filter(([key, value]) => !["status", "summary", "progress_percent", "warnings", "blockers", "reason"].includes(key) && (typeof value !== "object" || value === null)).slice(0, 12);
+  const objectEntries = Object.entries(section).filter(([, value]) => typeof value === "object" && value !== null);
+  return (
+    <Card className="tuning-workflow-inspector">
+      <SectionTitle
+        kicker="phase inspector"
+        title={props.phase.title}
+        subtitle={props.phase.subtitle}
+        actions={<><Badge tone={stageTone(status)}>{status}</Badge><button type="button" className="button-subtle" onClick={props.onClose}>Close</button></>}
+      />
+      {section.summary ? <div className="alert alert-info top-gap-small">{String(section.summary)}</div> : null}
+      {section.reason ? <div className="helper-text top-gap-small">Reason: {String(section.reason)}</div> : null}
+      {Array.isArray(section.blockers) && section.blockers.length ? <div className="alert alert-warning top-gap-small">Blocked by: {section.blockers.join(", ")}</div> : null}
+      {Array.isArray(section.warnings) && section.warnings.length ? <div className="alert alert-warning top-gap-small">Warnings: {section.warnings.join(", ")}</div> : null}
+      {summaryEntries.length ? <div className="summary-grid tuning-workflow-inspector-grid top-gap-small">{summaryEntries.map(([key, value]) => <div className="summary-item" key={key}><span className="summary-label">{key.replace(/_/g, " ")}</span><DetailValue value={value} /></div>)}</div> : null}
+      {objectEntries.length ? <div className="stack top-gap-small">{objectEntries.map(([key, value]) => <details key={key} open={key === "progress" || key === "holdout_validation"} className="tuning-workflow-detail-block"><summary>{key.replace(/_/g, " ")}</summary><DetailValue value={value} /></details>)}</div> : null}
+      <details className="top-gap-small"><summary>Full technical payload</summary><pre className="code-block tuning-workflow-detail-json">{prettyJson(section)}</pre></details>
     </Card>
   );
 }
@@ -48,6 +92,7 @@ export function TuningWorkflowPage() {
   const [experiments, setExperiments] = useState<TuningExperimentsResponse | null>(null);
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [selected, setSelected] = useState<TuningExperiment | null>(null);
+  const [selectedPhaseKey, setSelectedPhaseKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +159,10 @@ export function TuningWorkflowPage() {
     }, selected.current_stage.includes("running") ? 2000 : 10000);
     return () => window.clearInterval(interval);
   }, [selected?.id, selected?.current_stage]);
+
+  useEffect(() => {
+    setSelectedPhaseKey(null);
+  }, [selected?.id]);
 
   useEffect(() => {
     if (!selected) return;
@@ -271,6 +320,25 @@ export function TuningWorkflowPage() {
     };
   }, [selected]);
 
+  const workflowPhases = useMemo<WorkflowPhase[]>(() => {
+    if (!selected) return [];
+    return [
+      { key: "setup", title: "Experiment setup", subtitle: "Name, universe, windows, objective, baseline, and promotion target.", section: selected.sections.setup },
+      { key: "evidence_readiness", title: "Evidence readiness", subtitle: "Cache-only coverage audit and repeated bar-gap warnings.", section: selected.sections.evidence_readiness },
+      { key: "candidate_pool", title: "Candidate discovery", subtitle: selected.computation_labels.discovery, section: selected.sections.candidate_pool },
+      { key: "shortlist", title: "Candidate shortlist", subtitle: "Small shortlist for expensive validation, normally 5–10 candidates.", section: selected.sections.shortlist },
+      { key: "baseline_replay", title: "Baseline replay", subtitle: "Required before candidate comparison is valid.", section: selected.sections.baseline_replay },
+      { key: "candidate_replay_validation", title: "Candidate replay validation", subtitle: selected.computation_labels.replay, section: selected.sections.candidate_replay_validation },
+      { key: "stability_validation", title: "Walk-forward / holdout", subtitle: selected.computation_labels.holdout, section: selected.sections.stability_validation },
+      { key: "promotion_proposal", title: "Promotion proposal", subtitle: "Paper-only by default; live full autonomy fails closed.", section: selected.sections.promotion_proposal },
+      { key: "promotion_execution", title: "Promotion execution", subtitle: "Creates a paper config and records rollback evidence; live execution is disabled.", section: selected.sections.promotion_execution },
+      { key: "post_promotion_monitoring", title: "Post-promotion monitoring", subtitle: "Shown after paper promotion exists.", section: selected.sections.post_promotion_monitoring },
+      { key: "rollback", title: "Rollback", subtitle: "Records rollback reason and source/target evidence for paper configs.", section: selected.sections.rollback },
+    ];
+  }, [selected]);
+
+  const selectedPhase = useMemo(() => workflowPhases.find((phase) => phase.key === selectedPhaseKey) ?? null, [workflowPhases, selectedPhaseKey]);
+
   return (
     <>
       <PageHeader
@@ -369,18 +437,9 @@ export function TuningWorkflowPage() {
             </DisclosureCard>
 
             <section className="card-grid">
-              <SectionStatusCard title="Experiment setup" subtitle="Name, universe, windows, objective, baseline, and promotion target." section={selected.sections.setup} />
-              <SectionStatusCard title="Evidence readiness" subtitle="Cache-only coverage audit and repeated bar-gap warnings." section={selected.sections.evidence_readiness} />
-              <SectionStatusCard title="Candidate discovery" subtitle={selected.computation_labels.discovery} section={selected.sections.candidate_pool} />
-              <SectionStatusCard title="Candidate shortlist" subtitle="Small shortlist for expensive validation, normally 5–10 candidates." section={selected.sections.shortlist} />
-              <SectionStatusCard title="Baseline replay" subtitle="Required before candidate comparison is valid." section={selected.sections.baseline_replay} />
-              <SectionStatusCard title="Candidate replay validation" subtitle={selected.computation_labels.replay} section={selected.sections.candidate_replay_validation} />
-              <SectionStatusCard title="Walk-forward / holdout" subtitle={selected.computation_labels.holdout} section={selected.sections.stability_validation} />
-              <SectionStatusCard title="Promotion proposal" subtitle="Paper-only by default; live full autonomy fails closed." section={selected.sections.promotion_proposal} />
-              <SectionStatusCard title="Promotion execution" subtitle="Creates a paper config and records rollback evidence; live execution is disabled." section={selected.sections.promotion_execution} />
-              <SectionStatusCard title="Post-promotion monitoring" subtitle="Shown after paper promotion exists." section={selected.sections.post_promotion_monitoring} />
-              <SectionStatusCard title="Rollback" subtitle="Records rollback reason and source/target evidence for paper configs." section={selected.sections.rollback} />
+              {workflowPhases.map(({ key, ...phase }) => <SectionStatusCard key={key} {...phase} active={selectedPhaseKey === key} onViewDetails={() => setSelectedPhaseKey(key)} />)}
             </section>
+            <WorkflowPhaseInspector phase={selectedPhase} onClose={() => setSelectedPhaseKey(null)} />
           </>
         ) : null}
       </div>

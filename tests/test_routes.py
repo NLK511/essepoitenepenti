@@ -1086,6 +1086,16 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             jobs = JobRepository(session)
             runs = RunRepository(session)
             old_job = jobs.create("Failed Old", ["AAPL"], None)
+            for index in range(55):
+                session.add(
+                    RunRecord(
+                        job_id=old_job.id or 0,
+                        job_type="proposal_generation",
+                        status="completed",
+                        created_at=now - timedelta(seconds=index),
+                        updated_at=now - timedelta(seconds=index),
+                    )
+                )
             old_run = runs.enqueue(old_job.id or 0)
             claimed = runs.claim_next_queued_run()
             assert claimed is not None
@@ -1287,6 +1297,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(series["key"] == "actionability_gap_percent" for series in one_day_payload["dashboard_trends"]["series"]))
         self.assertTrue(all(item["status"] == "failed" for item in one_day_payload["major_failures"]))
         self.assertFalse(any(item["status"] == "completed_with_warnings" for item in all_payload["major_failures"]))
+        self.assertEqual(one_day_payload["work_queue_summary"]["plans_in_window"], one_day_payload["dashboard_summary"]["plan_amount"])
+        self.assertEqual(one_day_payload["work_queue_summary"]["plan_rows_loaded"], len(one_day_payload["recommendation_plans"]))
+        self.assertGreaterEqual(one_day_payload["work_queue_summary"]["plans_in_window"], one_day_payload["work_queue_summary"]["plan_rows_loaded"])
+        self.assertGreaterEqual(one_day_payload["work_queue_summary"]["major_failures"], len(one_day_payload["major_failures"]))
+        self.assertGreaterEqual(one_day_payload["work_queue_summary"]["major_failures"], 1)
+        self.assertGreaterEqual(one_day_payload["work_queue_summary"]["warning_patterns"], len(one_day_payload["distinct_warnings"]))
         grouped_warning = next(item for item in one_day_payload["distinct_warnings"] if item["label"] == "broker execution blocked by risk manager: risk_position_notional_limit_exceeded")
         self.assertEqual(grouped_warning["count"], 2)
         self.assertEqual(grouped_warning["tickers"], ["AAPL", "MSFT"])

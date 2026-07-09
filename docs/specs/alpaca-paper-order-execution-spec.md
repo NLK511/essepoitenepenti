@@ -46,7 +46,7 @@ For each actionable `RecommendationPlan`:
    - take-profit limit price
    - resubmitted order levels
    - protective-order amendment levels
-7. The normalized execution record, normalized request payload, and `BrokerOrderRequest` sent to an adapter must agree exactly. Adapters must not rebuild protective-order prices from unnormalized plan values when normalized payload levels are present.
+7. The normalized execution record, normalized request payload, and `BrokerOrderRequest` sent to an adapter must agree exactly. Adapters must not rebuild protective-order prices from unnormalized plan values when normalized payload levels are present. Alpaca adapter submission and amendment payload building must also apply the same final precision guard to every executable price field so old/manual/fallback requests cannot be rejected for sub-penny increments.
 8. The default equity price precision policy is broker-agnostic and safe for Alpaca-compatible US equities:
    - prices at or above $1.00 use 2 decimal places
    - prices below $1.00 use 4 decimal places

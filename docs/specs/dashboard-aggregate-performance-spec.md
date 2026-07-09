@@ -25,9 +25,11 @@ The dashboard and quality widgets are operator safety surfaces. Opening a 1-mont
 - Use daily snapshots for weekly/monthly dashboard windows.
 - Recompute rates from aggregate counts when possible.
 - Sum absolute values such as P&L, order counts, news counts, and bar counts.
+- Dashboard `technical_summary.news_processed` means news rows processed/ingested during the selected dashboard window. It must use `ingested_at` with a safe fallback to row `created_at`/`published_at`; it must not use only `published_at`, because macro and industry refreshes can process articles today that were published yesterday.
 - Use weighted averages for average-return fields when the sample count is available.
 - Keep raw detailed diagnostics on detail pages; keep dashboard payloads compact.
 - Dashboard `latest_runs` and `recent_runs` are compact run summaries only. They must include identity, type, status, error, timestamps, and duration, and must not include heavy run artifacts, summaries, or timing payloads. Full run artifacts belong on run-detail/research pages.
+- Dashboard work-queue headline counts must describe the selected window, not just the number of rows loaded for preview lists. `plans_in_window` comes from the selected-window plan count, while `plan_rows_loaded` is only a preview/debug count. `major_failures` must count failed runs in the selected window with a direct failed-run query, not by filtering the capped `recent_runs` preview list. Warning-pattern headline counts must use the full grouped warning set before display truncation.
 
 ## Recommendation-quality page guardrail
 

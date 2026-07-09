@@ -14,6 +14,7 @@ from trade_proposer_app.persistence.models import (
     HistoricalNewsRecord,
     ObservabilityEventRecord,
     RecommendationPlanRecord,
+    RunRecord,
     TickerSignalSnapshotRecord,
 )
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
@@ -77,6 +78,22 @@ def _count_ticker_signals(
         query = query.where(TickerSignalSnapshotRecord.computed_at >= computed_after)
     if computed_before is not None:
         query = query.where(TickerSignalSnapshotRecord.computed_at <= computed_before)
+    return int(session.scalar(query) or 0)
+
+
+def _count_news_processed(
+    session: Session, *, computed_after: datetime | None, computed_before: datetime | None
+) -> int:
+    processed_at = func.coalesce(
+        HistoricalNewsRecord.ingested_at,
+        HistoricalNewsRecord.created_at,
+        HistoricalNewsRecord.published_at,
+    )
+    query = select(func.count()).select_from(HistoricalNewsRecord)
+    if computed_after is not None:
+        query = query.where(processed_at >= computed_after)
+    if computed_before is not None:
+        query = query.where(processed_at <= computed_before)
     return int(session.scalar(query) or 0)
 
 
@@ -199,8 +216,8 @@ def _dashboard_window_metrics(
         action="short", computed_after=computed_after, computed_before=now
     )
 
-    news_processed = _count_records(
-        session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now
+    news_processed = _count_news_processed(
+        session, computed_after=computed_after, computed_before=now
     )
     bars_stored = _count_records(
         session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now
@@ -532,20 +549,29 @@ async def get_dashboard(
     selected_window_metrics = _dashboard_window_metrics(session, now=now, window_key=window_key)
     dashboard_trends = _build_dashboard_trends(session, now=now) if include_trends else None
 
-    major_failures: list[dict[str, object]] = []
-    for run in recent_runs:
-        if run.status != RunStatus.FAILED.value:
-            continue
-        major_failures.append(
-            {
-                "source": run.job_type,
-                "label": f"Run #{run.id}" if run.id is not None else "Run",
-                "detail": run.error_message or "failed",
-                "run_id": run.id,
-                "status": run.status,
-                "created_at": run.created_at,
-            }
-        )
+    failed_run_filters = [RunRecord.status == RunStatus.FAILED.value, RunRecord.created_at <= now]
+    if computed_after is not None:
+        failed_run_filters.append(RunRecord.created_at >= computed_after)
+    failed_runs_total = int(
+        session.scalar(select(func.count()).select_from(RunRecord).where(*failed_run_filters)) or 0
+    )
+    failed_runs = session.scalars(
+        select(RunRecord)
+        .where(*failed_run_filters)
+        .order_by(RunRecord.created_at.desc())
+        .limit(6)
+    ).all()
+    major_failures = [
+        {
+            "source": run.job_type,
+            "label": f"Run #{run.id}" if run.id is not None else "Run",
+            "detail": run.error_message or "failed",
+            "run_id": run.id,
+            "status": run.status,
+            "created_at": run.created_at,
+        }
+        for run in failed_runs
+    ]
 
     warning_counter: Counter[str] = Counter()
     warning_sources: dict[str, set[str]] = {}
@@ -584,6 +610,7 @@ async def get_dashboard(
             add_warning(status_reason, "quality")
         add_warning(selected_quality.get("walk_forward_error"), "quality")
 
+    warning_patterns_total = len(warning_counter)
     distinct_warnings = [
         {
             "label": warning,
@@ -595,6 +622,15 @@ async def get_dashboard(
     ]
 
     gating_severity_alert = GatingSeverityAlertService(session).latest_alert()
+    work_queue_summary = {
+        "plans_in_window": selected_window_metrics["dashboard_summary"].get("plan_amount", 0),
+        "plan_rows_loaded": len(recommendation_plans),
+        "recent_runs_loaded": len(recent_runs),
+        "major_failures": failed_runs_total,
+        "major_failure_rows_loaded": len(major_failures),
+        "warning_patterns": warning_patterns_total,
+        "warning_pattern_rows_loaded": len(distinct_warnings),
+    }
 
     return {
         "dashboard_window": window_key,
@@ -609,6 +645,7 @@ async def get_dashboard(
         "dashboard_summary": selected_window_metrics["dashboard_summary"],
         "technical_summary": selected_window_metrics["technical_summary"],
         "dashboard_trends": dashboard_trends,
+        "work_queue_summary": work_queue_summary,
         "major_failures": major_failures[:6],
         "distinct_warnings": distinct_warnings,
         "gating_severity_alert": gating_severity_alert,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
 from trade_proposer_app.services.alpaca_paper_client import (
@@ -155,9 +156,9 @@ class AlpacaPaperBrokerAdapter:
     def amend_position_protection(self, request: BrokerProtectionAmendRequest) -> BrokerOrderResult:
         payload: dict[str, object] = {"client_order_id": request.client_order_id or ""}
         if request.stop_loss is not None:
-            payload["stop_loss"] = {"stop_price": request.stop_loss}
+            payload["stop_loss"] = {"stop_price": self._normalize_equity_price(request.stop_loss)}
         if request.take_profit is not None:
-            payload["take_profit"] = {"limit_price": request.take_profit}
+            payload["take_profit"] = {"limit_price": self._normalize_equity_price(request.take_profit)}
         try:
             result = self.client.amend_order(request.broker_order_id, payload)
         except AlpacaPaperClientError as exc:
@@ -190,15 +191,15 @@ class AlpacaPaperBrokerAdapter:
         if request.notional_amount is not None and request.quantity is None:
             payload["notional"] = request.notional_amount
         if "limit_price" in request.payload:
-            payload["limit_price"] = request.payload["limit_price"]
+            payload["limit_price"] = self._normalize_equity_price(request.payload["limit_price"])  # type: ignore[arg-type]
         take_profit = self._payload_take_profit(request.payload, fallback=request.take_profit)
         stop_loss = self._payload_stop_loss(request.payload, fallback=request.stop_loss)
         if stop_loss is not None or take_profit is not None:
             payload["order_class"] = "bracket"
             if take_profit is not None:
-                payload["take_profit"] = {"limit_price": take_profit}
+                payload["take_profit"] = {"limit_price": self._normalize_equity_price(take_profit)}
             if stop_loss is not None:
-                payload["stop_loss"] = {"stop_price": stop_loss}
+                payload["stop_loss"] = {"stop_price": self._normalize_equity_price(stop_loss)}
         return payload
 
     @staticmethod
@@ -272,6 +273,12 @@ class AlpacaPaperBrokerAdapter:
             message=str(exc),
             payload=exc.payload,
         )
+
+    @staticmethod
+    def _normalize_equity_price(price: object) -> float:
+        value = Decimal(str(price))
+        quantum = Decimal("0.01") if abs(value) >= 1 else Decimal("0.0001")
+        return float(value.quantize(quantum, rounding=ROUND_HALF_UP))
 
     @staticmethod
     def _float_or_none(value: object) -> float | None:

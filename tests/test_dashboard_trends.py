@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.persistence.models import Base, HistoricalNewsRecord
 from trade_proposer_app.services.dashboard_trends import DashboardTrendService
 
 
@@ -130,6 +130,39 @@ class DashboardTrendServiceTests(unittest.TestCase):
         self.assertEqual(summary["broker_average_profit_percent"], 3.25)
         self.assertEqual(summary["simulated_average_profit_percent"], 1.5)
         self.assertEqual(technical["broker_realized_pnl"], 125.5)
+
+    def test_daily_snapshot_counts_news_by_ingestion_time_not_publication_time(self) -> None:
+        service = DashboardTrendService(self.session)
+        service.plan_repository = _FakePlanRepository()
+        service.outcome_repository = _FakeOutcomeRepository()
+        service.performance_metrics = _FakePerformanceMetrics()
+        service._count_ticker_signals = lambda **kwargs: 7
+        service._sum_plan_item_count = lambda plans, key: 0
+        day_start = datetime(2026, 7, 9, 0, 0, tzinfo=UTC)
+        day_end = day_start + timedelta(days=1)
+        self.session.add_all([
+            HistoricalNewsRecord(
+                ticker="global_macro",
+                provider="googlenews",
+                published_at=day_start - timedelta(hours=4),
+                ingested_at=day_start + timedelta(hours=6),
+                title="Processed today despite yesterday publication",
+                link="https://example.com/news-ingested-today",
+            ),
+            HistoricalNewsRecord(
+                ticker="global_macro",
+                provider="googlenews",
+                published_at=day_start + timedelta(hours=2),
+                ingested_at=day_start - timedelta(hours=1),
+                title="Published today but processed yesterday",
+                link="https://example.com/news-ingested-yesterday",
+            ),
+        ])
+        self.session.commit()
+
+        snapshot = service._compute_snapshot_between(day_start.date(), day_start, day_end)
+
+        self.assertEqual(snapshot["technical_summary"]["news_processed"], 1)
 
     def test_build_cached_window_metrics_aggregates_daily_snapshots_plus_today(self) -> None:
         service = DashboardTrendService(self.session)

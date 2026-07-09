@@ -11,6 +11,7 @@ from trade_proposer_app.domain.models import (
     BrokerReconciliationSnapshot,
     HistoricalMarketBar,
     RecommendationPlan,
+    TickerSignalSnapshot,
 )
 from trade_proposer_app.persistence.models import (
     Base,
@@ -27,6 +28,7 @@ from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
 from trade_proposer_app.repositories.broker_steering_decisions import (
     BrokerSteeringDecisionRepository,
 )
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -582,6 +584,116 @@ def test_state_builder_uses_fresh_steering_evidence_for_severe_invalidation() ->
     )[0]
 
     assert state.severe_negative_news is True
+
+
+def test_state_builder_uses_fresh_ticker_signal_as_current_thesis_evidence() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    signals = ContextSnapshotRepository(session)
+    plan = plans.create_plan(_plan(action="long", confidence_percent=70.0))
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker="AAPL",
+            ticker="AAPL",
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            stop_loss_order_id="sl-1",
+            stop_loss_order_status="new",
+            stop_loss_order_price=95.0,
+            take_profit_order_id="tp-1",
+            take_profit_order_status="new",
+            take_profit_order_price=110.0,
+            protective_orders_verified_at=NOW,
+            exit_order_id=None,
+        )
+    )
+    signal = signals.create_ticker_signal_snapshot(
+        TickerSignalSnapshot(
+            ticker="AAPL",
+            computed_at=NOW,
+            direction="short",
+            confidence_percent=35.0,
+            warnings=["severe_negative_news"],
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 94.0).list_states(
+        now=NOW
+    )[0]
+    decision = BrokerSteeringEngine().evaluate(
+        state,
+        BrokerSteeringConfig(enabled=True, dry_run=False, position_close_required_signals=3),
+    )
+
+    assert state.original_plan_action == "long"
+    assert state.actionability == "short"
+    assert state.analysis_direction == "short"
+    assert state.confidence_percent == 35.0
+    assert state.evidence_source == "ticker_signal"
+    assert state.evidence_freshness_status == "fresh"
+    assert state.ticker_signal_snapshot_id == signal.id
+    assert decision.decision == "close_position_now"
+    assert "position_confidence_below_close_threshold" in decision.reason_codes
+    assert "position_analysis_conflict" in decision.reason_codes
+    assert "position_severe_negative_news" in decision.reason_codes
+    assert decision.diagnostics["current_actionability"] == "short"
+    assert decision.diagnostics["current_analysis_direction"] == "short"
+    assert decision.diagnostics["original_plan_action"] == "long"
+
+
+def test_state_builder_does_not_treat_stale_ticker_signal_as_current_thesis_evidence() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    signals = ContextSnapshotRepository(session)
+    plan = plans.create_plan(_plan(action="long", confidence_percent=70.0))
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker="AAPL",
+            ticker="AAPL",
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            exit_order_id=None,
+        )
+    )
+    signals.create_ticker_signal_snapshot(
+        TickerSignalSnapshot(
+            ticker="AAPL",
+            computed_at=NOW - timedelta(days=3),
+            direction="short",
+            confidence_percent=35.0,
+            warnings=["severe_negative_news"],
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 94.0).list_states(
+        now=NOW
+    )[0]
+    decision = BrokerSteeringEngine().evaluate(
+        state,
+        BrokerSteeringConfig(enabled=True, dry_run=False, position_close_required_signals=3),
+    )
+
+    assert state.actionability is None
+    assert state.analysis_direction is None
+    assert state.severe_negative_news is False
+    assert state.evidence_freshness_status == "stale"
+    assert decision.decision != "close_position_now"
 
 
 def test_state_builder_ignores_stale_steering_evidence_for_severe_invalidation() -> None:

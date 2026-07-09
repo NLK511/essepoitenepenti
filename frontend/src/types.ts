@@ -641,6 +641,16 @@ export interface DashboardRunSummary {
   duration_seconds?: number | null;
 }
 
+export interface DashboardWorkQueueSummary {
+  plans_in_window: number;
+  plan_rows_loaded: number;
+  recent_runs_loaded: number;
+  major_failures: number;
+  major_failure_rows_loaded: number;
+  warning_patterns: number;
+  warning_pattern_rows_loaded: number;
+}
+
 export interface DashboardResponse {
   dashboard_window: string;
   watchlists: Watchlist[];
@@ -652,6 +662,7 @@ export interface DashboardResponse {
   dashboard_summary: DashboardSummary;
   technical_summary: DashboardTechnicalSummary;
   dashboard_trends?: DashboardTrends;
+  work_queue_summary?: DashboardWorkQueueSummary;
   major_failures: DashboardFailure[];
   distinct_warnings: DashboardWarningSummary[];
   gating_severity_alert?: GatingSeverityAlert | null;

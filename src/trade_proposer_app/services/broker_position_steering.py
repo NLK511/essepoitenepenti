@@ -61,6 +61,11 @@ class BrokerSteeringState:
     actionability: str | None = None
     analysis_direction: str | None = None
     severe_negative_news: bool = False
+    original_plan_action: str | None = None
+    evidence_source: str | None = None
+    evidence_freshness_status: str | None = None
+    evidence_computed_at: str | None = None
+    ticker_signal_snapshot_id: int | None = None
     price_chase_percent: float | None = None
     volatility_percent: float | None = None
     has_pending_order: bool = False
@@ -638,6 +643,13 @@ class BrokerSteeringEngine:
                 "has_pending_order": state.has_pending_order,
                 "has_open_position": state.has_open_position,
                 "confidence_percent": self._effective_confidence(state),
+                "original_plan_action": state.original_plan_action,
+                "current_actionability": state.actionability,
+                "current_analysis_direction": state.analysis_direction,
+                "evidence_source": state.evidence_source,
+                "evidence_freshness_status": state.evidence_freshness_status,
+                "evidence_computed_at": state.evidence_computed_at,
+                "ticker_signal_snapshot_id": state.ticker_signal_snapshot_id,
                 "broker_reconciliation_healthy": state.broker_reconciliation_healthy,
                 "broker_reconciliation_age_minutes": state.broker_reconciliation_age_minutes,
                 "linked_exit_orders_missing": state.linked_exit_orders_missing,

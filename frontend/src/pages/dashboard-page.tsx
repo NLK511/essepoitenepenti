@@ -264,6 +264,7 @@ export function DashboardPage() {
   const quality = data?.recommendation_quality?.summary ?? null;
   const majorFailures = data?.major_failures ?? [];
   const distinctWarnings = data?.distinct_warnings ?? [];
+  const workQueueSummary = data?.work_queue_summary ?? null;
   const trendSeriesMap = useMemo(() => new Map((dashboardTrends?.series ?? []).map((series) => [series.key, series])), [dashboardTrends]);
   const trendWindows = dashboardTrends?.windows ?? [];
   const windowLabel = useMemo(() => reviewWindowLabel(selectedWindow), [selectedWindow]);
@@ -457,10 +458,10 @@ export function DashboardPage() {
                 actions={<><Link to="/jobs/recommendation-plans" className="button-subtle">↗ Plans</Link><Link to="/jobs/debugger" className="button-subtle">⌘ Debugger</Link></>}
               />
               <div className="data-stack top-gap-small">
-                <StatCard label="Plans loaded" value={String(data.recommendation_plans.length)} helper="Latest recommendation-plan rows on the dashboard" />
-                <StatCard label="Recent runs" value={String(data.recent_runs.length)} helper="Recent run records available for triage" />
-                <StatCard label="Major failures" value={String(majorFailures.length)} helper="Failures that should change operator behavior now" />
-                <StatCard label="Warning patterns" value={String(distinctWarnings.length)} helper="Recurring warning groups in the selected window" />
+                <StatCard label="Plans in window" value={String(workQueueSummary?.plans_in_window ?? summary?.plan_amount ?? data.recommendation_plans.length)} helper={`${workQueueSummary?.plan_rows_loaded ?? data.recommendation_plans.length} latest plan rows loaded for preview`} />
+                <StatCard label="Recent runs" value={String(workQueueSummary?.recent_runs_loaded ?? data.recent_runs.length)} helper="Recent run records loaded for triage" />
+                <StatCard label="Major failures" value={String(workQueueSummary?.major_failures ?? majorFailures.length)} helper={`${workQueueSummary?.major_failure_rows_loaded ?? majorFailures.length} failure rows shown below`} />
+                <StatCard label="Warning patterns" value={String(workQueueSummary?.warning_patterns ?? distinctWarnings.length)} helper={`${workQueueSummary?.warning_pattern_rows_loaded ?? distinctWarnings.length} grouped warning rows shown below`} />
               </div>
             </Card>
           </section>
