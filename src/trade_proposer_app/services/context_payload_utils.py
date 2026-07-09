@@ -25,6 +25,9 @@ def macro_snapshot_context_fields(snapshot: dict[str, Any], existing_insights: l
         "macro_context_quality_status": snapshot.get("context_quality_status"),
         "macro_context_quality_flags": snapshot.get("context_quality_flags", {}),
         "macro_context_quality_notes": snapshot.get("context_quality_notes", []),
+        "macro_context_evidence_state": snapshot.get("context_evidence_state"),
+        "macro_context_coverage_state": snapshot.get("context_coverage_state"),
+        "macro_context_neutral_reason": _neutral_reason(snapshot),
         "macro_context_events": snapshot.get("context_active_events", []),
         "macro_context_active_themes": snapshot.get("context_active_themes", []),
         "macro_context_regime_tags": snapshot.get("context_regime_tags", []),
@@ -64,6 +67,7 @@ def industry_snapshot_context_fields(snapshot: dict[str, Any], existing_insights
         "industry_context_quality_notes": snapshot.get("context_quality_notes", []),
         "industry_context_evidence_state": snapshot.get("context_evidence_state"),
         "industry_context_coverage_state": snapshot.get("context_coverage_state"),
+        "industry_context_neutral_reason": _neutral_reason(snapshot),
         "industry_context_events": snapshot.get("context_active_events", []),
         "industry_context_active_drivers": snapshot.get("context_active_drivers", []),
         "industry_context_regime_tags": snapshot.get("context_regime_tags", []),
@@ -77,6 +81,25 @@ def industry_snapshot_context_fields(snapshot: dict[str, Any], existing_insights
         "industry_context_score_reasons": snapshot.get("score_reasons") or (snapshot.get("source_breakdown", {}) or {}).get("score_reasons", []),
         "industry_coverage_insights": _merged_insights(existing_insights, snapshot),
     }
+
+
+def _neutral_reason(snapshot: dict[str, Any]) -> str | None:
+    score = float(snapshot.get("score", 0.0) or 0.0)
+    if abs(score) > 0.01:
+        return None
+    reasons = snapshot.get("score_reasons") or (snapshot.get("source_breakdown", {}) or {}).get("score_reasons", [])
+    if isinstance(reasons, list) and reasons:
+        return str(reasons[0])
+    evidence = str(snapshot.get("context_evidence_state") or "").strip().lower()
+    coverage = str(snapshot.get("context_coverage_state") or "").strip().lower()
+    quality = str(snapshot.get("context_quality_status") or "").strip().lower()
+    if evidence in {"missing", "none"}:
+        return "missing_context_evidence"
+    if coverage in {"missing", "none"}:
+        return "missing_context_coverage"
+    if quality in {"degraded", "blocked", "failed"}:
+        return f"context_quality_{quality}"
+    return "true_neutral_or_balanced_context"
 
 
 def _merged_insights(existing_insights: list[object] | None, snapshot: dict[str, Any]) -> list[object]:

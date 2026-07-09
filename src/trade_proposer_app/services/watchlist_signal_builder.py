@@ -38,8 +38,16 @@ class WatchlistSignalBuilder:
             2,
         )
         ticker_sentiment_score = o._sentiment_score_to_percent(o._pluck(analysis, "sentiment", "ticker", "score"))
-        macro_exposure_score = o._sentiment_score_to_percent(o._pluck(analysis, "sentiment", "macro", "score"))
-        industry_alignment_score = o._sentiment_score_to_percent(o._pluck(analysis, "sentiment", "industry", "score"))
+        macro_exposure_score = self._mapped_or_sentiment_percent(
+            analysis,
+            "macro_exposure_alignment_percent",
+            o._pluck(analysis, "sentiment", "macro", "score"),
+        )
+        industry_alignment_score = self._mapped_or_sentiment_percent(
+            analysis,
+            "industry_exposure_alignment_percent",
+            o._pluck(analysis, "sentiment", "industry", "score"),
+        )
         expected_move_score = o._expected_move_score(deep_recommendation)
         execution_quality_score = o._execution_quality_score(deep_recommendation)
         warnings = self._warnings(watchlist, candidate, deep_output=deep_output, deep_error=deep_error)
@@ -122,6 +130,14 @@ class WatchlistSignalBuilder:
             "conflict_flag_details": transmission["conflict_flag_details"],
             "base_confidence_percent": base_confidence,
             "transmission_confidence_adjustment": transmission["transmission_effect"],
+            "macro_support_score": transmission["macro_support_score"],
+            "industry_support_score": transmission["industry_support_score"],
+            "raw_support_score": transmission["raw_support_score"],
+            "raw_support_percent": transmission["raw_support_percent"],
+            "macro_exposure_alignment_percent": transmission["macro_exposure_alignment_percent"],
+            "industry_exposure_alignment_percent": transmission["industry_exposure_alignment_percent"],
+            "context_neutral_reason": transmission["context_neutral_reason"],
+            "mapped_exposure": transmission["mapped_exposure"],
         }
 
     def _diagnostics_payload(
@@ -172,6 +188,14 @@ class WatchlistSignalBuilder:
             "expected_transmission_window_detail": transmission["expected_transmission_window_detail"],
             "conflict_flags": transmission["conflict_flags"],
             "conflict_flag_details": transmission["conflict_flag_details"],
+            "macro_support_score": transmission["macro_support_score"],
+            "industry_support_score": transmission["industry_support_score"],
+            "raw_support_score": transmission["raw_support_score"],
+            "raw_support_percent": transmission["raw_support_percent"],
+            "macro_exposure_alignment_percent": transmission["macro_exposure_alignment_percent"],
+            "industry_exposure_alignment_percent": transmission["industry_exposure_alignment_percent"],
+            "context_neutral_reason": transmission["context_neutral_reason"],
+            "mapped_exposure": transmission["mapped_exposure"],
         }
 
     def _fundamental_payload(self, analysis: dict[str, Any]) -> dict[str, Any]:
@@ -233,6 +257,8 @@ class WatchlistSignalBuilder:
         industry_channels = self._list_field(analysis, "industry_exposure_channels")
         ticker_channels = self._list_field(analysis, "ticker_exposure_channels")
         expected_window = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or o._fallback_transmission_window_placeholder(watchlist.default_horizon)
+        transmission_analysis = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis")
+        transmission_analysis = transmission_analysis if isinstance(transmission_analysis, dict) else {}
         return {
             "transmission_alignment_score": alignment_score,
             "transmission_bias": bias,
@@ -251,7 +277,29 @@ class WatchlistSignalBuilder:
             "ticker_exposure_channels": ticker_channels,
             "ticker_exposure_channel_details": self._channel_detail_field(analysis, "ticker_exposure_channel_details", ticker_channels),
             "transmission_effect": o._transmission_confidence_adjustment(analysis, transmission_bias=bias, alignment_score=alignment_score),
+            "macro_support_score": self._number_field(transmission_analysis, "macro_support_score"),
+            "industry_support_score": self._number_field(transmission_analysis, "industry_support_score"),
+            "raw_support_score": self._number_field(transmission_analysis, "raw_support_score"),
+            "raw_support_percent": self._number_field(transmission_analysis, "raw_support_percent"),
+            "macro_exposure_alignment_percent": self._number_field(transmission_analysis, "macro_exposure_alignment_percent", default=macro_exposure_score),
+            "industry_exposure_alignment_percent": self._number_field(transmission_analysis, "industry_exposure_alignment_percent", default=industry_alignment_score),
+            "context_neutral_reason": transmission_analysis.get("context_neutral_reason"),
+            "mapped_exposure": transmission_analysis.get("mapped_exposure") if isinstance(transmission_analysis.get("mapped_exposure"), dict) else {},
         }
+
+    def _mapped_or_sentiment_percent(self, analysis: dict[str, Any], mapped_key: str, sentiment_value: Any) -> float:
+        o = self._orchestration
+        mapped = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", mapped_key)
+        if o._is_number(mapped):
+            return round(max(0.0, min(100.0, float(mapped))), 2)
+        return o._sentiment_score_to_percent(sentiment_value)
+
+    @staticmethod
+    def _number_field(payload: dict[str, Any], key: str, *, default: float = 0.0) -> float:
+        value = payload.get(key)
+        if isinstance(value, (int, float)):
+            return round(float(value), 4)
+        return round(float(default), 4)
 
     def _primary_drivers(self, analysis: dict[str, Any], transmission_bias: str) -> list[object]:
         o = self._orchestration

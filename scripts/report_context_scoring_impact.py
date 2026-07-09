@@ -94,7 +94,41 @@ def _snapshot_summary(rows: list[tuple[Any, ...]], *, scope: str) -> dict[str, A
     }
 
 
-def _plan_context_summary(rows: list[tuple[Any, ...]]) -> dict[str, Any]:
+def _ablation_adjustment(transmission: dict[str, Any], *, mode: str) -> float:
+    actual = transmission.get("transmission_confidence_adjustment")
+    actual_value = float(actual) if isinstance(actual, (int, float)) else 0.0
+    if mode == "normal":
+        return actual_value
+    if mode == "forced_neutral":
+        return 0.0
+    quality = str(transmission.get("context_quality_status") or "").lower()
+    macro_quality = str(transmission.get("macro_context_quality_status") or "").lower()
+    industry_quality = str(transmission.get("industry_context_quality_status") or "").lower()
+    if mode == "quality_only":
+        if any(value in {"blocked", "failed"} for value in (quality, macro_quality, industry_quality)):
+            return -2.0
+        if any(value in {"degraded", "partial"} for value in (quality, macro_quality, industry_quality)):
+            return -1.0
+        return 0.0
+    bias = str(transmission.get("transmission_bias") or transmission.get("context_bias") or "").lower()
+    if mode == "adverse_only":
+        return actual_value if actual_value < 0 or bias == "headwind" else 0.0
+    if mode == "mapped_exposure":
+        mapped = transmission.get("mapped_exposure") if isinstance(transmission.get("mapped_exposure"), dict) else {}
+        alignment = mapped.get("alignment_percent", transmission.get("alignment_percent"))
+        try:
+            alignment_value = float(alignment)
+        except (TypeError, ValueError):
+            return 0.0
+        if alignment_value >= 62:
+            return min(2.0, (alignment_value - 50.0) / 20.0)
+        if alignment_value <= 42:
+            return max(-4.0, (alignment_value - 50.0) / 10.0)
+        return 0.0
+    return actual_value
+
+
+def _plan_context_summary(rows: list[tuple[Any, ...]], *, ablation_mode: str = "normal") -> dict[str, Any]:
     actions: Counter[str] = Counter()
     macro_scores: list[float] = []
     industry_scores: list[float] = []
@@ -112,8 +146,7 @@ def _plan_context_summary(rows: list[tuple[Any, ...]]) -> dict[str, Any]:
             pass
         transmission = signal.get("transmission_summary") if isinstance(signal.get("transmission_summary"), dict) else {}
         transmission_bias[str(transmission.get("transmission_bias") or "unknown")] += 1
-        if isinstance(transmission.get("transmission_confidence_adjustment"), (int, float)):
-            adjustments.append(float(transmission["transmission_confidence_adjustment"]))
+        adjustments.append(_ablation_adjustment(transmission, mode=ablation_mode))
         action_reasons[str(evidence.get("action_reason") or evidence.get("decision_reason") or "unknown")] += 1
     total = len(rows)
     return {
@@ -123,6 +156,7 @@ def _plan_context_summary(rows: list[tuple[Any, ...]]) -> dict[str, Any]:
         "industry_alignment_non_neutral_percent": round(100.0 * sum(abs(value - 50.0) > 1.0 for value in industry_scores) / len(industry_scores), 2) if industry_scores else None,
         "transmission_bias": dict(transmission_bias.most_common()),
         "action_reasons": dict(action_reasons.most_common(10)),
+        "ablation_mode": ablation_mode,
         "transmission_adjustment_avg": round(mean(adjustments), 3) if adjustments else None,
         "transmission_adjustment_non_zero_percent": round(100.0 * sum(abs(value) > 0.001 for value in adjustments) / len(adjustments), 2) if adjustments else None,
     }
@@ -133,6 +167,12 @@ def main() -> None:
     parser.add_argument("--database-url", default=settings.database_url)
     parser.add_argument("--plan-limit", type=int, default=10000)
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    parser.add_argument(
+        "--ablation-mode",
+        choices=["normal", "forced_neutral", "quality_only", "adverse_only", "mapped_exposure"],
+        default="normal",
+        help="Summarize plan transmission impact under a context ablation mode.",
+    )
     args = parser.parse_args()
 
     engine = create_engine(args.database_url)
@@ -152,7 +192,7 @@ def main() -> None:
     payload = {
         "macro": _snapshot_summary(macro_rows, scope="macro"),
         "industry": _snapshot_summary(industry_rows, scope="industry"),
-        "plans": _plan_context_summary(plan_rows),
+        "plans": _plan_context_summary(plan_rows, ablation_mode=args.ablation_mode),
     }
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

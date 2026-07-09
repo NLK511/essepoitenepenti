@@ -1,158 +1,148 @@
 # Context scoring remediation plan
 
-**Status:** partially implemented
+**Status:** implemented through mapped-exposure rollout guardrails
 
-Implemented so far:
+Implementation tracker for macro/industry context scoring. The durable behavior contract is `specs/context-scoring-spec.md`; this file tracks completed work, remaining work, and rollout order.
+
+## Current state
+
+Implemented:
 - shared `ContextEvidenceScorer` for macro and industry event-derived support scoring;
-- shared `ContextSnapshotSchemaAdapter` for canonical and legacy score keys;
-- macro resolver compatibility for legacy `context_score`/`context_label` rows;
-- canonical `support_score`, `support_label`, `directional_confidence_percent`, `score_components`, `score_reasons`, and `score_version=event_v1` on new macro/industry snapshots without writing duplicate legacy score keys;
+- shared `ContextSnapshotSchemaAdapter` for canonical and old score keys;
+- macro resolver compatibility for old `context_score`/`context_label` rows;
+- canonical `support_score`, `support_label`, `directional_confidence_percent`, `score_components`, `score_reasons`, and `score_version=event_v1` on new macro/industry snapshots;
+- no duplicate legacy score keys on new rows;
 - read-only `scripts/report_context_scoring_impact.py` impact report;
-- unit/integration tests for resolver compatibility and primary-news-derived macro/industry support.
+- tests for resolver compatibility and primary-news-derived macro/industry support.
 
-Still pending: exposure-mapped ticker-specific context scoring, shortlist context participation, UI updates, and replay ablation/promotion evidence.
+Implemented in this remediation pass:
+- ticker-specific `ContextExposureMapper` output backed by the ticker exposure ontology;
+- clean separation between raw support (`macro_support_score`, `industry_support_score`, `raw_support_score`) and mapped exposure alignment (`macro_exposure_alignment_percent`, `industry_exposure_alignment_percent`, `alignment_percent`);
+- mapped exposure routed into deep-analysis transmission summaries and ticker signal snapshots without widening positive confidence caps;
+- read-model neutral reasons for missing, degraded, unmapped, mixed, and true-neutral context;
+- impact report ablation modes for `normal`, `forced_neutral`, `quality_only`, `adverse_only`, and `mapped_exposure`.
 
-This plan remediates macro and industry context scoring so Aurelio uses shared, point-in-time, evidence-derived behavior instead of mostly neutral social-derived labels. It covers context production, common components, downstream application, measurement, and rollout.
+Still pending before promotion:
+- replay results proving mapped context improves or preserves performance;
+- any wider positive context boost beyond the current conservative cap.
 
-## Problem statement
+## Why this remediation exists
 
-Macro and industry context contain useful evidence fields, but historical snapshots and the previous scoring path made the downstream directional score weak or neutral most of the time.
+Original issues:
+- refresh payload `score`/`label` came mostly from social sentiment;
+- primary news extraction created events, quality, summaries, and saliency but did not consistently recompute directional support;
+- macro and industry used different score keys, which caused macro resolver fallback to neutral in some rows;
+- context semantics were scattered across sentiment, exposure, transmission, setup family, confidence adjustment, and quality gating;
+- shortlisting had no explicit context path.
 
-Original issues found before remediation:
-- macro and industry refresh payloads initialized `score`/`label` mostly from social sentiment;
-- later primary news extraction created events, quality, summaries, and saliency but did not consistently recompute directional support from those events;
-- industry wrote `support_score`/`support_label`, while macro wrote `context_score`/`context_label`; the macro resolver read `support_score`/`support_label`, creating likely neutral fallback;
-- missing/degraded context correctly avoided false confidence, but the same path suppressed many potentially useful primary-news signals;
-- context was applied in several places with mixed semantics: sentiment score, exposure score, transmission quality, context quality gate, setup family, and confidence adjustment;
-- shortlisting did not explicitly use context.
+Goal: keep context score production shared, auditable, point-in-time safe, and measurable before increasing context influence.
 
-Current remediation has fixed shared event-derived score production and resolver compatibility for new snapshots. Remaining work is to make ticker-specific exposure mapping, shortlist participation, and downstream confidence usage fully measured and clean.
+## Design principles
 
-Goal: keep macro and industry context score production shared, auditable, point-in-time safe, and outcome-measurable before increasing its influence.
-
-## Guiding principles
-
-1. **Evidence first** — scores must be derived from extracted events/drivers and source quality, not social sentiment alone.
-2. **Shared semantics** — macro and industry use the same scoring primitives and quality gates unless intentionally different.
+1. **Evidence first** — score from extracted events/drivers, not social sentiment alone.
+2. **Shared semantics** — macro and industry use the same scoring primitives unless a difference is explicit.
 3. **Neutral is honest** — missing, stale, unmapped, degraded, contradictory, or generic evidence should stay neutral or cautionary.
-4. **Direction is contextual** — context may be positive for one exposure and negative for another; global context direction alone is not enough.
+4. **Direction is contextual** — global context may be positive for one exposure and negative for another.
 5. **Bounded influence** — context cannot dominate technical setup, calibration, broker policy, or risk gates.
-6. **Replay safe** — context scoring and consumption must use only snapshots available at or before `as_of`.
-7. **Measured promotion** — positive boosts remain conservative until ablation/replay proves lift.
+6. **Replay safe** — use only snapshots available at or before `as_of`.
+7. **Measured promotion** — positive boosts stay conservative until ablation/replay proves lift.
 
-## Target architecture
+## Shared components
 
-Introduce common context components used by both macro and industry.
+### Implemented: `ContextEvidenceScorer`
 
-### 1. `ContextEvidenceScorer`
-
-Shared service that converts extracted events/drivers into a normalized context score.
+Converts extracted events/drivers into a normalized context score.
 
 Inputs:
 - active events/drivers;
-- previous events for lifecycle state;
-- primary news items and supporting social items;
+- primary news and supporting social counts;
 - source priority counts;
-- coverage quality;
+- context quality assessment;
 - contradiction count;
-- summary status;
-- quality assessment;
-- context scope: `macro` or `industry`;
-- optional exposure target: industry/ticker/sector/tags.
+- scope: `macro` or `industry`;
+- legacy score/label for diagnostics.
 
 Outputs:
-- `support_score`: signed `-1.0` to `+1.0`;
+- signed `support_score` from `-1.0` to `+1.0`;
 - `support_label`: `POSITIVE`, `NEGATIVE`, `MIXED`, or `NEUTRAL`;
 - `directional_confidence_percent`;
 - `saliency_score`;
-- `evidence_state`: `usable`, `degraded`, `thin`, `missing`;
-- `coverage_state`: `news`, `social`, `news+social`, `missing`;
-- `context_quality_status`: `usable`, `degraded`, `blocked`;
-- `score_components` with transparent sub-scores;
-- `score_reasons` and governed reason details.
+- `evidence_state` and `coverage_state`;
+- transparent `score_components` and `score_reasons`.
 
-Initial scoring model:
+Scoring model:
 
 ```text
 raw_direction = weighted average of event directional signs
-saliency = prominence of matched salient events and evidence volume
-source_quality = trade/official/major/source-priority weighted factor
-freshness = lifecycle and timestamp factor
-confidence = source_quality * saliency * evidence_quality * non_contradiction_factor
-support_score = raw_direction * saliency * confidence * quality_factor
+saliency = prominence of matched salient events and breadth
+source_quality = official/trade/major/social weighted factor
+confidence = source_quality * coverage * quality * non_contradiction_factor
+support_score = raw_direction * saliency * confidence
 ```
 
 Rules:
-- no active events => neutral score;
-- contradictory positive and negative events => `MIXED`, low or zero support score;
-- social-only evidence can inform but cannot create high confidence;
-- source quality and context quality cap the score;
-- degraded evidence cannot create positive boost downstream, but can warn or reduce confidence if adverse and concrete;
-- all score components must be persisted.
+- no active events => neutral;
+- contradictory evidence => mixed or penalized;
+- social-only evidence is capped;
+- degraded/blocked evidence is capped;
+- score components are persisted.
 
-### 2. `ContextDirectionalClassifier`
+### Implemented: `ContextSnapshotSchemaAdapter`
 
-Shared classifier that assigns direction to each event/driver.
+Canonical reader for old and new snapshot rows.
+
+Rules:
+- read `support_score`, fallback to old `context_score`;
+- read `support_label`, fallback to old `context_label`;
+- new rows write canonical `support_*` fields only;
+- downstream services consume canonical resolved payloads.
+
+### Partially implemented: directional classification
+
+Current scorer uses existing event extraction fields:
+- `evidence_direction`;
+- `market_interpretation`;
+- `state_transition`;
+- `saliency_weight`;
+- `source_priority`.
+
+Pending hardening:
+- extract a dedicated `ContextDirectionalClassifier` only if rules outgrow the compact scorer helper;
+- add category-specific tests for inflation, yields, oil, guidance, demand, and mixed contradictory events.
+
+### Implemented: `ContextExposureMapper`
+
+Implemented before widening context influence.
 
 Inputs:
-- event definition metadata;
-- event extraction direction hints;
-- lifecycle state: new/escalating/easing/fading/persistent;
-- market interpretation if available;
-- category-specific polarity rules.
-
-Outputs per event:
-- `direction`: `positive`, `negative`, `mixed`, or `neutral`;
-- `direction_confidence`;
-- `direction_reasons`.
-
-Important nuance:
-- Some events are not globally positive/negative. Example: higher oil is positive for energy but negative for airlines/consumer. Such events should be classified as directional by exposure tags, not global market sentiment.
-
-### 3. `ContextExposureMapper`
-
-Shared mapper that converts global/industry context into ticker- or industry-specific impact.
-
-Inputs:
-- context events/drivers with beneficiary/loser tags and transmission channels;
-- taxonomy industry profile;
+- context events/drivers with beneficiary/loser tags and channels;
+- ticker taxonomy profile;
 - ticker exposure ontology;
-- sector and relationship graph;
+- sector/relationship graph;
 - candidate direction and horizon.
 
 Outputs:
-- `exposure_bias`: `tailwind`, `headwind`, `mixed`, `neutral`, `unknown`;
+- `exposure_bias`: `tailwind`, `headwind`, `mixed`, `neutral`, or `unknown`;
 - `alignment_percent`;
 - `context_strength_percent`;
 - `context_event_relevance_percent`;
+- raw support fields and percent-style mapped alignment fields;
 - matched exposure paths and relationship edges;
 - conflict flags;
-- expected transmission window.
+- expected transmission window;
+- neutral/missing/degraded reason.
 
-This component should feed downstream transmission analysis and shortlist context scoring.
+This mapper feeds transmission analysis and ticker signal snapshots. Context-aware shortlist expansion remains gated by replay evidence.
 
-### 4. `ContextSnapshotSchemaAdapter`
+## Canonical payload
 
-Compatibility adapter for old and new snapshot keys.
-
-Rules:
-- read `support_score` or fallback to old `context_score`;
-- read `support_label` or fallback to old `context_label`;
-- new rows write canonical `support_*` fields only;
-- expose a canonical resolved object to downstream services.
-
-This fixes the macro resolver mismatch while preserving old rows without duplicating legacy keys in new snapshots.
-
-## Target payload contract
-
-Macro and industry snapshots should both expose:
+New macro and industry snapshots expose:
 
 ```json
 {
   "support_score": 0.42,
   "support_label": "POSITIVE",
   "directional_confidence_percent": 64.0,
-  "saliency_score": 0.58,
   "evidence_state": "usable",
   "coverage_state": "news",
   "context_quality_status": "usable",
@@ -161,288 +151,184 @@ Macro and industry snapshots should both expose:
     "event_direction": 0.7,
     "event_saliency": 0.58,
     "source_quality": 0.75,
-    "freshness": 0.9,
-    "contradiction_penalty": 0.0,
-    "quality_factor": 0.82
+    "coverage_factor": 0.9,
+    "quality_factor": 0.82,
+    "contradiction_penalty": 0.0
   },
-  "score_reasons": ["primary_news_event_direction", "major_source_support"]
+  "score_reasons": ["event_directional_evidence"],
+  "score_version": "event_v1"
 }
 ```
 
-Legacy `context_score`/`context_label` are read-only compatibility keys. New snapshots should write canonical `support_score`/`support_label` only.
+Old `context_score`/`context_label` rows are read-only compatibility data.
 
-## Pipeline application redesign
+## Pipeline application policy
 
 ### Shortlisting
 
-Current: no direct macro/industry effect.
+Current behavior: no explicit context effect.
 
-Target:
+Target behavior:
 - context can participate only as bounded triage after cheap scan;
-- macro/industry support should use `ContextExposureMapper`, not raw global score;
-- missing/degraded context is neutral;
-- positive context boost requires usable context, mapped exposure, alignment with candidate direction, and no severe contradiction;
+- use mapped exposure, not raw global score;
+- missing/degraded/unmapped context is neutral;
+- positive boost requires usable mapped context aligned with candidate direction;
 - weak technical candidates cannot be rescued by context alone.
 
-This follows `specs/macro-context-shortlist-spec.md` and should later generalize to `context-shortlist-spec` if industry is added.
+See `specs/macro-context-shortlist-spec.md` and `macro-context-shortlist-implementation-plan.md`.
 
 ### Deep analysis and signal building
 
-Current problem: `macro_exposure_score` and `industry_alignment_score` often map neutral `0.0` to `50.0`, obscuring whether context is genuinely neutral or unavailable.
+Current improvement: raw support fields and score components are available.
 
-Target:
-- carry both `score_percent` and `evidence_state`;
-- distinguish `neutral_because_no_effect` from `neutral_because_missing/degraded`;
-- build `macro_exposure_score`/`industry_alignment_score` from exposure mapping, not raw support alone;
-- preserve raw support score separately.
+Pending cleanup:
+- distinguish true neutral from missing/degraded neutral;
+- carry signed raw support separately from percent-style exposure alignment;
+- build `macro_exposure_score` and `industry_alignment_score` from mapped exposure once `ContextExposureMapper` exists.
 
-Suggested fields:
-- `macro_support_score`, `industry_support_score` signed `-1..1`;
+Suggested future fields:
+- `macro_support_score`, `industry_support_score`;
 - `macro_exposure_alignment_percent`, `industry_exposure_alignment_percent`;
 - `macro_evidence_state`, `industry_evidence_state`;
 - `macro_neutral_reason`, `industry_neutral_reason`.
 
-### Transmission
+### Transmission and confidence
 
-Current: transmission already has quality gates and conservative positive boosts. New snapshots now provide healthier event-derived support scores, but transmission still needs ticker-specific exposure mapping before context influence should be widened.
+Current transmission already has quality gates and conservative positive boosts.
 
-Target:
-- make transmission consume `ContextExposureMapper` output;
-- use context strength/relevance from mapped exposures;
-- keep positive boost capped at `+2` until validation;
-- keep negative/contradiction penalties stronger than positive boosts;
-- severe direct conflicts can still block actionability;
-- context quality conflicts should be explainable by scope: macro, industry, or both.
+Policy:
+- positive mapped context boost remains capped, currently max `+2`, until replay validation;
+- adverse/contradictory context may penalize more strongly or block;
+- missing/degraded context cannot positive-boost;
+- avoid double-counting the same evidence as news sentiment, context support, and transmission boost.
 
-### Confidence
+Concept separation:
+1. **context evidence quality** — can cap/degrade confidence;
+2. **context directional support** — small directional contribution;
+3. **context transmission fit** — setup family, risks, action blockers.
 
-Current: context appears in multiple confidence paths and may be double-counted as sentiment + context + transmission.
+### Setup family and plan framing
 
-Target:
-- separate three concepts:
-  1. **context evidence quality** — can cap or degrade confidence;
-  2. **context directional support** — small directional contribution;
-  3. **context transmission fit** — determines setup family, risks, and action blockers.
-- avoid adding the same event through news sentiment, context support, and market intelligence as three independent boosts;
-- positive context contribution should be small and gated;
-- adverse/contradictory context may reduce confidence or block.
-
-Recommended initial confidence policy:
-- raw deep-analysis confidence remains mostly technical/ticker-specific;
-- mapped usable context tailwind: max `+2` through transmission only;
-- mapped usable headwind: up to `-6` and possible action block;
-- degraded/missing context: no positive support, optional data-quality warning/cap;
-- contradictory context: no positive support, penalty/block depending severity.
-
-### Setup family
-
-Target:
-- `macro_beneficiary_loser` requires explicit mapped macro exposure and usable/non-stale context;
-- industry context may support `catalyst_follow_through` only if concrete industry event exists;
-- generic neutral context must not create a context-family label.
-
-### Plan generation
-
-Target:
-- plan geometry may use context family/bias only when mapped context is usable;
-- headwind stop/take-profit adjustments remain downstream plan-generation knobs;
-- context should not change entry/stop/take-profit if evidence is missing/degraded except through caution warnings or no-action.
-
-### Outcome/evaluation
-
-Add slices:
-- `macro_support_label`;
-- `industry_support_label`;
-- `macro_evidence_state`;
-- `industry_evidence_state`;
-- `macro_exposure_bias`;
-- `industry_exposure_bias`;
-- `context_neutral_reason`;
-- `context_score_source_version`.
+- `macro_beneficiary_loser` requires explicit usable mapped macro exposure.
+- Industry context may support catalyst families only with concrete industry events.
+- Generic neutral context must not create context-family labels.
+- Plan geometry should use context family/bias only when mapped context is usable.
 
 ## Implementation phases
 
-### Phase 1 — Fix resolver and add compatibility tests — implemented
+### Phase 1 — Resolver compatibility — implemented
 
-Implemented:
-1. Macro resolver tests cover canonical and legacy score keys.
-2. `ContextSnapshotResolver` uses canonical adapter logic.
-3. Industry resolver uses the same adapter path.
-4. Resolved payloads expose score-source diagnostics.
+- Macro resolver reads canonical and old keys.
+- Industry resolver uses the same adapter path.
+- Resolved payloads expose score-source diagnostics.
 
-Impact: macro numeric score is no longer accidentally neutralized when historical rows contain `context_score`/`context_label`.
+### Phase 2 — Shared scoring utilities — implemented
 
-### Phase 2 — Extract common schema adapter and quality/evidence helpers — implemented
+- Added `context_scoring.py`.
+- Moved shared evidence/coverage state behavior into `ContextEvidenceScorer`.
+- Normalized macro/industry source breakdowns around canonical `support_*` fields.
 
-Implemented:
-1. Added `context_scoring.py`.
-2. Moved shared evidence/coverage state helpers into `ContextEvidenceScorer`.
-3. Normalized macro and industry source breakdowns around canonical `support_*` fields.
-4. Added tests for usable primary-news evidence and resolver compatibility. Additional edge tests for social-only/degraded/contradictory cases remain useful hardening work.
+### Phase 3 — Event-derived support — implemented, hardening pending
 
-### Phase 3 — Shared event directional scoring — partially implemented
+- Macro and industry now derive support from extracted event direction, source priority, saliency, coverage, quality, and contradictions.
+- Additional edge tests for social-only, degraded, blocked, and contradictory cases are still useful.
 
-Implemented:
-1. `ContextEvidenceScorer` uses existing event extraction direction fields, market interpretation, lifecycle state, source priority, and saliency.
-2. Macro and industry now share this event-derived support computation.
+### Phase 4 — Impact report — partially implemented
 
-Pending hardening:
-1. Split a dedicated `ContextDirectionalClassifier` only if the scoring rules grow beyond the current compact helper.
-2. Add more category-specific tests for inflation, yields, oil, guidance, demand, and mixed contradictory events.
+Implemented report:
 
-### Phase 4 — Shared support score computation — implemented
+```bash
+.venv/bin/python scripts/report_context_scoring_impact.py --json
+```
 
-Implemented:
-1. Added `ContextEvidenceScorer`.
-2. `MacroContextService.create_from_refresh_payload` uses it.
-3. `IndustryContextService.create_from_refresh_payload` uses it.
-4. Both persist `support_score`, `support_label`, `directional_confidence_percent`, `score_components`, `score_reasons`, and `score_version=event_v1`.
-5. New rows do not write duplicate legacy score keys; legacy compatibility is in readers only.
-6. Tests prove macro and industry can derive non-neutral support from primary news even when refresh payload/social labels are neutral.
+Report covers:
+- snapshot coverage and score distributions;
+- label, evidence, quality, and score-version distributions;
+- neutral reasons;
+- plan context neutrality;
+- transmission adjustment and action-reason summaries.
 
-### Phase 5 — Exposure mapping for downstream use
-
-1. Add/extend `ContextExposureMapper` using ticker exposure ontology.
-2. Map macro/industry events to ticker-specific tailwind/headwind/mixed.
-3. Feed mapper output into ticker deep analysis and signal builder.
-4. Preserve raw context support separately from mapped exposure alignment.
-5. Add tests for direct exposure, inverse exposure, unmapped exposure, and mixed exposure.
-
-### Phase 6 — Downstream application cleanup
-
-1. Audit all uses of:
-   - `macro_context_score`;
-   - `industry_context_score`;
-   - `macro_exposure_score`;
-   - `industry_alignment_score`;
-   - `context_strength_percent`;
-   - `transmission_confidence_adjustment`.
-2. Ensure each use consumes the intended semantic field.
-3. Prevent double counting in confidence calculation.
-4. Add plan payload diagnostics showing:
-   - raw support;
-   - mapped exposure;
-   - quality/evidence state;
-   - final confidence adjustment.
-
-### Phase 7 — Measurement and ablation reports — partially implemented
-
-Implemented: `scripts/report_context_scoring_impact.py` provides read-only coverage, score-distribution, neutral-reason, and plan-impact summaries.
-
-Report sections:
-- macro/industry snapshot coverage and score distribution;
-- neutral reason breakdown;
-- score source version distribution;
-- plan impact summary;
-- action-block summary;
-- outcomes by context slice;
-- examples where context changed confidence/action;
-- suspicious cases: strong events but neutral score, usable quality but zero support, support without mapped exposure.
-
-Pending ablation modes:
+Implemented ablation modes:
 - normal context;
 - context forced neutral;
 - context quality-only;
 - context adverse-only;
-- context full mapped exposure.
+- full mapped exposure.
 
-Compare:
-- shortlist recall;
-- deep-analysis budget;
-- actionable count;
-- no-action reasons;
-- confidence distribution;
-- win rate / EV / benchmark follow-through.
+### Phase 5 — Exposure mapping — implemented
 
-### Phase 8 — Replay validation before stronger influence
+- Added `ContextExposureMapper` using ticker exposure ontology.
+- Preserved raw support separately from mapped exposure alignment.
+- Fed mapped context into ticker deep analysis, signal builder, and transmission summaries.
+- Tested direct, inverse, unmapped, and mixed exposures.
+
+### Phase 6 — Downstream cleanup — implemented for read models and signal payloads
+
+Audit and normalize usage of:
+- `macro_context_score`;
+- `industry_context_score`;
+- `macro_exposure_score`;
+- `industry_alignment_score`;
+- `context_strength_percent`;
+- `transmission_confidence_adjustment`.
+
+Diagnostics now show raw support, mapped exposure, evidence state, quality state, neutral reason, and final confidence adjustment.
+
+### Phase 7 — Replay validation — pending
 
 Run point-in-time replay on representative windows.
 
 Promotion gates:
 - no future snapshot leakage;
 - improved or unchanged actionable win rate;
-- reduced missed-win rate among non-shortlisted samples if context shortlist is enabled;
-- no excessive actionability collapse from context penalties;
-- context-lane or context-supported plans show positive follow-through on sufficient sample.
+- reduced missed-win rate if context shortlist is enabled;
+- no excessive actionability collapse from penalties;
+- sufficient samples by context lane/bias.
 
 Until gates pass:
 - keep positive boosts small;
 - keep context primarily diagnostic and defensive.
 
-### Phase 9 — UI/read-model updates
+### Phase 8 — UI/read-model cleanup — implemented for read models
 
 Operator surfaces should distinguish:
 - no context available;
-- context neutral because no salient directional event;
-- context mixed/contradictory;
-- context usable and directionally supportive/adverse;
+- true neutral/no salient directional event;
+- mixed/contradictory context;
+- usable supportive/adverse context;
 - mapped ticker exposure exists/does not exist.
 
-Avoid showing a plain neutral `50` without explaining whether it is true neutral or missing/degraded fallback.
+Avoid showing a plain neutral `50` without evidence/coverage reason.
 
-## Test matrix
+## Tests to keep expanding
 
-Required unit tests:
+Already covered:
 - macro legacy key adapter;
-- industry canonical key adapter;
-- shared evidence states;
-- event directional classifier;
-- support score bounds;
-- contradiction handling;
-- quality caps;
+- event-derived non-neutral macro support from primary news;
+- event-derived non-neutral industry support from primary news;
+- downstream proposal/deep-analysis context quality compatibility.
+
+Add next:
 - social-only cap;
-- no active events => neutral;
-- usable directional news => non-zero score;
-- same evidence produces same common score behavior for macro and industry.
-
-Required integration tests:
-- macro context snapshot persists canonical support fields;
-- industry context snapshot persists canonical support fields;
-- resolver returns canonical fields for old and new rows;
-- ticker analysis receives raw support and mapped exposure fields;
-- transmission uses mapped context, not raw neutral fallback;
-- plan signal breakdown exposes context score components;
+- degraded/blocked quality caps;
+- contradiction handling;
+- no-active-events neutral behavior;
+- same evidence shape produces consistent macro/industry common scoring;
+- mapped exposure direct/inverse/unmapped/mixed cases;
 - replay uses stored snapshots only.
-
-Required regression tests:
-- missing/degraded context cannot positive-boost confidence;
-- context cannot make weak technical setup actionable by itself;
-- severe context contradiction can still block;
-- disabled/neutral context preserves existing behavior.
 
 ## Data migration/backfill policy
 
-Do not rewrite old context rows initially.
+Do not rewrite old context rows by default.
 
-Instead:
+Policy:
 1. resolver adapter supports old rows;
 2. new rows write canonical fields;
-3. impact report separates `score_version=legacy` vs `score_version=event_v1`;
-4. optional offline reconstruction can backfill only for replay research, clearly marked as reconstructed.
+3. impact report separates `score_version=legacy` and `score_version=event_v1`;
+4. optional offline reconstruction may backfill replay research rows only when clearly marked as reconstructed.
 
-## Rollout policy
+## Next recommended PR
 
-1. Ship resolver bug fix first.
-2. Ship common scorer behind `context_scoring_version=event_v1`.
-3. Run side-by-side scoring in diagnostics without changing confidence/action for at least one replay batch.
-4. Compare legacy vs event-v1 reports.
-5. Enable defensive penalties first if evidence supports them.
-6. Enable small positive mapped boosts only after replay lift.
-7. Consider shortlist context participation only after scoring is proven healthy.
-
-## Open decisions
-
-- Should macro global support have any direct market-wide bullish/bearish meaning, or only exposure-mapped meaning?
-- Which event categories are globally directional versus exposure-specific?
-- How much should source quality cap social-only context?
-- What sample size is required before widening context boost caps?
-- Should industry context be refreshed only for watchlist industries instead of all taxonomy industries to improve evidence quality and reduce noise?
-
-## Next recommended code PR
-
-Next safe PR:
-1. add ticker-specific `ContextExposureMapper` output using the ticker exposure ontology;
-2. preserve raw support score separately from mapped exposure alignment;
-3. route mapped exposure into transmission summaries without widening positive confidence caps;
-4. add replay-safe ablation/report support for forced-neutral versus mapped-context behavior;
-5. update UI/read models so neutral `50` is not shown without its evidence/coverage reason.
+1. Run replay validation using `scripts/report_context_scoring_impact.py --ablation-mode forced_neutral|quality_only|adverse_only|mapped_exposure` plus historical replay batches.
+2. Decide whether context-aware shortlist participation has enough evidence to graduate from diagnostic mode.
+3. If promoted, keep positive boosts capped and prefer adverse/quality guardrails first.

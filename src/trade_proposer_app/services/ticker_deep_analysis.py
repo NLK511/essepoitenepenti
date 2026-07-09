@@ -20,6 +20,7 @@ from trade_proposer_app.services.market_intelligence import MarketIntelligenceSe
 from trade_proposer_app.services.payload_utils import sanitize_for_json
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.services.context_exposure_mapper import ContextExposureMapper
 from trade_proposer_app.services.ticker_analysis_payloads import TickerAnalysisPayloadService
 from trade_proposer_app.services.ticker_exposure_ontology import TickerExposureOntologyService
 from trade_proposer_app.services.ticker_technical_features import TickerTechnicalFeatureService
@@ -46,6 +47,7 @@ class TickerDeepAnalysisService:
         self.market_intelligence_service = market_intelligence_service or MarketIntelligenceService()
         self.fundamental_snapshots = fundamental_snapshots
         self.exposure_ontology = TickerExposureOntologyService()
+        self.context_exposure_mapper = ContextExposureMapper(self.exposure_ontology)
         self.analysis_payloads = TickerAnalysisPayloadService(
             macro_context_score=self._macro_context_score,
             macro_context_label=self._macro_context_label,
@@ -617,21 +619,15 @@ class TickerDeepAnalysisService:
             macro_events=macro_events,
             industry_events=industry_events,
         )
-        ontology_context = self.exposure_ontology.assess_context(
-            str(profile.get("ticker") or context.get("ticker") or ""),
-            context,
+        exposure_mapping = self.context_exposure_mapper.map_context(
+            ticker=str(profile.get("ticker") or context.get("ticker") or ""),
+            context=context,
             direction=direction,
             taxonomy_profile=profile,
         )
-        alignment_percent = max(
-            0.0,
-            min(
-                100.0,
-                pre_ontology_alignment_percent
-                + float(ontology_context.get("alignment_adjustment_percent", 0.0) or 0.0),
-            ),
-        )
-        bias = self._context_bias(alignment_percent)
+        ontology_context = exposure_mapping.ontology_context
+        alignment_percent = exposure_mapping.alignment_percent
+        bias = exposure_mapping.exposure_bias if exposure_mapping.exposure_bias != "unknown" else self._context_bias(alignment_percent)
         transmission_tags = self._transmission_tags(
             macro_score=macro_score,
             industry_score=industry_score,
@@ -664,14 +660,23 @@ class TickerDeepAnalysisService:
             "macro_score": round(macro_score, 3),
             "industry_score": round(industry_score, 3),
             "ticker_score": round(ticker_score, 3),
+            "macro_support_score": exposure_mapping.macro_support_score,
+            "industry_support_score": exposure_mapping.industry_support_score,
+            "raw_support_score": exposure_mapping.raw_support_score,
+            "raw_support_percent": exposure_mapping.raw_support_percent,
+            "macro_exposure_alignment_percent": exposure_mapping.macro_exposure_alignment_percent,
+            "industry_exposure_alignment_percent": exposure_mapping.industry_exposure_alignment_percent,
+            "mapped_exposure": exposure_mapping.as_dict(),
             "base_alignment_percent": round(base_alignment_percent, 1),
             "pre_ontology_alignment_percent": round(pre_ontology_alignment_percent, 1),
             "alignment_percent": round(alignment_percent, 1),
             "ontology_context": ontology_context,
             "context_bias": bias,
+            "exposure_bias": exposure_mapping.exposure_bias,
+            "context_neutral_reason": exposure_mapping.neutral_reason,
             "catalyst_intensity_percent": round(catalyst_intensity, 1),
-            "context_strength_percent": round(max(0.0, min(100.0, (macro_event_strength * 45.0) + (industry_event_strength * 55.0))), 1),
-            "context_event_relevance_percent": round(max(0.0, min(100.0, (macro_event_strength * 100.0 + industry_event_strength * 100.0) / 2.0)), 1),
+            "context_strength_percent": exposure_mapping.context_strength_percent,
+            "context_event_relevance_percent": exposure_mapping.context_event_relevance_percent,
             "contradiction_count": contradiction_count,
             "transmission_tags": transmission_tags,
             "transmission_tag_details": self._transmission_tag_details(transmission_tags),
@@ -682,8 +687,9 @@ class TickerDeepAnalysisService:
             "industry_exposure_channel_details": self._channel_details(industry_exposure_channels),
             "ticker_exposure_channels": ticker_exposure_channels,
             "ticker_exposure_channel_details": self._channel_details(ticker_exposure_channels),
-            "ticker_relationship_edges": profile.get("relationship_edges", []) if isinstance(profile.get("relationship_edges"), list) else [],
+            "ticker_relationship_edges": exposure_mapping.relationship_edges or (profile.get("relationship_edges", []) if isinstance(profile.get("relationship_edges"), list) else []),
             "matched_ticker_relationships": matched_ticker_relationships,
+            "matched_exposure_paths": exposure_mapping.matched_exposure_paths,
             "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events),
             "expected_transmission_window_detail": self.taxonomy_service.get_transmission_window_definition(
                 TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events)
