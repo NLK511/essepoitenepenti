@@ -1,6 +1,6 @@
 # Macro context shortlist implementation plan
 
-**Status:** planned
+**Status:** completed and archived implementation plan
 
 Implementation tracker for `specs/macro-context-shortlist-spec.md`. The spec is the behavior contract; this file keeps only build order, integration seams, and rollout checks.
 
@@ -193,14 +193,18 @@ Promotion evidence must show:
 
 ## Done checklist
 
-- [ ] Scorer tests.
-- [ ] `MacroShortlistSupport` model.
-- [ ] Macro shortlist scoring service.
-- [ ] Shortlist config and payload fields.
-- [ ] Macro-adjusted ranking and/or macro lane.
-- [ ] Orchestration wiring with point-in-time snapshots.
-- [ ] Signal/decision-sample diagnostics.
-- [ ] Taxonomy labels for lane/reasons.
-- [ ] Replay-safety tests.
-- [ ] UI/read-model fields.
-- [ ] Replay comparison before positive boost is enabled in production.
+- [x] Scorer tests.
+- [x] `MacroShortlistSupport` model.
+- [x] Macro shortlist scoring service.
+- [x] Shortlist config and payload fields.
+- [x] Macro-adjusted ranking and macro lane.
+- [x] Orchestration wiring with point-in-time snapshots.
+- [x] Signal/decision-sample diagnostics through shortlist decision payloads.
+- [x] Taxonomy labels for lane/reasons.
+- [x] Replay-safety tests through resolver-only/as-of scorer tests.
+- [x] UI/read-model fields through existing shortlist diagnostics surfaces.
+- [x] Replay comparison tooling remains available; boost/lane widening stays blocked by `docs/specs/macro-context-shortlist-spec.md` until measured evidence supports it.
+
+## Archived follow-up
+
+The implementation is complete at conservative bounds. Future changes should be driven by replay/benchmark evidence and updated first in `docs/specs/macro-context-shortlist-spec.md`.

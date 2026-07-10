@@ -19,7 +19,7 @@ The active proposal path is watchlist-oriented and coordinated by `WatchlistOrch
 For each run:
 1. resolve watchlist/manual ticker scope
 2. run cheap scan across candidates
-3. select shortlist with explicit rules
+3. select shortlist with explicit technical, catalyst, and bounded macro-context rules
 4. run `TickerDeepAnalysisService` for shortlisted names only
 5. fetch OHLC data through live-first hybrid logic with retry/fallback; replay remains point-in-time consistent
 6. compute technical/context features
@@ -28,7 +28,7 @@ For each run:
 9. persist signals, decision samples, plans when plan framing ran, run summaries, and artifacts
 10. emit explicit `no_action` plans only after shortlist/deep-analysis/policy gates; non-shortlisted names remain signal+decision-sample audit records, not full plans
 
-Context currently affects downstream deep-analysis transmission through mapped ticker exposure diagnostics. Upstream macro-context shortlist participation remains planned/gated: technical cheap-scan evidence stays primary, and macro context must not independently create a shortlist candidate with weak technical evidence.
+Context affects shortlist triage and downstream deep-analysis transmission through mapped ticker exposure diagnostics. Technical cheap-scan evidence remains primary, and macro context cannot independently create a shortlist candidate with weak technical evidence.
 
 `ProposalService` remains a lower-level helper for compatibility and shared feature/history/news/context work, not the main run executor.
 
@@ -48,7 +48,7 @@ Flow: scan → shortlist → deep analysis → calibration-aware confidence/poli
 
 - **Signal gating tuning:** upstream shortlist/threshold control
 - **Plan-generation tuning:** downstream trade framing and actionable precision. Default scheduled/API tuning uses point-in-time replay; stored-plan rescore is retained only for manual diagnostics/regression.
-- **Historical replay:** point-in-time batch/slice replay, coverage, replay-generated plans, and replay outcomes used by replay tuning (`specs/historical-playback-tuning-spec.md`, `historical-playback-tuning-plan.md`).
+- **Historical replay:** point-in-time batch/slice replay, coverage, replay-generated plans, and replay outcomes used by replay tuning (`specs/historical-playback-tuning-spec.md`).
 - **Recommendation quality, calibration, baselines, evidence concentration, walk-forward:** trust and promotion review
 
 Use signal gating when selection is too strict/loose, replay-based plan-generation tuning when trade framing is weak, and quality/walk-forward reports before trusting changes.

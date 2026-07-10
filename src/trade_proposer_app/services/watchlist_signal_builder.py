@@ -162,6 +162,8 @@ class WatchlistSignalBuilder:
             "shortlist_eligible": bool(shortlist_decision.get("eligible")) if isinstance(shortlist_decision, dict) and shortlist_decision.get("eligible") is not None else shortlisted,
             "selection_lane": shortlist_decision.get("selection_lane") if isinstance(shortlist_decision, dict) else None,
             "selection_lane_label": shortlist_decision.get("selection_lane_label") if isinstance(shortlist_decision, dict) else None,
+            "context_adjusted_attention": shortlist_decision.get("context_adjusted_attention") if isinstance(shortlist_decision, dict) else candidate.attention_score,
+            "macro_shortlist": shortlist_decision.get("macro_shortlist") if isinstance(shortlist_decision, dict) else None,
             "cheap_scan_confidence_percent": candidate.confidence_percent,
             "cheap_scan_directional_score": candidate.cheap_scan_signal.directional_score if candidate.cheap_scan_signal is not None else None,
             "cheap_scan_component_scores": self._cheap_scan_component_scores(candidate),

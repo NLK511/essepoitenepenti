@@ -1,8 +1,8 @@
 # UI Attention Audit and Remediation Plan — 2026-05-30
 
-**Status:** active plan
+**Status:** archived audit record
 
-This audit judges the UI by one question: does this screen help an operator decide whether the app is performing well enough to trust, improve, or stop it?
+This archived audit judged the UI by one question: does this screen help an operator decide whether the app is performing well enough to trust, improve, or stop it?
 
 The answer today is: not cleanly enough. The app has valuable evidence, but it spreads that evidence across too many pages with overlapping summaries, diagnostics, and run artifacts. This makes the operator spend attention on navigation instead of edge validation, data quality, broker risk, and plan review.
 

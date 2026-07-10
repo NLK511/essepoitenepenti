@@ -4,5 +4,13 @@
   "below_confidence_threshold": {"label": "below confidence threshold"},
   "below_attention_threshold": {"label": "below attention threshold"},
   "outside_shortlist_limit": {"label": "outside shortlist limit"},
-  "below_catalyst_lane_threshold": {"label": "below catalyst lane threshold"}
+  "below_catalyst_lane_threshold": {"label": "below catalyst lane threshold"},
+  "macro_tailwind_boost": {"label": "macro tailwind boost"},
+  "macro_headwind_penalty": {"label": "macro headwind penalty"},
+  "macro_context_missing": {"label": "macro context missing"},
+  "macro_context_degraded": {"label": "macro context degraded"},
+  "macro_exposure_not_mapped": {"label": "macro exposure not mapped"},
+  "macro_context_neutral": {"label": "macro context neutral"},
+  "macro_shortlist_disabled": {"label": "macro shortlist disabled"},
+  "below_macro_lane_floor": {"label": "below macro lane floor"}
 }

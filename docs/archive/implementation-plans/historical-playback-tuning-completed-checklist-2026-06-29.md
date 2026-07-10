@@ -2,7 +2,7 @@
 
 **Status:** archived implementation history
 
-This archived checklist records the completed implementation history for historical playback tuning. The active operating plan now lives at `../../historical-playback-tuning-plan.md`; the durable contract lives at `../../specs/historical-playback-tuning-spec.md`.
+This archived checklist records the completed implementation history for historical playback tuning. The operating-plan record is archived at `historical-playback-tuning-operating-plan.md`; the durable contract lives at `../../specs/historical-playback-tuning-spec.md`.
 
 ## Goal
 

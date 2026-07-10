@@ -17,10 +17,22 @@ class ShortlistCandidate(Protocol):
     cheap_scan_signal: object | None
 
 
+class MacroShortlistSupportLike(Protocol):
+    score: float
+    adjustment: float
+    bias: str
+    quality_status: str
+    reasons: tuple[str, ...]
+
+    def as_dict(self) -> dict[str, object]: ...
+
+
 @dataclass(frozen=True)
 class ShortlistSelectionConfig:
     confidence_threshold: float
     signal_gating_tuning_config: dict[str, float]
+    macro_shortlist_lane_fraction: float = 0.15
+    macro_shortlist_lane_max: int = 3
 
 
 class ShortlistSelectionService:
@@ -30,7 +42,14 @@ class ShortlistSelectionService:
         self.config = config
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def evaluate(self, watchlist: Watchlist, candidates: list[ShortlistCandidate]) -> dict[str, object]:
+    def evaluate(
+        self,
+        watchlist: Watchlist,
+        candidates: list[ShortlistCandidate],
+        *,
+        macro_support_by_ticker: dict[str, MacroShortlistSupportLike] | None = None,
+    ) -> dict[str, object]:
+        macro_support_by_ticker = macro_support_by_ticker or {}
         if not candidates:
             return {
                 "shortlist": [],
@@ -51,7 +70,7 @@ class ShortlistSelectionService:
         minimum_attention = self.minimum_shortlist_attention(watchlist.default_horizon, ticker_count)
         core_limit = ticker_count
         catalyst_threshold = self.minimum_catalyst_proxy_score(watchlist.default_horizon, ticker_count)
-        ranked = self._rank_candidates(candidates, watchlist)
+        ranked = self._rank_candidates(candidates, watchlist, macro_support_by_ticker=macro_support_by_ticker)
         eligibility = self._eligibility_by_ticker(
             ranked,
             watchlist,
@@ -65,9 +84,11 @@ class ShortlistSelectionService:
             limit=limit,
             core_limit=core_limit,
             catalyst_lane_limit=ticker_count,
+            macro_lane_limit=self.macro_shortlist_lane_limit(ticker_count),
             minimum_confidence=minimum_confidence,
             minimum_attention=minimum_attention,
             catalyst_threshold=catalyst_threshold,
+            macro_support_by_ticker=macro_support_by_ticker,
         )
         decisions, rejection_counts = self._decision_payloads(
             ranked,
@@ -75,6 +96,8 @@ class ShortlistSelectionService:
             selection_lane=selection_lane,
             eligibility=eligibility,
             catalyst_threshold=catalyst_threshold,
+            macro_support_by_ticker=macro_support_by_ticker,
+            watchlist=watchlist,
         )
         return {
             "shortlist": shortlist,
@@ -85,6 +108,7 @@ class ShortlistSelectionService:
                 "limit": limit,
                 "core_limit": core_limit,
                 "catalyst_lane_limit": ticker_count,
+                "macro_lane_limit": self.macro_shortlist_lane_limit(ticker_count),
                 "minimum_confidence_percent": minimum_confidence,
                 "minimum_attention_score": minimum_attention,
                 "minimum_catalyst_proxy_score": catalyst_threshold,
@@ -94,13 +118,19 @@ class ShortlistSelectionService:
         }
 
     @staticmethod
-    def _rank_candidates(candidates: list[ShortlistCandidate], watchlist: Watchlist) -> list[ShortlistCandidate]:
+    def _rank_candidates(
+        candidates: list[ShortlistCandidate],
+        watchlist: Watchlist,
+        *,
+        macro_support_by_ticker: dict[str, MacroShortlistSupportLike] | None = None,
+    ) -> list[ShortlistCandidate]:
+        macro_support_by_ticker = macro_support_by_ticker or {}
         return sorted(
             candidates,
             key=lambda item: (
                 0 if item.error_message else 1,
                 0 if (item.direction == "short" and not watchlist.allow_shorts) else 1,
-                item.attention_score,
+                ShortlistSelectionService._context_adjusted_attention(item, macro_support_by_ticker),
                 item.confidence_percent,
             ),
             reverse=True,
@@ -142,9 +172,11 @@ class ShortlistSelectionService:
         limit: int,
         core_limit: int,
         catalyst_lane_limit: int,
+        macro_lane_limit: int,
         minimum_confidence: float,
         minimum_attention: float,
         catalyst_threshold: float,
+        macro_support_by_ticker: dict[str, MacroShortlistSupportLike],
     ) -> tuple[list[str], dict[str, str]]:
         shortlist: list[str] = []
         selection_lane: dict[str, str] = {}
@@ -172,6 +204,27 @@ class ShortlistSelectionService:
                 shortlist.append(candidate.ticker)
                 selection_lane[candidate.ticker] = "catalyst"
                 catalyst_lane_limit -= 1
+        macro_ranked = sorted(
+            [candidate for candidate in ranked if candidate.ticker not in shortlist],
+            key=lambda candidate: macro_support_by_ticker.get(candidate.ticker).adjustment if macro_support_by_ticker.get(candidate.ticker) is not None else 0.0,
+            reverse=True,
+        )
+        for candidate in macro_ranked:
+            if macro_lane_limit <= 0 or len(shortlist) >= limit:
+                break
+            eligible, reasons = eligibility[candidate.ticker]
+            if self._macro_lane_eligible(
+                candidate,
+                watchlist,
+                support=macro_support_by_ticker.get(candidate.ticker),
+                eligible=eligible,
+                reasons=reasons,
+                minimum_confidence=minimum_confidence,
+                minimum_attention=minimum_attention,
+            ):
+                shortlist.append(candidate.ticker)
+                selection_lane[candidate.ticker] = "macro_context"
+                macro_lane_limit -= 1
         return shortlist, selection_lane
 
     def _catalyst_lane_eligible(
@@ -197,6 +250,32 @@ class ShortlistSelectionService:
             and (eligible or "below_confidence_threshold" in reasons or "below_attention_threshold" in reasons)
         )
 
+    def _macro_lane_eligible(
+        self,
+        candidate: ShortlistCandidate,
+        watchlist: Watchlist,
+        *,
+        support: MacroShortlistSupportLike | None,
+        eligible: bool,
+        reasons: list[str],
+        minimum_confidence: float,
+        minimum_attention: float,
+    ) -> bool:
+        if support is None:
+            return False
+        relaxed_confidence_floor = max(40.0, minimum_confidence - 8.0)
+        relaxed_attention_floor = max(50.0, minimum_attention - 5.0)
+        return (
+            not candidate.error_message
+            and not (candidate.direction == "short" and not watchlist.allow_shorts)
+            and candidate.confidence_percent >= relaxed_confidence_floor
+            and candidate.attention_score >= relaxed_attention_floor
+            and float(support.adjustment) > 0.0
+            and support.bias == "tailwind"
+            and support.quality_status in {"usable", "ok"}
+            and (eligible or "below_confidence_threshold" in reasons or "below_attention_threshold" in reasons)
+        )
+
     def _decision_payloads(
         self,
         ranked: list[ShortlistCandidate],
@@ -205,6 +284,8 @@ class ShortlistSelectionService:
         selection_lane: dict[str, str],
         eligibility: dict[str, tuple[bool, list[str]]],
         catalyst_threshold: float,
+        macro_support_by_ticker: dict[str, MacroShortlistSupportLike],
+        watchlist: Watchlist,
     ) -> tuple[list[dict[str, object]], dict[str, int]]:
         decisions: list[dict[str, object]] = []
         rejection_counts: dict[str, int] = {}
@@ -213,8 +294,22 @@ class ShortlistSelectionService:
             shortlisted = candidate.ticker in shortlist
             if eligible and not shortlisted:
                 reasons = [*reasons, "outside_shortlist_limit"]
+            support = macro_support_by_ticker.get(candidate.ticker)
             if not shortlisted and self.catalyst_shortlist_score(candidate) < catalyst_threshold:
                 reasons = [*reasons, "below_catalyst_lane_threshold"]
+            if support is not None:
+                if support.adjustment != 0.0:
+                    reasons = [*reasons, *list(getattr(support, "reasons", ()) or ())]
+                if (
+                    support.adjustment > 0.0
+                    and support.bias == "tailwind"
+                    and support.quality_status in {"usable", "ok"}
+                    and not shortlisted
+                    and not candidate.error_message
+                    and not (candidate.direction == "short" and not watchlist.allow_shorts)
+                    and (candidate.confidence_percent < max(40.0, self.config.confidence_threshold - 20.0) or candidate.attention_score < 50.0)
+                ):
+                    reasons = [*reasons, "below_macro_lane_floor"]
             deduped_reasons = list(dict.fromkeys(reasons))
             for reason in deduped_reasons:
                 rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
@@ -226,6 +321,8 @@ class ShortlistSelectionService:
                     "direction": candidate.direction,
                     "confidence_percent": candidate.confidence_percent,
                     "attention_score": candidate.attention_score,
+                    "context_adjusted_attention": self._context_adjusted_attention(candidate, macro_support_by_ticker),
+                    "macro_shortlist": support.as_dict() if support is not None else None,
                     "catalyst_proxy_score": self.catalyst_shortlist_score(candidate),
                     "shortlisted": shortlisted,
                     "shortlist_rank": shortlist.index(candidate.ticker) + 1 if shortlisted else None,
@@ -240,8 +337,23 @@ class ShortlistSelectionService:
         return decisions, rejection_counts
 
     @staticmethod
+    def _context_adjusted_attention(
+        candidate: ShortlistCandidate,
+        macro_support_by_ticker: dict[str, MacroShortlistSupportLike] | None = None,
+    ) -> float:
+        support = (macro_support_by_ticker or {}).get(candidate.ticker)
+        adjustment = float(support.adjustment) if support is not None else 0.0
+        return round(max(0.0, min(100.0, float(candidate.attention_score) + adjustment)), 2)
+
+    @staticmethod
     def shortlist_limit(_horizon: StrategyHorizon, ticker_count: int) -> int:
         return max(0, ticker_count)
+
+    def macro_shortlist_lane_limit(self, ticker_count: int) -> int:
+        if ticker_count <= 0:
+            return 0
+        fraction_limit = int(round(ticker_count * max(0.0, float(self.config.macro_shortlist_lane_fraction))))
+        return max(1, min(int(self.config.macro_shortlist_lane_max), fraction_limit or 1))
 
     def minimum_shortlist_confidence(self, horizon: StrategyHorizon, ticker_count: int) -> float:
         base = {

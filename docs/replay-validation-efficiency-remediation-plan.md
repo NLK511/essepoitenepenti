@@ -580,8 +580,8 @@ This protects the app from selecting candidates that look better only because th
 
 ### Tasks
 
-- [ ] Update `docs/tuning-workflow-ux-implementation-plan.md` to reference this remediation plan.
-- [ ] Update `docs/historical-playback-tuning-plan.md` if replay operating discipline changes.
+- [ ] Update `docs/specs/tuning-workflow-ux-spec.md` or a new focused UI plan if replay validation depth changes the workflow contract.
+- [ ] Update `docs/archive/implementation-plans/historical-playback-tuning-operating-plan.md` only if historical operating context needs an archived note.
 - [ ] Update operator docs once UI ships.
 - [ ] Run full test suite.
 - [ ] Run a small cache-only smoke experiment:

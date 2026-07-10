@@ -24,6 +24,7 @@ from trade_proposer_app.domain.models import (
     TickerSignalSnapshot,
     Watchlist,
 )
+from trade_proposer_app.services.macro_shortlist_scoring import MacroShortlistSupport
 from trade_proposer_app.services.watchlist_execution import WatchlistExecutionService
 from trade_proposer_app.services.watchlist_orchestration import (
     WatchlistOrchestrationService,
@@ -34,6 +35,8 @@ from trade_proposer_app.services.watchlist_orchestration import (
 class WatchlistOrchestrationPolicyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.context_snapshots = Mock()
+        self.context_snapshots.get_latest_macro_context_snapshot.return_value = None
+        self.context_snapshots.get_latest_macro_context_snapshot_before.return_value = None
         self.recommendation_plans = Mock()
         self.cheap_scan_service = Mock()
         self.decision_samples = Mock()
@@ -82,6 +85,47 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
 
         result = self.service._evaluate_shortlist(watchlist, candidates)
         self.assertEqual(result["shortlist"], ["B", "C"])
+
+    def test_macro_context_lane_can_admit_borderline_candidate_and_records_diagnostics(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidates = [
+            _CheapScanCandidate("TECH", "long", 70.0, 80.0, [], ""),
+            _CheapScanCandidate("AMAT", "long", 42.0, 50.0, [], ""),
+        ]
+        self.service.macro_shortlist_scorer.score_many = Mock(return_value={
+            "TECH": MacroShortlistSupport(),
+            "AMAT": MacroShortlistSupport(
+                score=68.0,
+                adjustment=4.0,
+                bias="tailwind",
+                quality_status="usable",
+                reasons=("macro_tailwind_boost",),
+                snapshot_id=123,
+            ),
+        })
+
+        result = self.service._evaluate_shortlist(watchlist, candidates, as_of=None)
+        decisions = {item["ticker"]: item for item in result["decisions"]}
+
+        self.assertIn("AMAT", result["shortlist"])
+        self.assertEqual(decisions["AMAT"]["selection_lane"], "macro_context")
+        self.assertEqual(decisions["AMAT"]["macro_shortlist"]["snapshot_id"], 123)
+        self.assertEqual(decisions["AMAT"]["context_adjusted_attention"], 54.0)
+        self.assertIn("macro_tailwind_boost", decisions["AMAT"]["reasons"])
+
+    def test_macro_context_does_not_override_shorts_disabled_or_deep_floor_miss(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=False)
+        candidates = [
+            _CheapScanCandidate("SHORT", "short", 90.0, 90.0, [], ""),
+            _CheapScanCandidate("LOW", "long", 10.0, 10.0, [], ""),
+        ]
+        support = MacroShortlistSupport(score=90.0, adjustment=5.0, bias="tailwind", quality_status="usable", reasons=("macro_tailwind_boost",))
+        self.service.macro_shortlist_scorer.score_many = Mock(return_value={"SHORT": support, "LOW": support})
+
+        result = self.service._evaluate_shortlist(watchlist, candidates)
+
+        self.assertNotIn("SHORT", result["shortlist"])
+        self.assertNotIn("LOW", result["shortlist"])
 
     def test_shortlist_has_no_hard_cap_for_eligible_candidates(self) -> None:
         watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)

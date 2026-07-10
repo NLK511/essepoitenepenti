@@ -80,4 +80,6 @@ If a feature ships, move stable behavior to the canonical current-state doc and 
 - `architecture.md`
 - `production-readiness-plan.md`
 - `recommendation-quality-improvement-plan.md`
+- `specs/historical-playback-tuning-spec.md`
+- `archive/implementation-plans/historical-playback-tuning-operating-plan.md`
 - `archive/roadmap-history.md`

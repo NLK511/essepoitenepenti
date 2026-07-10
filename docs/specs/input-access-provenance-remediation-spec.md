@@ -1,6 +1,6 @@
 # Input Access and Provenance Remediation Spec
 
-**Status:** current behavior + active remediation
+**Status:** current behavior
 
 Last updated: 2026-06-29
 
@@ -166,4 +166,4 @@ Tests should cover:
 - `large-parameter-search-spec.md`
 - `news-provider-eligibility-spec.md`
 - `fundamental-analysis-snapshot-spec.md`
-- `../historical-playback-tuning-plan.md`
+- `../archive/implementation-plans/historical-playback-tuning-operating-plan.md`

@@ -164,7 +164,7 @@ Use as a launcher for advanced tools, not as a second performance workbench.
 Open tuning only when Quality & Edge points to a justified action:
 - Signal gating tuning = upstream recall/selection threshold work
 - Plan generation tuning = downstream plan construction/entry/risk/reward work; default mode is point-in-time replay, while stored-plan rescore is only a diagnostic/regression mode (`specs/plan-generation-tuning-spec.md`, `specs/historical-playback-tuning-spec.md`)
-- Historical replay = replay batch/slice coverage and replay-generated plan/outcome audit surface for replay tuning (`historical-playback-tuning-plan.md`)
+- Historical replay = replay batch/slice coverage and replay-generated plan/outcome audit surface for replay tuning (`specs/historical-playback-tuning-spec.md`)
 - Decision samples = sample-level review for discarded/borderline signals
 - Candidate signals = shortlist/pre-plan diagnostic artifact
 

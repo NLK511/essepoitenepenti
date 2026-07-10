@@ -1,8 +1,8 @@
 # UI Page Content Refactor Spec — 2026-05-30
 
-**Status:** active plan
+**Status:** archived implementation history
 
-This is Phase 0 of `ui-attention-audit-2026-05-30.md`.
+This archived record was Phase 0 of `ui-attention-audit-2026-05-30.md`.
 
 It audits clutter inside the pages before final navigation, merging, or deletion decisions. Page removal is intentionally deferred: the final page topology should be based on simplified pages, not their current cluttered form.
 

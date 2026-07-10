@@ -1,4 +1,5 @@
 {
   "technical": {"label": "technical"},
-  "catalyst": {"label": "catalyst"}
+  "catalyst": {"label": "catalyst"},
+  "macro_context": {"label": "macro context"}
 }

@@ -26,7 +26,7 @@ class WatchlistExecutionCoordinator(Protocol):
     def _load_calibration_summary(self) -> dict[str, object] | None: ...
     def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> CheapScanCandidate: ...
     def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> tuple[RunOutput | None, str | None]: ...
-    def _evaluate_shortlist(self, watchlist: Watchlist, candidates: list[CheapScanCandidate]) -> dict[str, object]: ...
+    def _evaluate_shortlist(self, watchlist: Watchlist, candidates: list[CheapScanCandidate], *, as_of: datetime | None = None) -> dict[str, object]: ...
     def _shortlist_decision_for_ticker(self, evaluation: dict[str, object], ticker: str) -> dict[str, object] | None: ...
     def _build_signal_snapshot(self, watchlist: Watchlist, candidate: CheapScanCandidate, **kwargs: Any) -> TickerSignalSnapshot: ...
     def _record_non_shortlisted_decision_sample(self, watchlist: Watchlist, candidate: CheapScanCandidate, **kwargs: Any) -> None: ...
@@ -62,7 +62,7 @@ class WatchlistExecutionService:
 
         calibration_summary = o._load_calibration_summary()
         candidates = self._run_cheap_scans(watchlist, normalized_tickers, as_of=as_of)
-        shortlist_evaluation = self._evaluate_shortlist(o, watchlist, candidates)
+        shortlist_evaluation = self._evaluate_shortlist(o, watchlist, candidates, as_of=as_of)
         shortlist = shortlist_evaluation["shortlist"]
         shortlist_map = {ticker: rank for rank, ticker in enumerate(shortlist, start=1)}
 
@@ -141,9 +141,9 @@ class WatchlistExecutionService:
         return candidates
 
     @staticmethod
-    def _evaluate_shortlist(o: WatchlistExecutionCoordinator, watchlist: Watchlist, candidates: list[CheapScanCandidate]) -> dict[str, object]:
+    def _evaluate_shortlist(o: WatchlistExecutionCoordinator, watchlist: Watchlist, candidates: list[CheapScanCandidate], *, as_of: datetime | None) -> dict[str, object]:
         logger.info("  Evaluating shortlist...")
-        shortlist_evaluation = o._evaluate_shortlist(watchlist, candidates)
+        shortlist_evaluation = o._evaluate_shortlist(watchlist, candidates, as_of=as_of)
         logger.info(f"  Shortlist selected: {len(shortlist_evaluation['shortlist'])} tickers")
         return shortlist_evaluation
 

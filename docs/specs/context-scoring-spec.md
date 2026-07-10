@@ -17,6 +17,8 @@ Macro and industry context now share common scoring primitives:
 - Macro resolver no longer loses score/label when old rows contain only `context_score`/`context_label`.
 - Missing or eventless context remains neutral with explicit reasons.
 - Degraded, blocked, contradictory, or social-only context is capped and cannot create strong positive support.
+- `ContextExposureMapper` maps raw macro/industry support into ticker-specific exposure alignment using the ticker exposure ontology while preserving raw support separately from mapped alignment.
+- Deep-analysis transmission and ticker signal diagnostics expose raw support, mapped alignment, matched exposure paths, neutral reasons, and quality/evidence states.
 
 ## Required score semantics
 
@@ -87,7 +89,7 @@ The context impact report must be able to summarize:
 - plan exposure neutrality;
 - transmission adjustment and action-reason impact.
 
-Use replay ablation before increasing positive context influence.
+`scripts/report_context_scoring_impact.py` supports ablation modes `normal`, `forced_neutral`, `quality_only`, `adverse_only`, and `mapped_exposure`. Use replay ablation before increasing positive context influence.
 
 ## Test requirements
 
@@ -97,4 +99,6 @@ Tests must prove:
 - new industry context derives non-neutral support from directional primary news even when payload social label is neutral;
 - eventless context remains neutral;
 - degraded/missing context remains capped;
-- downstream proposal/deep-analysis tests continue to expose context quality fields.
+- downstream proposal/deep-analysis tests continue to expose context quality fields;
+- context exposure mapper tests cover direct, inverse, unmapped, and mixed exposures;
+- macro-shortlist tests prove mapped context remains resolver-only and point-in-time safe.

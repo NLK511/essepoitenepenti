@@ -54,7 +54,7 @@ Not fully autonomous yet:
 - all target diversity/concentration/stability protections as sole unattended promotion policy
 - unattended auto-promotion beyond replay Tier A / execution-required fail-closed gates plus current validation/baseline/tie checks
 
-Replay-based tuning is specified in `historical-playback-tuning-spec.md` and planned in `../historical-playback-tuning-plan.md`. Stored compact eligible records are a manual diagnostic/regression layer, not proof that full point-in-time playback has been run.
+Replay-based tuning is specified in `historical-playback-tuning-spec.md`; the completed operating-plan record is archived at `../archive/implementation-plans/historical-playback-tuning-operating-plan.md`. Stored compact eligible records are a manual diagnostic/regression layer, not proof that full point-in-time playback has been run.
 
 `auto_enabled` and `auto_promote_enabled` are stored readiness/configuration flags. They are not proof that unattended autonomous promotion is fully active.
 

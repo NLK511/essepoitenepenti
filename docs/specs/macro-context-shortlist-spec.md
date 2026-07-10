@@ -18,22 +18,23 @@ Goal: let macro context influence shortlist prioritization in a bounded, auditab
 
 Implemented current behavior:
 - cheap scan uses price/volume-derived technical, volatility, breakout, momentum, trend, and liquidity signals;
-- `ShortlistSelectionService` ranks candidates by cheap-scan attention and confidence, plus error/shorts eligibility;
-- catalyst lane uses cheap-scan attention, breakout, and directional strength only;
-- macro and industry context snapshots are used after shortlist during deep analysis/signal/plan framing;
-- plan framing may block or degrade trades for context quality, headwind, or transmission contradiction;
+- `MacroShortlistScorer` resolves the latest macro snapshot at the run `as_of`, maps it through ticker exposure ontology, and returns `MacroShortlistSupport` with raw score, bounded adjustment, bias, quality, source snapshot id, tags, matched exposure paths, and governed reasons;
+- `ShortlistSelectionService` ranks candidates by error/shorts eligibility, `context_adjusted_attention = attention_score + macro_shortlist_adjustment`, and confidence;
+- the technical lane remains primary and the catalyst lane remains available;
+- a capped `macro_context` lane can admit only technically adequate borderline names with usable mapped tailwind support;
+- shorts-disabled, cheap-scan errors, and minimum technical floors override macro support;
+- missing/degraded/unmapped macro context stays neutral and visible in `macro_shortlist` diagnostics;
+- shortlist decision payloads, ticker signal diagnostics, and decision samples carry compact macro-shortlist fields;
 - non-shortlisted tickers persist signal and decision-sample evidence, not full recommendation plans.
 
-Therefore macro context currently has only indirect shortlist influence through price action already reflected in bars.
+## Governed behavior
 
-## Target behavior
+Macro context participates in upstream shortlist selection as a **bounded prioritization signal**, not as a hard requirement and not as a replacement for technical evidence.
 
-Macro context should participate in upstream shortlist selection as a **bounded prioritization signal**, not as a hard requirement and not as a replacement for technical evidence.
-
-Target behavior:
+Required behavior:
 1. preserve the existing technical shortlist lane as the primary lane;
 2. add a macro-aware shortlist adjustment to ranking and decision diagnostics;
-3. optionally add a small macro-context lane for technically adequate names with strong, fresh macro support;
+3. keep the small macro-context lane for technically adequate names with strong, fresh macro support;
 4. never allow macro context alone to shortlist a ticker with weak technical/attention evidence;
 5. never give positive macro support when macro context is missing, stale, degraded, blocked, contradictory, or social-only weak evidence;
 6. record every macro adjustment and rejection/support reason for operator review and signal-gating tuning.
@@ -204,4 +205,4 @@ Integration tests must prove:
 
 ## Decision rule
 
-Macro context should improve shortlist prioritization only when it is fresh, usable, mapped to the ticker, and bounded. When evidence is weak, missing, stale, or contradictory, the correct behavior is neutral diagnostics or cautious deprioritization, not narrative-driven selection.
+Macro context may improve shortlist prioritization only when it is fresh, usable, mapped to the ticker, and bounded. When evidence is weak, missing, stale, or contradictory, the correct behavior is neutral diagnostics or cautious deprioritization, not narrative-driven selection. Boost bounds and lane caps must not widen until replay/benchmark evidence shows improvement.

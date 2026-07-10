@@ -1,10 +1,10 @@
 # Tuning workflow UX implementation plan
 
-**Status:** in progress
+**Status:** completed and archived v1 implementation plan
 
 Canonical spec: `specs/tuning-workflow-ux-spec.md`.
 
-This plan breaks the work into small shippable phases. The goal is to give Aurelio one operator workflow from candidate discovery to candidate promotion, without removing the existing advanced replay and plan-generation tuning pages.
+This archived plan records the v1 tuning workflow implementation. The durable UX contract and remaining target behavior now live in `docs/specs/tuning-workflow-ux-spec.md`; active quality/promotion discipline lives in `docs/recommendation-quality-improvement-plan.md`.
 
 ## Goals
 
@@ -44,7 +44,7 @@ Implementation choice: v1 now persists first-class `tuning_experiments` rows. Ex
 ### Acceptance criteria
 
 - [x] Implementation choice is documented in this plan.
-- [ ] No code changes begin until the persistence/read-model approach is clear.
+- [x] Persistence/read-model approach was clarified before the v1 implementation proceeded.
 
 ## Phase 1 — Backend experiment model/read model
 
@@ -460,10 +460,14 @@ Mitigation:
 - copy rules from spec
 - promotion blocked unless replay/holdout gates pass
 
-## Open implementation decisions
+## Archived decisions
 
-- [ ] Persist `tuning_experiments` now, or infer v1 from replay batch metadata?
-- [ ] Store candidate pool in a new table, or attach to experiment config JSON initially?
-- [ ] Should candidate discovery jobs be separate job type(s), or reuse `plan_generation_tuning` with workflow metadata?
-- [ ] Should watchlist pruning proposals be persisted or generated on demand?
-- [ ] Which default objective should be selected for the first production workflow: Tier A win rate, 5d return, or balanced score?
+- [x] Persisted `tuning_experiments` rows are used for v1.
+- [x] Candidate pool is attached to experiment metadata initially to avoid premature schema expansion.
+- [x] Candidate discovery/replay actions reuse existing tuning and replay mechanics with workflow metadata where possible.
+- [x] Watchlist pruning proposals are generated as readiness-audit payloads in v1.
+- [x] Default objective remains conservative/balanced and promotion-gated; exact objective tuning remains governed by `docs/specs/plan-generation-tuning-spec.md`.
+
+## Archived follow-up
+
+Unchecked phase details in this file are historical target notes, not the active tracker. Any remaining UI behavior should be specified in `docs/specs/tuning-workflow-ux-spec.md` or a new focused plan before implementation.

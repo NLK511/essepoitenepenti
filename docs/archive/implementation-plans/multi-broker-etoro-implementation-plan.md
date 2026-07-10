@@ -1,6 +1,8 @@
 # Multi-broker and eToro implementation plan
 
-**Status:** active implementation plan, phase 1 first batch implemented
+**Status:** archived implementation history
+
+This archived record captures the multi-broker/eToro implementation history. Current broker behavior and remaining production gates live in `../../specs/multi-broker-execution-risk-spec.md`, `../../specs/etoro-live-trading-integration-spec.md`, and `../../production-readiness-plan.md`.
 
 ## Implementation progress
 

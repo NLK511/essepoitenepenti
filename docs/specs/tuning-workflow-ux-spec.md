@@ -1,8 +1,8 @@
 # Tuning workflow UX spec
 
-**Status:** target behavior
+**Status:** current and target behavior
 
-This spec defines the operator UX for plan-generation tuning from candidate discovery through validation, promotion, and post-promotion monitoring.
+This spec defines the operator UX for plan-generation tuning from candidate discovery through validation, promotion, and post-promotion monitoring. The v1 workflow page and backend experiment lifecycle are implemented; deeper target behavior remains governed here rather than in a separate active implementation checklist.
 
 It complements:
 - `plan-generation-tuning-spec.md` for tuning semantics, ranking, parameter schema, and promotion rules

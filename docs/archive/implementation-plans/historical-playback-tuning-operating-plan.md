@@ -1,6 +1,6 @@
 # Historical playback tuning operating plan
 
-**Status:** active plan
+**Status:** archived operating record
 
 Historical playback tuning has moved from implementation checklist to operating discipline. The durable behavior contract lives in `specs/historical-playback-tuning-spec.md`; completed implementation history belongs in archive if more detail is needed.
 
@@ -29,7 +29,7 @@ Implemented baseline:
 - operator visibility for tuning mode, evidence tiers, skipped reasons, resolution source, and replay links
 - replay-based tuning as the default scheduled/auto tuning path; stored-plan rescore remains diagnostic/manual
 
-## Active operating work
+## Ongoing operating discipline
 
 ### 1. Evidence quality monitoring
 
@@ -64,7 +64,7 @@ Implemented baseline:
 
 ## Success criteria
 
-Historical playback tuning is healthy when:
+This is an ongoing operating discipline, not an incomplete implementation plan. Historical playback tuning is healthy when:
 
 - replay batches produce enough Tier A or explicitly accepted Tier A/B evidence for the question being tested
 - every tuning artifact states mode, outcome population, eligibility tier, and promotion readiness

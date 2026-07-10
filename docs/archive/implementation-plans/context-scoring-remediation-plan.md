@@ -1,6 +1,6 @@
 # Context scoring remediation plan
 
-**Status:** implemented through mapped-exposure rollout guardrails
+**Status:** completed and archived implementation plan
 
 Implementation tracker for macro/industry context scoring. The durable behavior contract is `specs/context-scoring-spec.md`; this file tracks completed work, remaining work, and rollout order.
 
@@ -22,9 +22,9 @@ Implemented in this remediation pass:
 - read-model neutral reasons for missing, degraded, unmapped, mixed, and true-neutral context;
 - impact report ablation modes for `normal`, `forced_neutral`, `quality_only`, `adverse_only`, and `mapped_exposure`.
 
-Still pending before promotion:
-- replay results proving mapped context improves or preserves performance;
-- any wider positive context boost beyond the current conservative cap.
+Completion note:
+- mapped context scoring, raw-vs-mapped diagnostics, neutral/degraded reasons, and ablation report modes are implemented;
+- promotion evidence and any wider positive boost are no longer tracked in this implementation plan; they remain governed by `docs/recommendation-quality-improvement-plan.md` and `docs/specs/context-scoring-spec.md`.
 
 ## Why this remediation exists
 
@@ -175,7 +175,7 @@ Target behavior:
 - positive boost requires usable mapped context aligned with candidate direction;
 - weak technical candidates cannot be rescued by context alone.
 
-See `specs/macro-context-shortlist-spec.md` and `macro-context-shortlist-implementation-plan.md`.
+See `../../specs/macro-context-shortlist-spec.md` and `macro-context-shortlist-implementation-plan.md`.
 
 ### Deep analysis and signal building
 
@@ -327,8 +327,6 @@ Policy:
 3. impact report separates `score_version=legacy` and `score_version=event_v1`;
 4. optional offline reconstruction may backfill replay research rows only when clearly marked as reconstructed.
 
-## Next recommended PR
+## Archived follow-up
 
-1. Run replay validation using `scripts/report_context_scoring_impact.py --ablation-mode forced_neutral|quality_only|adverse_only|mapped_exposure` plus historical replay batches.
-2. Decide whether context-aware shortlist participation has enough evidence to graduate from diagnostic mode.
-3. If promoted, keep positive boosts capped and prefer adverse/quality guardrails first.
+Replay validation and promotion decisions should now be handled through the active recommendation-quality backlog. The implementation artifact is complete; future work should be specified as behavior changes in the relevant specs before code changes.

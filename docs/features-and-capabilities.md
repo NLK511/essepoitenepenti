@@ -73,7 +73,7 @@ It is not yet a proven short-horizon prediction engine.
 - Historical ticker/company news requests prefer Finnhub when a time window is supplied; unsafe live-feed fallbacks are skipped instead of leaking future company articles into replay.
 - Run watchlist-backed proposal jobs through a staged flow:
   1. watchlist scan
-  2. shortlist selection
+  2. shortlist selection with technical, catalyst, and bounded macro-context lanes
   3. deep analysis for shortlisted names only
   4. persistence of signals for all scanned names, decision samples for audit/tuning, and plans only when downstream plan framing actually ran; cheap-scan-only rejected names stay as signal-plus-decision-sample evidence, while phantom-trade-eligible rejected plans are reserved for shortlisted names that reached real trade framing but still ended as `no_action` or `watchlist`
 - **Hybrid Market Data Fetching:** Cheap scan prefers local database bars (including 1m-to-daily resampling), retries transient remote failures, and still scores the ticker from local data when local history is sufficient. Deep analysis prefers fresh remote bars in live runs, retries transient remote failures, and falls back to persisted local bars before surfacing deep analysis as unavailable.

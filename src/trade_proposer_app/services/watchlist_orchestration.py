@@ -18,6 +18,8 @@ from trade_proposer_app.repositories.recommendation_decision_samples import (
     RecommendationDecisionSampleRepository,
 )
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
+from trade_proposer_app.services.macro_shortlist_scoring import MacroShortlistScorer
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     PARAMETER_BY_KEY,
@@ -85,6 +87,8 @@ class WatchlistOrchestrationService:
             ),
             taxonomy_service=self.taxonomy_service,
         )
+        self.context_snapshot_resolver = ContextSnapshotResolver(self.context_snapshots, taxonomy_service=self.taxonomy_service)
+        self.macro_shortlist_scorer = MacroShortlistScorer(self.context_snapshot_resolver, taxonomy_service=self.taxonomy_service)
         self.scan_runner = WatchlistScanRunnerService(self.cheap_scan_service, self.deep_analysis_service)
         self.execution_service = WatchlistExecutionService(self)
         self.plan_narrative = WatchlistPlanNarrativeService(action_reason_label=self._action_reason_label)
@@ -192,8 +196,9 @@ class WatchlistOrchestrationService:
         evaluation = self._evaluate_shortlist(watchlist, candidates)
         return list(evaluation["shortlist"])
 
-    def _evaluate_shortlist(self, watchlist: Watchlist, candidates: list[_CheapScanCandidate]) -> dict[str, object]:
-        return self.shortlist_selection.evaluate(watchlist, candidates)
+    def _evaluate_shortlist(self, watchlist: Watchlist, candidates: list[_CheapScanCandidate], *, as_of: datetime | None = None) -> dict[str, object]:
+        macro_support = self.macro_shortlist_scorer.score_many(candidates, as_of=as_of, horizon=watchlist.default_horizon)
+        return self.shortlist_selection.evaluate(watchlist, candidates, macro_support_by_ticker=macro_support)
 
     @staticmethod
     def _shortlist_decision_for_ticker(evaluation: dict[str, object], ticker: str) -> dict[str, object] | None:

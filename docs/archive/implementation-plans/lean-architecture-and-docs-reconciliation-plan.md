@@ -1,8 +1,8 @@
 # Lean architecture and docs reconciliation plan
 
-**Status:** active plan
+**Status:** archived implementation history
 
-This is the short active plan for keeping the architecture and docs lean after the May 2026 cleanup. Completed implementation history has been moved to `docs/archive/implementation-plans/`.
+This archived record captured the lean-architecture/docs reconciliation effort after the May 2026 cleanup. The active lightweight refactor backlog now lives in `../../codebase-simplification-plan.md`.
 
 ## Goal
 

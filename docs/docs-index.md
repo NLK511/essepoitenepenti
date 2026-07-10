@@ -40,11 +40,7 @@ These are the primary narrative source of truth for the product today:
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
 - `industry-context-improvement-plan.md` — industry-context evidence-quality and post-ontology role review
-- `historical-playback-tuning-plan.md` — point-in-time replay and replay-based tuning implementation tracker
-- `tuning-workflow-ux-implementation-plan.md` — candidate discovery-to-promotion workflow implementation plan
 - `replay-validation-efficiency-remediation-plan.md` — replay validation depth, frozen-input reuse, and local-only input remediation plan
-- `macro-context-shortlist-implementation-plan.md` — planned bounded macro-context participation in upstream shortlist selection
-- `context-scoring-remediation-plan.md` — active shared macro/industry context scoring remediation and downstream application review
 
 ## Specs directory
 
@@ -108,7 +104,7 @@ Start with:
 
 - `archive/README.md`
 - `archive/roadmap-history.md`
-- `archive/implementation-plans/` — completed implementation plans, cleanup plans, UI audits, and migration records
+- `archive/implementation-plans/` — completed implementation plans, operating records, cleanup plans, UI audits, and migration records
 - `archive/audits/` — dated audit and remediation records
 - `archive/redesign/` — historical redesign source docs whose stable content has been merged into current docs
 

@@ -1,8 +1,8 @@
 # Audit remediation and autonomy readiness plan
 
-**Status:** active plan
+**Status:** archived implementation history
 
-This is the umbrella plan for fully addressing the concerns raised in the 2026-05-10 project audit.
+This archived record captured the umbrella audit-remediation plan after the 2026-05-10 project audit. Current production/autonomy gates now live in `../../production-readiness-plan.md`, `../../recommendation-quality-improvement-plan.md`, and `../../specs/edge-validation-standard.md`.
 
 It covers safety, evidence, observability, docs coherence, migration confidence, and the last major simplification seams.
 
