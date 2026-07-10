@@ -31,12 +31,6 @@ class JobType(StrEnum):
         if isinstance(value, cls):
             return value
         normalized = str(value or "").strip()
-        legacy_aliases = {
-            "macro_context_refresh": cls.MACRO_CONTEXT_REFRESH,
-            "industry_context_refresh": cls.INDUSTRY_CONTEXT_REFRESH,
-        }
-        if normalized in legacy_aliases:
-            return legacy_aliases[normalized]
         return cls(normalized)
 
 

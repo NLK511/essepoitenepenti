@@ -2,7 +2,7 @@
 
 **Status:** archived implementation history
 
-This archived record captured the lean-architecture/docs reconciliation effort after the May 2026 cleanup. The active lightweight refactor backlog now lives in `../../codebase-simplification-plan.md`.
+This archived record captured the lean-architecture/docs reconciliation effort after the May 2026 cleanup. The durable simplification rules now live in `../../specs/codebase-simplification-spec.md`.
 
 ## Goal
 

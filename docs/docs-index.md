@@ -36,7 +36,6 @@ These are the primary narrative source of truth for the product today:
 
 - `production-readiness-plan.md` — production hardening, staging soak, external broker gates, and rollout ladder
 - `docker-deployment-implementation-plan.md` — optional single-host Docker Compose deployment checklist
-- `codebase-simplification-plan.md` — lightweight behavior-preserving refactor maintenance backlog
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
 - `replay-validation-efficiency-remediation-plan.md` — replay validation depth, frozen-input reuse, and local-only input remediation plan
@@ -91,6 +90,7 @@ Detailed behavior contracts live in `specs/`. They are current product truth or 
 ### UI/read models and observability
 
 - `specs/dashboard-aggregate-performance-spec.md`
+- `specs/codebase-simplification-spec.md`
 - `specs/observability-spec.md`
 - `specs/production-supervision-spec.md`
 - `specs/docker-deployment-spec.md`
