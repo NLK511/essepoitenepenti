@@ -51,7 +51,9 @@ It is not yet a proven short-horizon prediction engine.
 ### Shared context and ontology
 - Persist macro and industry context snapshots as the canonical shared-context artifacts.
 - Review macro and industry context from the Context pages and detail views.
-- Industry context now exposes explicit evidence states (`usable`, `degraded`, `missing`, `missing_snapshot`) and coverage states (`news`, `social`, `news+social`, `missing`) so neutral-looking fallback rows are not mistaken for decision-grade evidence.
+- Derive macro and industry support scores through shared event-based scoring (`support_score`, `support_label`, directional confidence, score components, and reasons) rather than social sentiment alone.
+- Map raw macro/industry support into ticker-specific exposure alignment through the ticker exposure ontology while keeping raw support, mapped alignment, and neutral/degraded reasons visible separately.
+- Expose explicit evidence states (`usable`, `degraded`, `thin`, `missing`, `missing_snapshot`) and coverage states (`news`, `social`, `news+social`, `missing`) so neutral-looking fallback rows are not mistaken for decision-grade evidence.
 - **Realistic Context Reconstruction:** Re-generate historical context snapshots from past news and social data. For time-windowed company/ticker news requests, the app now prefers Finnhub and rejects undated or future-dated articles so historical simulations do not silently mix in later company news.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
@@ -104,7 +106,7 @@ The main limits are still practical:
 - reliability still needs more hardening around worker/scheduler crash recovery and partial-persistence edge cases
 - observability has run correlation ids, worker heartbeats, health diagnostics, and first structured run events, but provider/broker lifecycle events and daemon-health presentation still need more polish
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the app remains single-user and the frontend stores the bearer token locally
-- context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
+- context extraction/scoring is stronger than before at capturing short-horizon state changes and now includes ticker-exposure mapping, but wider positive context influence still needs replay/ablation proof
 - ticker deep analysis still reuses some older proposal-engine internals
 - strict historical macro/topic news is still limited on the free-provider stack because Finnhub free access is company-news oriented rather than broad topic search; in those cases the app now prefers missing evidence over unsafe future leakage
 - calibration exists, but evidence remains limited

@@ -2,71 +2,57 @@
 
 **Status:** planned
 
-This plan implements `specs/macro-context-shortlist-spec.md`: macro context participates in upstream shortlist prioritization as bounded, auditable triage evidence while technical cheap-scan evidence remains primary.
+Implementation tracker for `specs/macro-context-shortlist-spec.md`. The spec is the behavior contract; this file keeps only build order, integration seams, and rollout checks.
 
-## Success criteria
+## Objective
 
-- Macro context can modestly boost or penalize shortlist priority only when point-in-time evidence is usable and mapped to the ticker.
-- Missing/degraded macro context is neutral and visible, not silently punitive.
-- Weak technical candidates cannot be shortlisted solely by macro context.
-- Every shortlist decision exposes raw technical scores, macro adjustment, lane, source snapshot, and reason details.
-- Historical replay uses only snapshots available at `as_of` and does not refresh remote context.
-- Tests cover scorer behavior, shortlist lane/caps, diagnostics, and replay safety.
+Add bounded macro-context participation to upstream shortlist selection without making macro context a standalone selector. Technical cheap-scan evidence remains primary.
 
-## Phase 0 — Confirm contracts and current seams
+Success means:
+- usable, mapped macro context can modestly boost or penalize shortlist priority;
+- missing/degraded/unmapped macro context is neutral and visible;
+- weak technical candidates cannot be shortlisted solely by macro;
+- shortlist decisions expose raw technical scores, macro adjustment, lane, source snapshot, and reasons;
+- replay uses only point-in-time stored context snapshots.
 
-1. Review active services:
-   - `ShortlistSelectionService`
-   - `WatchlistExecutionService`
-   - `WatchlistOrchestrationService`
-   - `WatchlistSignalBuilder`
-   - `WatchlistDecisionSamplesService`
-   - `ContextSnapshotResolver`
-   - `TickerTaxonomyService`
-2. Confirm where `as_of` flows through watchlist execution and replay.
-3. Confirm available macro snapshot fields and taxonomy exposure fields sufficient for first-pass mapping.
-4. Decide whether first release uses macro-only or macro+industry context for exposure mapping. Preferred first release: macro snapshot drives the bias; taxonomy/ticker profile explains exposure; industry is diagnostics only unless already available without extra fetch.
+## Build sequence
 
-Deliverable: short code notes in the PR description; no code behavior change.
+### Phase 0 — Contract/seam confirmation
 
-## Phase 1 — Unit-test the target behavior first
+Review and document PR notes for:
+- `ShortlistSelectionService`
+- `WatchlistExecutionService`
+- `WatchlistOrchestrationService`
+- `WatchlistSignalBuilder`
+- `WatchlistDecisionSamplesService`
+- `ContextSnapshotResolver`
+- `TickerTaxonomyService`
+- ticker exposure ontology support
 
-Add tests before implementation.
+Decide first-release scope:
+- preferred: macro snapshot drives bias; taxonomy/ontology explains ticker exposure;
+- industry context remains diagnostic until mapped exposure scoring is proven.
 
-### New scorer tests
+### Phase 1 — Tests first
 
-Create tests for a new service, tentatively `WatchlistMacroShortlistScorer`:
-- returns neutral support when no macro snapshot exists;
-- returns neutral support when snapshot quality is degraded/blocked/missing;
-- returns bounded positive adjustment for usable aligned macro exposure;
-- returns bounded negative adjustment for usable adverse exposure;
-- returns no positive support when ticker exposure cannot be mapped;
-- preserves snapshot id, quality status, reason keys, and active tags;
-- respects `as_of` by using resolver output only, not provider refresh.
+Add tests for:
+- neutral output when macro snapshot is missing, degraded, blocked, or unmapped;
+- bounded positive adjustment for usable aligned exposure;
+- bounded negative adjustment for usable adverse exposure;
+- no boost below technical floors;
+- macro lane cap and floors;
+- shorts-disabled rejection taking precedence;
+- replay/as-of path avoiding provider refresh;
+- decision payload carrying macro fields and `selection_lane=macro_context`.
 
-### Shortlist service tests
+Suggested homes:
+- focused scorer tests for the new macro shortlist scorer;
+- `tests/test_watchlist_orchestration_policy.py` or a new shortlist-selection test module;
+- decision-sample persistence tests for compact diagnostics.
 
-Extend `tests/test_watchlist_orchestration_policy.py` or add focused shortlist tests:
-- raw technical ranking remains unchanged when macro scoring is neutral/disabled;
-- context-adjusted attention changes rank only within bounded adjustment;
-- macro lane admits a borderline candidate above macro floors;
-- macro lane rejects candidates below technical floors;
-- macro lane cap is enforced;
-- shorts-disabled rejection beats macro support;
-- decision payload includes macro fields and `selection_lane=macro_context` when selected by that lane.
+### Phase 2 — Scorer and model
 
-### Persistence/decision-sample tests
-
-Add/extend tests to prove:
-- signal diagnostics include macro shortlist fields;
-- recommendation decision sample payload includes compact macro shortlist evidence;
-- non-shortlisted macro near misses remain decision samples, not plan rows.
-
-## Phase 2 — Add macro shortlist support model and scorer
-
-### New dataclass
-
-Add a compact immutable model, for example in `shortlist_selection.py` or a new file:
+Add a compact support model, preferably outside the cheap-scan candidate model to avoid broad churn:
 
 ```python
 @dataclass(frozen=True)
@@ -81,114 +67,74 @@ class MacroShortlistSupport:
     context_tags: tuple[str, ...] = ()
 ```
 
-### New service
+Add `macro_shortlist_scoring.py` with:
+- `ContextSnapshotResolver | None`
+- `TickerTaxonomyService`
+- ticker exposure ontology if needed
+- config for enable flag, max boost, max penalty, and saliency/confidence floors
 
-Add `src/trade_proposer_app/services/macro_shortlist_scoring.py` with:
-- constructor dependencies:
-  - `ContextSnapshotResolver | None`
-  - `TickerTaxonomyService`
-  - config for enable flag, max boost, max penalty, saliency/confidence floors
-- method:
-  - `score(ticker, direction, *, as_of, horizon) -> MacroShortlistSupport`
-
-Initial algorithm:
+Initial scorer algorithm:
 1. Resolve latest macro snapshot at or before `as_of`.
-2. If absent, return neutral with `macro_context_missing`.
-3. Derive quality/freshness from snapshot fields.
-4. If not usable, return neutral with `macro_context_degraded` or `macro_context_blocked`.
-5. Extract active macro tags/drivers/events and saliency/confidence.
-6. Map ticker exposure using taxonomy profile / exposure ontology.
-7. Determine directional support for candidate direction.
-8. Apply bounded adjustment:
-   - aligned/direct/high-confidence: up to `+5`
-   - adverse/direct/high-confidence: down to `-5`
-   - mixed/weak/unmapped: `0`
-9. Return support with governed reason details.
+2. Return neutral with explicit reason when absent/degraded/blocked/unmapped.
+3. Read canonical context scoring fields from the resolver.
+4. Map active macro events/tags to ticker exposure.
+5. Determine whether the candidate direction sees tailwind, headwind, mixed, or unknown context.
+6. Apply bounded adjustment: default `+5` max boost and `-5` max penalty.
+7. Return governed reason details.
 
-Keep first algorithm intentionally simple and deterministic. Do not add remote calls.
+No remote calls are allowed.
 
-## Phase 3 — Extend shortlist candidate and ranking
+### Phase 3 — Shortlist integration
 
-### Candidate shape
+Prefer passing `macro_support_by_ticker` into `ShortlistSelectionService.evaluate(...)` instead of mutating cheap-scan candidate shape.
 
-Extend `CheapScanCandidate` or attach sidecar support in shortlist evaluation:
-- `macro_shortlist_support: MacroShortlistSupport | None`
-- derived property/function for `context_adjusted_attention`.
+Config defaults:
+- disabled or diagnostics-only until replay validation passes;
+- `macro_shortlist_max_boost = 5.0`;
+- `macro_shortlist_max_penalty = 5.0`;
+- `macro_shortlist_lane_fraction = 0.15`;
+- `macro_shortlist_lane_max = 3`.
 
-Prefer avoiding broad model churn: pass a `macro_support_by_ticker` dictionary into `ShortlistSelectionService.evaluate(...)` if that keeps cheap-scan candidate clean.
-
-### Shortlist config
-
-Extend `ShortlistSelectionConfig` with conservative defaults:
-- `macro_shortlist_enabled: bool = False` initially, or true only after tests if product owner wants immediate target behavior;
-- `macro_shortlist_max_boost: float = 5.0`;
-- `macro_shortlist_max_penalty: float = 5.0`;
-- `macro_shortlist_lane_fraction: float = 0.15`;
-- `macro_shortlist_lane_max: int = 3`.
-
-Use active signal-gating settings only after metadata is added to the signal-gating parameter registry. Until then, keep constants/defaults.
-
-### Ranking
-
-Implement first target ranking:
+Ranking option for first implementation:
 - preserve error/shorts eligibility ordering;
-- rank by `attention_score + macro_adjustment`, then confidence;
-- include raw and adjusted values in decision payload.
+- use `attention_score + macro_adjustment`, then confidence;
+- store both raw and adjusted scores.
 
-If tests reveal too much churn, switch to raw ranking plus macro lane only.
+If rank churn is too high, keep raw ranking and use macro only as a lane admission rule.
 
-## Phase 4 — Add macro lane
+### Phase 4 — Macro lane
 
-Add lane after core technical lane and catalyst lane decision ordering is reviewed.
+Add after core technical/catalyst handling.
 
-Recommended order:
-1. core technical lane fills all eligible technical names as today;
-2. catalyst lane preserves event/technical breakout candidates;
-3. macro lane admits additional borderline macro-supported names only if below final limit/cap.
-
-Because current shortlist limit effectively equals ticker count, enforce macro lane by lane-specific floors and diagnostics rather than pretending there is a scarce fixed limit. If future configs reintroduce strict limits, macro lane cap becomes binding.
-
-Macro lane eligibility:
+Eligibility:
 - no cheap-scan error;
 - shorts allowed if short;
 - confidence >= `max(40, minimum_confidence - 8)`;
 - attention >= `max(50, minimum_attention - 5)`;
-- macro adjustment > 0 and bias `tailwind`;
+- macro adjustment > `0`;
+- bias `tailwind`;
 - quality `usable`;
 - not already shortlisted.
 
-Decision reasons:
+Reasons/lane labels to govern:
 - `macro_tailwind_boost`
 - `macro_headwind_penalty`
 - `macro_context_missing`
 - `macro_context_degraded`
 - `macro_exposure_not_mapped`
 - `below_macro_lane_floor`
+- `macro_context` selection lane
 
-Add taxonomy definitions for new reason and lane labels if governed labels live in taxonomy config/code.
+### Phase 5 — Orchestration and persistence
 
-## Phase 5 — Wire orchestration and replay-safe context resolution
+Wire once per run:
+1. Resolve macro context with the same `as_of` used for cheap scan/deep analysis.
+2. Build support for every cheap-scan candidate before shortlist evaluation.
+3. Pass support into shortlist selection.
+4. Store run artifact summary: snapshot id, boosted/penalized/neutral/missing counts, macro-lane count, context warnings.
+5. Persist compact diagnostics in shortlist decision payloads, signal snapshots, and decision samples.
 
-In watchlist execution/orchestration:
-1. Resolve macro context once per run with the same `as_of` used for cheap scan/deep analysis.
-2. Build macro support for every cheap-scan candidate before shortlist evaluation.
-3. Pass support into shortlist evaluation.
-4. Ensure replay mode uses local snapshot resolver only and never calls context refresh.
-5. Add run artifact summary:
-   - macro snapshot id;
-   - number boosted/penalized/neutral/missing;
-   - macro-lane count;
-   - warnings if snapshot missing/degraded.
-
-## Phase 6 — Persist diagnostics
-
-Add compact fields to:
-- shortlist decision payload;
-- `TickerSignalSnapshot.diagnostics`;
-- `TickerSignalSnapshot.source_breakdown` if useful for operator detail;
-- `RecommendationDecisionSample.decision_context` / compact context payload.
-
-Suggested payload:
+Suggested compact payload:
 
 ```json
 {
@@ -205,11 +151,11 @@ Suggested payload:
 }
 ```
 
-Keep plan payload additions minimal because plans already include richer transmission summaries after deep analysis.
+Do not duplicate richer downstream transmission payloads in plans.
 
-## Phase 7 — UI/read-model updates
+### Phase 6 — UI, tuning, validation
 
-Update API serializers/read models used by shortlist and decision-sample pages to expose:
+UI/read models should expose:
 - raw attention/confidence;
 - context-adjusted attention;
 - macro adjustment;
@@ -217,61 +163,44 @@ Update API serializers/read models used by shortlist and decision-sample pages t
 - lane label;
 - macro reasons.
 
-UI changes:
-- add a small “Macro shortlist” row/badge in signal and decision sample details;
-- show neutral/missing/degraded explicitly;
-- avoid green positive styling when evidence is degraded or missing;
-- add filters later only if operator review shows need.
-
-## Phase 8 — Tuning and validation
-
-Add signal-gating analysis slices:
+Signal-gating analysis slices:
 - `selection_lane=macro_context`;
 - `macro_shortlist_bias`;
 - `macro_shortlist_quality_status`;
 - `macro_shortlist_adjustment_bucket`.
 
-Run historical replay comparing:
+Replay comparison:
 - baseline technical shortlist;
 - macro-aware shortlist with default bounds;
 - macro lane disabled vs enabled.
 
-Promotion evidence must include:
-- missed-win reduction for non-shortlisted samples;
+Promotion evidence must show:
+- reduced missed-win rate among non-shortlisted samples;
 - no material degradation in actionable plan win rate;
 - no excessive deep-analysis budget increase;
-- sample-size sufficiency by lane and bias.
-
-## Phase 9 — Documentation and cleanup
-
-After implementation:
-- update `docs/recommendation-methodology.md` from target wording to implemented wording;
-- update `docs/features-and-capabilities.md` if UI/operator capability changes;
-- update `docs/raw-details-reference.md` with new payload fields;
-- archive this implementation plan when complete.
+- sufficient samples by lane and bias.
 
 ## Risks and mitigations
 
 | Risk | Mitigation |
 | --- | --- |
-| Macro narratives add noise | Keep boost small, require usable evidence, benchmark before widening |
-| Missed technical winners due to macro penalty | Bound penalty and keep degraded/missing neutral |
-| Replay leakage | Use snapshot resolver only; tests fail if providers are called |
-| Taxonomy exposure gaps | Neutral with `macro_exposure_not_mapped`, do not infer unsupported read-through |
+| Macro narratives add noise | Keep boost small, require usable mapped evidence, benchmark before widening |
+| Missed technical winners due to penalty | Bound penalty and keep degraded/missing neutral |
+| Replay leakage | Resolver-only scoring; tests fail provider calls |
+| Taxonomy gaps | Neutral with `macro_exposure_not_mapped` |
 | UI over-trust | Label as shortlist triage, not prediction proof |
-| Complexity creep | One scorer, compact payload, no new vendor/source work |
+| Complexity creep | One scorer, compact payload, no new vendor work |
 
-## Initial implementation checklist
+## Done checklist
 
-- [ ] Add spec tests for macro support scorer.
-- [ ] Add `MacroShortlistSupport` dataclass.
-- [ ] Add macro shortlist scoring service.
-- [ ] Add shortlist config defaults and decision payload fields.
-- [ ] Add macro-adjusted ranking and macro lane.
-- [ ] Wire scorer into watchlist orchestration using point-in-time context snapshots.
-- [ ] Persist diagnostics into signal snapshots and decision samples.
-- [ ] Add taxonomy labels for new lane/reasons.
-- [ ] Add replay-safety tests.
-- [ ] Add UI/read-model fields.
-- [ ] Run full targeted test suite.
-- [ ] Run replay comparison before enabling positive boost by default in production.
+- [ ] Scorer tests.
+- [ ] `MacroShortlistSupport` model.
+- [ ] Macro shortlist scoring service.
+- [ ] Shortlist config and payload fields.
+- [ ] Macro-adjusted ranking and/or macro lane.
+- [ ] Orchestration wiring with point-in-time snapshots.
+- [ ] Signal/decision-sample diagnostics.
+- [ ] Taxonomy labels for lane/reasons.
+- [ ] Replay-safety tests.
+- [ ] UI/read-model fields.
+- [ ] Replay comparison before positive boost is enabled in production.

@@ -28,7 +28,7 @@ For each run:
 9. persist signals, decision samples, plans when plan framing ran, run summaries, and artifacts
 10. emit explicit `no_action` plans only after shortlist/deep-analysis/policy gates; non-shortlisted names remain signal+decision-sample audit records, not full plans
 
-Target shortlist behavior: macro context should participate before deep analysis as a bounded prioritization signal when a point-in-time usable macro snapshot and governed ticker exposure path exist. Technical cheap-scan evidence remains primary; macro context must not independently create a shortlist candidate with weak technical evidence. See `specs/macro-context-shortlist-spec.md`.
+Context currently affects downstream deep-analysis transmission through mapped ticker exposure diagnostics. Upstream macro-context shortlist participation remains planned/gated: technical cheap-scan evidence stays primary, and macro context must not independently create a shortlist candidate with weak technical evidence.
 
 `ProposalService` remains a lower-level helper for compatibility and shared feature/history/news/context work, not the main run executor.
 
