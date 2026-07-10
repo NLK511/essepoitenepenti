@@ -63,6 +63,18 @@ Macro and industry source breakdowns must expose:
 
 Older rows may still contain only `context_score`/`context_label`; readers must use `ContextSnapshotSchemaAdapter`. New rows must not write duplicate legacy score keys.
 
+## Industry context role
+
+Industry context is secondary corroborating context, not the primary ticker-exposure model. Current behavior:
+- industry snapshots expose quality, evidence, coverage, score reasons, neutral reasons, active-driver counts, and source diagnostics;
+- missing snapshots resolve as blocked/missing rather than meaningful neutral evidence;
+- empty-driver snapshots must say no salient industry evidence was found;
+- degraded, blocked, partial, failed, missing, or driverless industry context cannot provide positive mapped support;
+- decision-usable industry context requires usable quality, usable evidence, and at least one active driver;
+- Context Review and `scripts/report_industry_context_quality.py` surface usable/degraded/blocked counts, stale rows, zero-confidence rows, active-driver rate, and neutral reasons.
+
+Any wider industry-positive role requires outcome evidence against ontology/transmission baselines.
+
 ## Downstream use
 
 Context scores may influence downstream analysis only through bounded paths:
@@ -99,6 +111,7 @@ Tests must prove:
 - new industry context derives non-neutral support from directional primary news even when payload social label is neutral;
 - eventless context remains neutral;
 - degraded/missing context remains capped;
+- degraded or driverless industry context cannot create positive mapped support;
 - downstream proposal/deep-analysis tests continue to expose context quality fields;
 - context exposure mapper tests cover direct, inverse, unmapped, and mixed exposures;
 - macro-shortlist tests prove mapped context remains resolver-only and point-in-time safe.

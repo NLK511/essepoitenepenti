@@ -67,8 +67,8 @@ class ContextExposureMapper:
         direction: RecommendationDirection,
         taxonomy_profile: dict[str, Any] | None = None,
     ) -> ContextExposureMapping:
-        macro_support = self._score(context, "macro_context_score", "macro_sentiment_score")
-        industry_support = self._score(context, "industry_context_score", "industry_sentiment_score")
+        macro_support = self._scoped_score(context, "macro", "macro_context_score", "macro_sentiment_score")
+        industry_support = self._scoped_score(context, "industry", "industry_context_score", "industry_sentiment_score")
         raw_support = max(-1.0, min(1.0, (macro_support * 0.45) + (industry_support * 0.55)))
         raw_support_percent = self._score_to_percent(raw_support, direction=direction)
         ontology_context = self.ontology.assess_context(
@@ -123,7 +123,16 @@ class ContextExposureMapper:
         )
 
     @classmethod
-    def _score(cls, context: dict[str, Any], *keys: str) -> float:
+    def _scoped_score(cls, context: dict[str, Any], scope: str, *keys: str) -> float:
+        quality = str(context.get(f"{scope}_context_quality_status") or "").strip().lower()
+        evidence = str(context.get(f"{scope}_context_evidence_state") or "").strip().lower()
+        events = context.get(f"{scope}_context_events") or context.get(f"{scope}_context_active_themes") or context.get(f"{scope}_context_active_drivers")
+        if quality in {"blocked", "failed", "degraded", "partial"}:
+            return 0.0
+        if evidence in {"missing", "missing_snapshot", "none"}:
+            return 0.0
+        if evidence and evidence not in {"usable", "events", "mixed", "contradictory"} and not events:
+            return 0.0
         for key in keys:
             value = context.get(key)
             if value is not None:
@@ -143,10 +152,10 @@ class ContextExposureMapper:
         ]
         if any(value in {"blocked", "failed"} for value in statuses):
             return "blocked"
-        if any(value in {"degraded", "partial"} for value in statuses):
-            return "degraded"
         if any(value in {"usable", "ok"} for value in statuses):
             return "usable"
+        if any(value in {"degraded", "partial"} for value in statuses):
+            return "degraded"
         return "unknown"
 
     @staticmethod

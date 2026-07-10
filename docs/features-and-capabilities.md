@@ -53,7 +53,7 @@ It is not yet a proven short-horizon prediction engine.
 - Review macro and industry context from the Context pages and detail views.
 - Derive macro and industry support scores through shared event-based scoring (`support_score`, `support_label`, directional confidence, score components, and reasons) rather than social sentiment alone.
 - Map raw macro/industry support into ticker-specific exposure alignment through the ticker exposure ontology while keeping raw support, mapped alignment, and neutral/degraded reasons visible separately.
-- Expose explicit evidence states (`usable`, `degraded`, `thin`, `missing`, `missing_snapshot`) and coverage states (`news`, `social`, `news+social`, `missing`) so neutral-looking fallback rows are not mistaken for decision-grade evidence.
+- Expose explicit evidence states (`usable`, `degraded`, `thin`, `missing`, `missing_snapshot`), coverage states (`news`, `social`, `news+social`, `missing`), neutral reasons, and industry decision-usability counts so fallback rows are not mistaken for decision-grade evidence.
 - **Realistic Context Reconstruction:** Re-generate historical context snapshots from past news and social data. For time-windowed company/ticker news requests, the app now prefers Finnhub and rejects undated or future-dated articles so historical simulations do not silently mix in later company news.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.

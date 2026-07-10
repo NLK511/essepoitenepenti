@@ -537,7 +537,14 @@ class RepositoryTests(unittest.TestCase):
                 direction="negative",
                 saliency_score=0.74,
                 confidence_percent=68.0,
+                active_drivers=[{"label": "Fuel costs rising"}],
                 linked_macro_themes=["oil_supply_shock_risk"],
+                source_breakdown={
+                    "evidence_state": "usable",
+                    "coverage_state": "news",
+                    "context_quality_status": "usable",
+                    "score_reasons": ["industry_native_driver_support"],
+                },
             )
         )
         ticker_signal = context_repository.create_ticker_signal_snapshot(
@@ -599,6 +606,10 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plan.id, plans[0].id)
         self.assertEqual(macro_items[0].warnings, ["headline_only_evidence"])
         self.assertEqual(industry_items[0].linked_macro_themes, ["oil_supply_shock_risk"])
+        industry_summary = context_repository.industry_context_summary()
+        self.assertEqual(industry_summary["decision_usable_count"], 1)
+        self.assertEqual(industry_summary["coverage_state_counts"]["news"], 1)
+        self.assertEqual(industry_summary["decision_usable_rate_percent"], 100.0)
         self.assertEqual(ticker_items[0].diagnostics["stage"], "cheap_scan_then_deep_analysis")
         self.assertEqual(plans[0].action, "short")
         self.assertEqual(plans[0].signal_breakdown["macro_exposure"], 0.8)

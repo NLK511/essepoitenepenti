@@ -79,7 +79,7 @@ Cheap-scan liquidity uses simple `close * volume` over 20 bars, so the warning i
 
 ## Macro and industry context
 
-Macro/industry context snapshots are canonical shared artifacts. Missing/stale artifacts fall back to neutral values and explicit warnings. Industry missing-snapshot handling is blocked rather than neutrally informative, and thin snapshots expose evidence/coverage states.
+Macro/industry context snapshots are canonical shared artifacts. Missing/stale artifacts fall back to neutral values and explicit warnings. Industry missing-snapshot handling is blocked rather than neutrally informative, and thin snapshots expose evidence/coverage states, neutral reasons, stale status, and decision-usability diagnostics.
 
 Current shortlist behavior does not explicitly use macro context: shortlist selection is driven by cheap-scan technical attention/confidence plus catalyst proxy logic. Target behavior is to add a small macro-aware shortlist adjustment and optional macro-context lane. Missing/degraded macro evidence stays neutral; usable aligned macro evidence may modestly boost ranking; usable adverse macro evidence may modestly penalize; macro support may not bypass technical floors.
 
@@ -93,7 +93,7 @@ Context score meanings:
 - **confidence:** trustworthiness given evidence, source quality, contradictions, degradation
 - **quality:** usable/degraded/blocked after separating required vs optional evidence
 
-These are review aids, not prediction probabilities. Industry context only adds positive support when usable evidence exists.
+These are review aids, not prediction probabilities. Industry context only adds positive support when usable evidence and active drivers exist; degraded, blocked, missing, or driverless industry context remains cautionary/neutral.
 
 Current extraction is heuristic but preserves more short-horizon state than broad theme detection: persistence, transition, catalyst type, interpretation, trigger actor metadata, and why-now summary. Target context reads should include active driver, concrete catalyst, change vs prior snapshot, escalation/easing/stabilizing/mixed state, transmission mechanism, and explicit uncertainty.
 

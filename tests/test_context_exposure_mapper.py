@@ -72,6 +72,27 @@ def test_context_exposure_mapper_keeps_missing_or_unmapped_context_neutral() -> 
     assert result.neutral_reason in {"missing_context_evidence", "missing_exposure_mapping"}
 
 
+def test_context_exposure_mapper_zeroes_degraded_industry_positive_support() -> None:
+    mapper = ContextExposureMapper()
+
+    result = mapper.map_context(
+        ticker="AMAT",
+        context={
+            "macro_context_score": 0.0,
+            "industry_context_score": 0.9,
+            "industry_context_evidence_state": "usable",
+            "industry_context_quality_status": "degraded",
+            "industry_context_events": [{"label": "Fab expansion supports wafer equipment orders"}],
+        },
+        direction=RecommendationDirection.LONG,
+    )
+
+    assert result.industry_support_score == 0.0
+    assert result.raw_support_score == 0.0
+    assert result.exposure_bias in {"neutral", "mixed"}
+    assert result.exposure_bias != "tailwind"
+
+
 def test_context_exposure_mapper_surfaces_mixed_conflicts_as_neutral_reason() -> None:
     mapper = ContextExposureMapper()
 

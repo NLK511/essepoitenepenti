@@ -13,12 +13,18 @@ type IndustryContextSummary = {
   status_counts: Record<string, number>;
   evidence_state_counts: Record<string, number>;
   quality_status_counts: Record<string, number>;
+  coverage_state_counts?: Record<string, number>;
+  neutral_reason_counts?: Record<string, number>;
   active_driver_count: number;
   empty_driver_count: number;
   zero_confidence_count: number;
+  stale_count?: number;
+  decision_usable_count?: number;
+  decision_usable_rate_percent?: number;
   usable_rate_percent: number;
   active_driver_rate_percent: number;
   warning_count: number;
+  top_neutral_reasons?: Array<[string, number]>;
   top_warnings: Array<[string, number]>;
   top_missing_inputs: Array<[string, number]>;
 };
@@ -51,6 +57,29 @@ function stringList(value: unknown): string[] {
 
 function contradictoryMacroThemes(snapshot: MacroContextSnapshot): string[] {
   return stringList(snapshot.metadata?.contradictory_event_labels);
+}
+
+function contextBreakdownValue(snapshot: IndustryContextSnapshot, key: string, fallback = "unknown"): string {
+  const contextQuality = snapshot.metadata?.context_quality;
+  const metadataValue = contextQuality && typeof contextQuality === "object" && !Array.isArray(contextQuality)
+    ? (contextQuality as Record<string, unknown>)[key]
+    : undefined;
+  const value = snapshot.source_breakdown?.[key] ?? metadataValue;
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function industryNeutralReason(snapshot: IndustryContextSnapshot): string {
+  const scoreReasons = snapshot.source_breakdown?.score_reasons;
+  if (Array.isArray(scoreReasons) && scoreReasons.length > 0 && typeof scoreReasons[0] === "string") return scoreReasons[0];
+  const quality = contextBreakdownValue(snapshot, "context_quality_status");
+  const evidence = contextBreakdownValue(snapshot, "evidence_state");
+  const coverage = contextBreakdownValue(snapshot, "coverage_state");
+  if (quality === "blocked" || quality === "failed") return "context quality blocked";
+  if (quality === "degraded" || quality === "partial") return "context quality degraded";
+  if (evidence === "missing" || evidence === "missing_snapshot") return "missing industry evidence";
+  if (coverage === "missing") return "missing industry coverage";
+  if (snapshot.active_drivers.length === 0) return "no salient industry drivers";
+  return "balanced or neutral context";
 }
 
 function actionLabel(scope: "macro" | "industry"): string {
@@ -286,9 +315,9 @@ export function ContextReviewPage() {
                   <div className="helper-text">Stored industry context rows</div>
                 </Card>
                 <Card>
-                  <div className="metric-label">Usable rate</div>
-                  <div className="metric-value">{industrySummary.usable_rate_percent.toFixed(1)}%</div>
-                  <div className="helper-text">Rows marked usable</div>
+                  <div className="metric-label">Decision-usable rate</div>
+                  <div className="metric-value">{(industrySummary.decision_usable_rate_percent ?? industrySummary.usable_rate_percent).toFixed(1)}%</div>
+                  <div className="helper-text">Usable quality + evidence + active drivers</div>
                 </Card>
                 <Card>
                   <div className="metric-label">Active-driver rate</div>
@@ -296,11 +325,16 @@ export function ContextReviewPage() {
                   <div className="helper-text">Rows with at least one driver</div>
                 </Card>
                 <Card>
-                  <div className="metric-label">Zero-confidence rows</div>
-                  <div className="metric-value">{industrySummary.zero_confidence_count}</div>
-                  <div className="helper-text">Rows that resolved to neutral</div>
+                  <div className="metric-label">Stale / zero-confidence</div>
+                  <div className="metric-value">{industrySummary.stale_count ?? 0} / {industrySummary.zero_confidence_count}</div>
+                  <div className="helper-text">Expired rows and rows that resolved to neutral</div>
                 </Card>
               </section>
+              {industrySummary.top_neutral_reasons && industrySummary.top_neutral_reasons.length > 0 ? (
+                <div className="cluster top-gap-small">
+                  {industrySummary.top_neutral_reasons.map(([reason, count]) => <Badge key={reason} tone="neutral">{reason.replace(/_/g, " ")} {count}</Badge>)}
+                </div>
+              ) : null}
             </DisclosureCard>
           ) : null}
 
@@ -424,8 +458,11 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                 <div className="top-gap-small">
                   <div className="cluster">
                     <Badge tone={contextSnapshotTone(snapshot)}>status {snapshot.status}</Badge>
+                    <Badge tone={contextBreakdownValue(snapshot, "context_quality_status") === "usable" ? "ok" : "warning"}>quality {contextBreakdownValue(snapshot, "context_quality_status")}</Badge>
+                    <Badge tone="neutral">evidence {contextBreakdownValue(snapshot, "evidence_state")}</Badge>
+                    <Badge tone="neutral">coverage {contextBreakdownValue(snapshot, "coverage_state")}</Badge>
                     <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
-                    {topDriver ? <Badge tone="neutral">driver {themeString(topDriver.label)}</Badge> : null}
+                    {topDriver ? <Badge tone="neutral">driver {themeString(topDriver.label)}</Badge> : <Badge tone="warning">{industryNeutralReason(snapshot)}</Badge>}
                   </div>
                 </div>
                 <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Direction:</strong> {snapshot.direction}</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
@@ -517,6 +554,9 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
       <div className="top-gap-small">
         <div className="cluster">
           <Badge tone={contextSnapshotTone(snapshot)}>status {snapshot.status}</Badge>
+          <Badge tone={contextBreakdownValue(snapshot, "context_quality_status") === "usable" ? "ok" : "warning"}>quality {contextBreakdownValue(snapshot, "context_quality_status")}</Badge>
+          <Badge tone="neutral">evidence {contextBreakdownValue(snapshot, "evidence_state")}</Badge>
+          <Badge tone="neutral">coverage {contextBreakdownValue(snapshot, "coverage_state")}</Badge>
           <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
           <Badge tone="neutral">direction {snapshot.direction || "—"}</Badge>
           {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}

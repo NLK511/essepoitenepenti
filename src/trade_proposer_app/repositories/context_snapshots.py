@@ -187,17 +187,31 @@ class ContextSnapshotRepository:
     def industry_context_summary(self) -> dict[str, Any]:
         rows = self.session.scalars(select(IndustryContextSnapshotRecord)).all()
         status_counts = Counter(str(row.status or "unknown") for row in rows)
-        evidence_counts = Counter(
-            str(self._load(row.source_breakdown_json, {}).get("evidence_state") or "missing")
-            for row in rows
-        )
-        quality_counts = Counter(
-            str(self._load(row.source_breakdown_json, {}).get("context_quality_status") or "unknown")
-            for row in rows
-        )
+        evidence_counts = Counter()
+        coverage_counts = Counter()
+        quality_counts = Counter()
+        neutral_reasons = Counter()
         warnings = Counter()
         missing_inputs = Counter()
+        stale_count = 0
+        decision_usable_count = 0
+        now = datetime.now(timezone.utc)
         for row in rows:
+            source_breakdown = self._load(row.source_breakdown_json, {})
+            active_drivers = self._load(row.active_drivers_json, [])
+            evidence_state = str(source_breakdown.get("evidence_state") or "missing")
+            coverage_state = str(source_breakdown.get("coverage_state") or "missing")
+            quality_status = str(source_breakdown.get("context_quality_status") or "unknown")
+            evidence_counts[evidence_state] += 1
+            coverage_counts[coverage_state] += 1
+            quality_counts[quality_status] += 1
+            if row.expires_at is not None and self._normalize_datetime(row.expires_at) < now:
+                stale_count += 1
+            if quality_status == "usable" and evidence_state == "usable" and active_drivers:
+                decision_usable_count += 1
+            if float(row.confidence_percent or 0.0) == 0.0 or not active_drivers or quality_status != "usable":
+                reason = self._industry_neutral_reason(source_breakdown, active_drivers, quality_status, evidence_state, coverage_state)
+                neutral_reasons[reason] += 1
             for warning in self._load(row.warnings_json, []):
                 if isinstance(warning, str) and warning.strip():
                     warnings[warning.strip()] += 1
@@ -211,16 +225,45 @@ class ContextSnapshotRepository:
             "total_count": total,
             "status_counts": dict(status_counts),
             "evidence_state_counts": dict(evidence_counts),
+            "coverage_state_counts": dict(coverage_counts),
             "quality_status_counts": dict(quality_counts),
             "active_driver_count": active_driver_count,
             "empty_driver_count": total - active_driver_count,
             "zero_confidence_count": zero_confidence_count,
-            "usable_rate_percent": round((status_counts.get("ok", 0) / total * 100.0) if total else 0.0, 1),
+            "stale_count": stale_count,
+            "decision_usable_count": decision_usable_count,
+            "decision_usable_rate_percent": round((decision_usable_count / total * 100.0) if total else 0.0, 1),
+            "usable_rate_percent": round((quality_counts.get("usable", 0) / total * 100.0) if total else 0.0, 1),
             "active_driver_rate_percent": round((active_driver_count / total * 100.0) if total else 0.0, 1),
             "warning_count": sum(status_counts.values()) - status_counts.get("ok", 0),
+            "neutral_reason_counts": dict(neutral_reasons),
+            "top_neutral_reasons": neutral_reasons.most_common(5),
             "top_warnings": warnings.most_common(5),
             "top_missing_inputs": missing_inputs.most_common(5),
         }
+
+    @staticmethod
+    def _industry_neutral_reason(
+        source_breakdown: dict[str, Any],
+        active_drivers: list[Any],
+        quality_status: str,
+        evidence_state: str,
+        coverage_state: str,
+    ) -> str:
+        if quality_status in {"blocked", "failed"}:
+            return "context_quality_blocked"
+        if quality_status in {"degraded", "partial"}:
+            return "context_quality_degraded"
+        if evidence_state in {"missing", "missing_snapshot"}:
+            return "missing_industry_evidence"
+        if coverage_state == "missing":
+            return "missing_industry_coverage"
+        if not active_drivers:
+            return "no_salient_industry_drivers"
+        for reason in source_breakdown.get("score_reasons") or []:
+            if isinstance(reason, str) and reason.strip():
+                return reason.strip()
+        return "true_neutral_or_balanced_context"
 
     def create_ticker_signal_snapshot(self, snapshot: TickerSignalSnapshot) -> TickerSignalSnapshot:
         record = TickerSignalSnapshotRecord(

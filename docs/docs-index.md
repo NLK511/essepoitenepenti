@@ -39,7 +39,6 @@ These are the primary narrative source of truth for the product today:
 - `codebase-simplification-plan.md` — lightweight behavior-preserving refactor maintenance backlog
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
-- `industry-context-improvement-plan.md` — industry-context evidence-quality and post-ontology role review
 - `replay-validation-efficiency-remediation-plan.md` — replay validation depth, frozen-input reuse, and local-only input remediation plan
 
 ## Specs directory
