@@ -29,6 +29,8 @@ The page must cover the full lifecycle:
 
 Raw replay batches, job runs, config versions, and search artifacts may remain on advanced pages, but the normal operator path must start from this workflow.
 
+Lifecycle cards must stay compact and scannable. When an operator opens phase details, the UI must use a readable full-width inspector below the card grid, not cramped inline detail columns inside each card.
+
 ## Core concepts
 
 ### Tuning experiment
