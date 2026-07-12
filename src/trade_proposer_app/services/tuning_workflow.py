@@ -417,15 +417,74 @@ class TuningWorkflowService:
         self.session.refresh(record)
         return self.experiment_detail(record)
 
+    def _sync_discovery_job(self, metadata: dict[str, object]) -> bool:
+        before = _json_dumps(metadata)
+        discovery_job = metadata.get("discovery_job") if isinstance(metadata.get("discovery_job"), dict) else None
+        if not discovery_job:
+            return False
+        run_id = int(discovery_job.get("run_id") or 0)
+        if run_id <= 0:
+            return False
+        run = self.session.get(RunRecord, run_id)
+        if run is None:
+            discovery_job["status"] = "missing"
+            discovery_job["missing_at"] = datetime.now(timezone.utc).isoformat()
+            return _json_dumps(metadata) != before
+
+        run_status = str(run.status or "")
+        discovery_job["run_status"] = run_status
+        if run.completed_at is not None:
+            discovery_job["completed_at"] = run.completed_at.isoformat()
+        if run.error_message:
+            discovery_job["error_message"] = run.error_message
+
+        if run_status == "completed":
+            if discovery_job.get("status") not in {"imported", "completed"}:
+                discovery_job["status"] = "completed"
+            candidate_pool = metadata.get("candidate_pool") if isinstance(metadata.get("candidate_pool"), dict) else {}
+            candidate_pool["run_status"] = run_status
+            candidate_pool["discovery_run_id"] = run_id
+            if candidate_pool.get("status") in {"discovery_job_queued", "queued", "running", "reused_active_run"}:
+                candidate_pool.update(
+                    {
+                        "status": "import_pending",
+                        "label": "large discovery completed; import top candidates",
+                    }
+                )
+                metadata["candidate_pool"] = candidate_pool
+        elif run_status in {"queued", "running"}:
+            discovery_job["status"] = run_status
+            candidate_pool = metadata.get("candidate_pool") if isinstance(metadata.get("candidate_pool"), dict) else {}
+            if candidate_pool:
+                candidate_pool["run_status"] = run_status
+                candidate_pool["discovery_run_id"] = run_id
+                metadata["candidate_pool"] = candidate_pool
+        elif run_status:
+            discovery_job["status"] = run_status
+            candidate_pool = metadata.get("candidate_pool") if isinstance(metadata.get("candidate_pool"), dict) else {}
+            candidate_pool["run_status"] = run_status
+            candidate_pool["discovery_run_id"] = run_id
+            if candidate_pool.get("status") == "discovery_job_queued":
+                candidate_pool.update(
+                    {
+                        "status": "failed",
+                        "label": f"large discovery {run_status}",
+                    }
+                )
+                metadata["candidate_pool"] = candidate_pool
+        metadata["discovery_job"] = discovery_job
+        return _json_dumps(metadata) != before
+
     def _sync_replay_summaries(self, metadata: dict[str, object]) -> bool:
         before = _json_dumps(metadata)
         baseline = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else None
         if baseline and baseline.get("batch_id") is not None:
             batch_id = int(baseline["batch_id"])
             batch = self.session.get(HistoricalReplayBatchRecord, batch_id)
+            progress = self._batch_progress(batch_id)
             baseline.update({
-                "status": batch.status if batch else baseline.get("status", "missing"),
-                "progress": self._batch_progress(batch_id),
+                "status": self._batch_status_from_progress(batch.status if batch else "missing", progress, complete_status="completed"),
+                "progress": progress,
                 "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch_id),
             })
         validation = metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else None
@@ -437,14 +496,15 @@ class TuningWorkflowService:
                 batch_id = int(payload["batch_id"])
                 batch = self.session.get(HistoricalReplayBatchRecord, batch_id)
                 candidate_hash = str(payload.get("candidate_config_hash") or "")
+                progress = self._batch_progress(batch_id)
                 payload.update({
-                    "status": payload.get("status") if payload.get("source_frozen_inputs_reused") else (batch.status if batch else payload.get("status", "missing")),
-                    "progress": self._batch_progress(batch_id),
+                    "status": payload.get("status") if payload.get("source_frozen_inputs_reused") else self._batch_status_from_progress(batch.status if batch else "missing", progress, complete_status="completed"),
+                    "progress": progress,
                     "summary": ReplayValidationAggregateService(self.session).aggregate_batch(batch_id, candidate_config_hash=candidate_hash or None),
                 })
             validation["comparisons"] = self._candidate_comparisons(metadata)
             statuses = [str(payload.get("status")) for payload in candidate_batches.values() if isinstance(payload, dict)]
-            validation["status"] = "complete" if statuses and all(status == "completed" for status in statuses) else ("running" if any(status == "running" for status in statuses) else validation.get("status", "queued"))
+            validation["status"] = self._aggregate_async_status(statuses, complete_status="complete", current_status=str(validation.get("status") or "queued"))
         holdout = metadata.get("holdout_validation") if isinstance(metadata.get("holdout_validation"), dict) else None
         stability = metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else None
         if holdout:
@@ -454,8 +514,14 @@ class TuningWorkflowService:
             candidate_batch = self.session.get(HistoricalReplayBatchRecord, candidate_id) if candidate_id else None
             baseline_progress = self._batch_progress(baseline_id) if baseline_id else {}
             candidate_progress = self._batch_progress(candidate_id) if candidate_id else {}
-            statuses = [batch.status for batch in (baseline_batch, candidate_batch) if batch is not None]
-            holdout_status = "complete" if statuses and all(status == "completed" for status in statuses) else ("running" if any(status == "running" for status in statuses) else holdout.get("status", "queued"))
+            statuses = [
+                self._batch_status_from_progress(baseline_batch.status, baseline_progress, complete_status="completed")
+                for baseline_batch in ([baseline_batch] if baseline_batch is not None else [])
+            ] + [
+                self._batch_status_from_progress(candidate_batch.status, candidate_progress, complete_status="completed")
+                for candidate_batch in ([candidate_batch] if candidate_batch is not None else [])
+            ]
+            holdout_status = self._aggregate_async_status(statuses, complete_status="complete", current_status=str(holdout.get("status") or "queued"))
             holdout.update({
                 "status": holdout_status,
                 "baseline_progress": baseline_progress,
@@ -482,6 +548,41 @@ class TuningWorkflowService:
                     },
                 })
         return _json_dumps(metadata) != before
+
+    @staticmethod
+    def _batch_status_from_progress(batch_status: str, progress: Mapping[str, object], *, complete_status: str) -> str:
+        status = str(batch_status or "").strip().lower() or "missing"
+        total = int(progress.get("slice_count") or 0)
+        completed = int(progress.get("completed_count") or 0)
+        failed = int(progress.get("failed_count") or 0)
+        stale = int(progress.get("stale_count") or 0)
+        running = int(progress.get("running_count") or 0)
+        queued = int(progress.get("queued_count") or 0) + int(progress.get("planned_count") or 0)
+        if failed or stale:
+            return "failed"
+        if running:
+            return "running"
+        if queued:
+            return "queued"
+        if total > 0 and completed >= total:
+            return complete_status
+        return status
+
+    @staticmethod
+    def _aggregate_async_status(statuses: list[str], *, complete_status: str, current_status: str = "queued") -> str:
+        normalized = [str(status or "").strip().lower() for status in statuses if str(status or "").strip()]
+        if not normalized:
+            return current_status
+        failed_statuses = {"failed", "canceled", "cancelled", "stale", "missing"}
+        if any(status in failed_statuses for status in normalized):
+            return "failed"
+        if any(status == "running" for status in normalized):
+            return "running"
+        if any(status in {"queued", "planned", "created"} for status in normalized):
+            return "queued"
+        if all(status in {"completed", "complete"} for status in normalized):
+            return complete_status
+        return current_status
 
     def stop_candidate_replay_after_current_slice(self, experiment_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
@@ -1097,7 +1198,7 @@ class TuningWorkflowService:
         discovery_settings = loads_json_object(record.discovery_settings_json)
         replay_settings = loads_json_object(record.replay_settings_json)
         baseline = loads_json_object(record.baseline_json)
-        metadata = loads_json_object(record.metadata_json)
+        metadata = self._synced_metadata(record)
         setup = self._setup_status(record, universe, windows, discovery_settings, replay_settings, baseline)
         lifecycle = self._lifecycle(record, setup, metadata)
         return {
@@ -1120,12 +1221,7 @@ class TuningWorkflowService:
         replay_settings = loads_json_object(record.replay_settings_json)
         baseline = loads_json_object(record.baseline_json)
         advanced_settings = loads_json_object(record.advanced_settings_json)
-        metadata = loads_json_object(record.metadata_json)
-        if self._sync_replay_summaries(metadata):
-            record.metadata_json = _json_dumps(metadata)
-            self.session.commit()
-            self.session.refresh(record)
-            metadata = loads_json_object(record.metadata_json)
+        metadata = self._synced_metadata(record)
         setup = self._setup_status(record, universe, windows, discovery_settings, replay_settings, baseline)
         lifecycle = self._lifecycle(record, setup, metadata)
         sections = self._sections(record, setup, lifecycle, metadata)
@@ -1157,6 +1253,21 @@ class TuningWorkflowService:
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
             "archived_at": record.archived_at.isoformat() if record.archived_at else None,
         }
+
+    def _synced_metadata(self, record: TuningExperimentRecord) -> dict[str, object]:
+        metadata = loads_json_object(record.metadata_json)
+        if self._sync_workflow_state(metadata):
+            record.metadata_json = _json_dumps(metadata)
+            self.session.commit()
+            self.session.refresh(record)
+            metadata = loads_json_object(record.metadata_json)
+        return metadata
+
+    def _sync_workflow_state(self, metadata: dict[str, object]) -> bool:
+        before = _json_dumps(metadata)
+        self._sync_discovery_job(metadata)
+        self._sync_replay_summaries(metadata)
+        return _json_dumps(metadata) != before
 
     def _normalize_payload(self, payload: Mapping[str, object], *, partial: bool) -> dict[str, object]:
         name = str(payload.get("name") or "").strip()
@@ -1422,15 +1533,29 @@ class TuningWorkflowService:
         shortlist = metadata.get("shortlist") if isinstance(metadata.get("shortlist"), dict) else {}
         if not shortlist.get("candidate_ids"):
             return {"current_stage": "shortlist_needed", "next_action": "Select a small replay shortlist.", "blockers": []}
-        if not metadata.get("baseline_replay"):
+        baseline_replay = metadata.get("baseline_replay") if isinstance(metadata.get("baseline_replay"), dict) else {}
+        baseline_status = str(baseline_replay.get("status") or "")
+        if not baseline_replay:
             return {"current_stage": "baseline_needed", "next_action": "Bind or run a baseline replay before comparing candidates.", "blockers": ["baseline replay"]}
-        if not metadata.get("candidate_replay_validation"):
+        if baseline_status in {"queued", "running", "planned", "created"}:
+            return {"current_stage": "baseline_replay_running", "next_action": "Wait for baseline replay to finish before comparing candidates.", "blockers": ["baseline replay"]}
+        if baseline_status in {"failed", "canceled", "cancelled", "stale", "missing"}:
+            return {"current_stage": "baseline_replay_failed", "next_action": "Rerun or bind a completed baseline replay before comparing candidates.", "blockers": ["baseline replay failed"]}
+        candidate_replay = metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else {}
+        candidate_status = str(candidate_replay.get("status") or "")
+        if not candidate_replay:
             return {"current_stage": "candidate_replay_needed", "next_action": "Run candidate replay validation for shortlisted configs.", "blockers": []}
+        if candidate_status in {"queued", "running", "planned", "created"}:
+            return {"current_stage": "candidate_replay_running", "next_action": "Wait for candidate replay validation to finish.", "blockers": ["candidate replay validation"]}
+        if candidate_status in {"failed", "canceled", "cancelled", "stale", "missing"}:
+            return {"current_stage": "candidate_replay_failed", "next_action": "Rerun candidate replay validation or remove failed candidates.", "blockers": ["candidate replay validation failed"]}
         stability = metadata.get("stability_validation") if isinstance(metadata.get("stability_validation"), dict) else {}
         if not stability:
             return {"current_stage": "stability_validation_needed", "next_action": "Run walk-forward or holdout validation for the leading candidate.", "blockers": []}
-        if stability.get("status") in {"queued", "running"}:
+        if stability.get("status") in {"queued", "running", "planned", "created"}:
             return {"current_stage": "stability_validation_running", "next_action": "Wait for holdout/walk-forward validation to finish, then review the result.", "blockers": ["holdout/walk-forward validation"]}
+        if stability.get("status") in {"failed", "canceled", "cancelled", "stale", "missing"}:
+            return {"current_stage": "stability_validation_failed", "next_action": "Rerun holdout/walk-forward validation or choose another candidate.", "blockers": ["holdout/walk-forward validation failed"]}
         if not metadata.get("promotion_proposal"):
             return {"current_stage": "promotion_proposal_needed", "next_action": "Create a promotion proposal with gate table.", "blockers": []}
         execution = metadata.get("promotion_execution") if isinstance(metadata.get("promotion_execution"), dict) else {}
@@ -1459,7 +1584,7 @@ class TuningWorkflowService:
         sections = {
             "setup": {"status": setup_status, "warnings": setup.get("warnings", []), "blockers": setup.get("missing_fields", [])},
             "evidence_readiness": metadata.get("readiness_audit") if isinstance(metadata.get("readiness_audit"), dict) else {"status": "not_run", "cache_only": True, "warnings": []},
-            "candidate_pool": {**candidate_pool, "label": "discovery-only evidence"},
+            "candidate_pool": {**candidate_pool, "label": candidate_pool.get("label") or "discovery-only evidence"},
             "shortlist": {"status": "selected" if shortlist.get("candidate_ids") else "empty", "candidate_ids": shortlist.get("candidate_ids", []), "max_candidates": loads_json_object(record.replay_settings_json).get("max_candidates", 5)},
             "baseline_replay": baseline_replay,
             "candidate_replay_validation": metadata.get("candidate_replay_validation") if isinstance(metadata.get("candidate_replay_validation"), dict) else candidate_replay_default,
@@ -1488,7 +1613,7 @@ class TuningWorkflowService:
             enriched.setdefault("summary", f"{completed}/{total} slices complete; {failed} failed, {stale} stale.")
             return enriched
         done_statuses = {"complete", "completed", "generated", "selected", "ok", "pass", "paper_config_created", "proposal_ready", "rolled_back"}
-        pending_statuses = {"not_run", "missing", "empty", "not_applicable"}
+        pending_statuses = {"not_run", "missing", "empty", "not_applicable", "import_pending", "ready"}
         running_statuses = {"queued", "running", "discovery_job_queued", "reused_active_run"}
         blocked_statuses = {"blocked", "failed", "rejected"}
         if status in done_statuses:

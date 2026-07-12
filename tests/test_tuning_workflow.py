@@ -114,6 +114,12 @@ class TuningWorkflowServiceTests(unittest.TestCase):
                 }
             })
             session.commit()
+            detail = service.experiment_detail(record)
+            self.assertEqual("completed", detail["sections"]["candidate_pool"]["run_status"])
+            self.assertEqual("import_pending", detail["sections"]["candidate_pool"]["status"])
+            self.assertNotEqual("discovery_running", detail["current_stage"])
+            self.assertNotEqual("discovery_running", service.experiment_summary(record)["current_stage"])
+
             detail = service.import_discovery_job_candidates(experiment_id)
             pool = detail["sections"]["candidate_pool"]
             self.assertEqual("generated", pool["status"])
@@ -236,7 +242,7 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             service.update_shortlist(experiment_id, [candidate_id])
 
             detail = service.create_baseline_replay_batch(experiment_id)
-            self.assertEqual("candidate_replay_needed", detail["current_stage"])
+            self.assertEqual("baseline_replay_failed", detail["current_stage"])
             metadata_record = service.get_experiment(experiment_id)
             metadata = json.loads(metadata_record.metadata_json)
             metadata["candidate_pool"]["candidates"][0]["validation_depth"] = "full_orchestration_replay"
@@ -244,11 +250,53 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             session.commit()
             detail = service.create_candidate_replay_batches(experiment_id)
 
-            self.assertEqual("queued", detail["sections"]["candidate_replay_validation"]["status"])
+            self.assertEqual("failed", detail["sections"]["candidate_replay_validation"]["status"])
             self.assertEqual(2, len(fake_replay.created))
             self.assertTrue(fake_replay.created[0]["config"]["cache_only"])
             self.assertEqual("tuning_workflow_candidate_replay", fake_replay.created[1]["config"]["source"])
             self.assertIn("plan_generation_tuning_config_override", fake_replay.created[1]["config"])
+        finally:
+            session.close()
+
+    def test_lifecycle_waits_for_queued_candidate_replay_batches(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment(
+                {
+                    "name": "Queued replay lifecycle",
+                    "universe": {"tickers": ["AAPL"]},
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-02",
+                        "replay_end": "2026-02-03",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-04-01",
+                    },
+                    "baseline": {"source": "existing_replay_batch"},
+                }
+            )
+            experiment_id = int(detail["id"])
+            baseline_batch = HistoricalReplayBatchRecord(name="baseline-queued-lifecycle", status="completed", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            candidate_batch = HistoricalReplayBatchRecord(name="candidate-queued-lifecycle", status="queued", as_of_start=datetime(2026, 2, 2, tzinfo=timezone.utc), as_of_end=datetime(2026, 2, 3, tzinfo=timezone.utc))
+            session.add_all([baseline_batch, candidate_batch])
+            session.commit()
+
+            service.run_readiness_audit(experiment_id)
+            detail = service.generate_candidate_pool(experiment_id)
+            candidate_id = detail["sections"]["candidate_pool"]["candidates"][0]["id"]
+            service.update_shortlist(experiment_id, [candidate_id])
+            service.bind_baseline_replay_batch(experiment_id, baseline_batch.id or 0)
+            detail = service.record_candidate_replay_validation(experiment_id, {candidate_id: candidate_batch.id or 0})
+
+            self.assertEqual("queued", detail["sections"]["candidate_replay_validation"]["status"])
+            self.assertEqual("candidate_replay_running", detail["current_stage"])
+            candidate_batch.status = "completed"
+            session.commit()
+            detail = service.experiment_detail(service.get_experiment(experiment_id))
+            self.assertEqual("complete", detail["sections"]["candidate_replay_validation"]["status"])
+            self.assertEqual("stability_validation_needed", detail["current_stage"])
         finally:
             session.close()
 
