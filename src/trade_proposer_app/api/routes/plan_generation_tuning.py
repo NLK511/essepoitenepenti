@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -266,8 +266,39 @@ async def run_large_plan_generation_tuning_search(
     seed: int = Query(default=20260614, ge=1),
     limit: int | None = Query(default=None, ge=1, le=5000),
     min_validation_actionable: int = Query(default=50, ge=1, le=500),
+    discovery_start: date | None = Query(default=None),
+    discovery_end: date | None = Query(default=None),
+    selection_start: date | None = Query(default=None),
+    selection_end: date | None = Query(default=None),
+    holdout_start: date | None = Query(default=None),
+    holdout_end: date | None = Query(default=None),
+    allow_derived_partitions: bool = Query(default=True),
+    discovery_panel_dates: int = Query(default=24, ge=6, le=120),
+    stability_panel_dates: int = Query(default=60, ge=12, le=365),
+    stage1_survivors: int = Query(default=2_000, ge=10, le=10_000),
+    stage2_survivors: int = Query(default=100, ge=5, le=1_000),
+    finalists: int = Query(default=10, ge=1, le=50),
     session: Session = Depends(get_db_session),
 ):
+    boundaries = (
+        discovery_start,
+        discovery_end,
+        selection_start,
+        selection_end,
+        holdout_start,
+        holdout_end,
+    )
+    if not allow_derived_partitions and not any(value is not None for value in boundaries):
+        raise HTTPException(status_code=400, detail="explicit evidence windows are required when derived partitions are disabled")
+    if any(value is not None for value in boundaries) and not all(value is not None for value in boundaries):
+        raise HTTPException(status_code=400, detail="all discovery, selection, and holdout boundaries are required")
+    if all(value is not None for value in boundaries):
+        assert discovery_start and discovery_end and selection_start and selection_end
+        assert holdout_start and holdout_end
+        if not (discovery_start <= discovery_end < selection_start <= selection_end < holdout_start <= holdout_end):
+            raise HTTPException(status_code=400, detail="large-search windows must be chronological and non-overlapping")
+    if stage2_survivors > stage1_survivors or finalists > stage2_survivors:
+        raise HTTPException(status_code=400, detail="survivor budgets must decrease from stage 1 to stage 2 to finalists")
     jobs = JobRepository(session)
     runs = RunRepository(session)
     runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
@@ -292,6 +323,18 @@ async def run_large_plan_generation_tuning_search(
                 "seed": seed,
                 "limit": limit,
                 "min_validation_actionable": min_validation_actionable,
+                "discovery_start": discovery_start.isoformat() if discovery_start else None,
+                "discovery_end": discovery_end.isoformat() if discovery_end else None,
+                "selection_start": selection_start.isoformat() if selection_start else None,
+                "selection_end": selection_end.isoformat() if selection_end else None,
+                "holdout_start": holdout_start.isoformat() if holdout_start else None,
+                "holdout_end": holdout_end.isoformat() if holdout_end else None,
+                "allow_derived_partitions": allow_derived_partitions,
+                "discovery_panel_dates": discovery_panel_dates,
+                "stability_panel_dates": stability_panel_dates,
+                "stage1_survivors": stage1_survivors,
+                "stage2_survivors": stage2_survivors,
+                "finalists": finalists,
                 "batch_log_interval": 1000,
                 "artifact_path": (
                     "artifacts/large-plan-generation-parameter-search-run-"

@@ -97,7 +97,7 @@ Tie tolerances:
 
 A materially lower win-rate candidate must not outrank a higher win-rate candidate only because it trades more.
 
-For exploration runs, ranking metrics must come from rolling walk-forward validation, not one tail split.
+For normal bounded exploration runs, ranking metrics must come from rolling walk-forward validation, not one tail split. Very large searches may use deterministic stratified discovery panels and successive-halving stability screens to control cost, but only the bounded survivor set may be ranked for selection using rolling walk-forward evidence. A locked holdout is a one-time falsification check and must not be reused for candidate generation, refinement, or repeated reranking.
 
 ## Parameter schema
 
@@ -244,7 +244,7 @@ Minimum improvement for auto-promotion:
 - actionable win rate improves by at least `1.0pp`, or
 - improves by at least `0.5pp` and actionable win count increases by at least `10%`
 
-Auto-promotion must pass both full-backtest and recent holdout/rolling validation. Default holdout split is oldest `80%` for search/aggregation and newest `20%` for validation; insufficient samples force research-only mode.
+Auto-promotion must pass both full-backtest and recent holdout/rolling validation. For bounded non-adaptive runs, the default split remains oldest `80%` for search/aggregation and newest `20%` for validation. For adaptive or very large exploration, any partition repeatedly scored across candidates is discovery/selection evidence rather than holdout; the locked holdout must be non-overlapping, immutable, evaluated only after finalist selection, and never used to generate refinements. Insufficient samples or a contaminated/reused holdout force research-only mode.
 
 Promotion modes:
 - `dry_run`

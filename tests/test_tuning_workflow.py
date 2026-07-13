@@ -11,7 +11,7 @@ from trade_proposer_app.app import app
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.config import settings
 from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord, HistoricalReplayBatchRecord, HistoricalReplaySliceRecord, RecommendationPlanRecord, ReplayEligibilityRecord, ReplayPlanOutcomeRecord, RunRecord, WatchlistRecord
-from trade_proposer_app.services.tuning_workflow import TuningWorkflowService
+from trade_proposer_app.services.tuning_workflow import TuningWorkflowError, TuningWorkflowService
 
 
 class FakeReplayBatch:
@@ -125,6 +125,29 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual("generated", pool["status"])
             self.assertEqual(2, len(pool["candidates"]))
             self.assertEqual("large_search", pool["discovery_mode"])
+        finally:
+            session.close()
+
+    def test_large_discovery_rejects_overlapping_evidence_windows(self) -> None:
+        session = self.create_session()
+        try:
+            service = TuningWorkflowService(session)
+            detail = service.create_experiment(
+                {
+                    "name": "Overlapping windows",
+                    "windows": {
+                        "discovery_start": "2026-01-01",
+                        "discovery_end": "2026-02-01",
+                        "replay_start": "2026-02-01",
+                        "replay_end": "2026-03-01",
+                        "holdout_start": "2026-03-02",
+                        "holdout_end": "2026-03-31",
+                    },
+                }
+            )
+
+            with self.assertRaisesRegex(TuningWorkflowError, "non-overlapping"):
+                service.queue_large_discovery_search(int(detail["id"]))
         finally:
             session.close()
 

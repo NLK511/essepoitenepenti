@@ -68,6 +68,7 @@ class _RecordWindow(Sequence):
 class PlanGenerationWalkForwardService:
     def __init__(self, tuning_service: object) -> None:
         self.tuning_service = tuning_service
+        self._baseline_slice_cache: dict[tuple[object, ...], _SliceEvaluation] = {}
 
     def summarize(
         self,
@@ -144,7 +145,9 @@ class PlanGenerationWalkForwardService:
         average_win_rate_delta = self._average_delta(stats.win_rate_deltas, precision=2)
         average_expected_value_delta = self._average_delta(stats.expected_value_deltas, precision=4)
         average_actionable_ratio = self._average_delta(stats.actionable_ratios, precision=4)
-        max_actionable_ratio = round(max(stats.actionable_ratios), 4) if stats.actionable_ratios else None
+        max_actionable_ratio = (
+            round(max(stats.actionable_ratios), 4) if stats.actionable_ratios else None
+        )
         promotion_recommended = self._promotion_recommended(
             qualified_slices=stats.qualified_slices,
             candidate_wins=stats.candidate_wins,
@@ -278,24 +281,30 @@ class PlanGenerationWalkForwardService:
             index += 1
             window_end = current + timedelta(days=validation_days)
             while window_start_index < record_count:
-                record_time = self._normalize_datetime(
-                    records[window_start_index].plan.computed_at
-                ) or current
+                record_time = (
+                    self._normalize_datetime(records[window_start_index].plan.computed_at)
+                    or current
+                )
                 if record_time >= current:
                     break
                 window_start_index += 1
             if window_end_index < window_start_index:
                 window_end_index = window_start_index
             while window_end_index < record_count:
-                record_time = self._normalize_datetime(
-                    records[window_end_index].plan.computed_at
-                ) or window_end
+                record_time = (
+                    self._normalize_datetime(records[window_end_index].plan.computed_at)
+                    or window_end
+                )
                 if record_time >= window_end:
                     break
                 window_end_index += 1
             slice_records = _RecordWindow(records, window_start_index, window_end_index)
-            baseline_eval = self._score_slice(slice_records, baseline_config)
-            candidate_eval = self._score_slice(slice_records, candidate_config)
+            baseline_eval = self._score_baseline_slice(slice_records, baseline_config)
+            candidate_eval = (
+                baseline_eval
+                if candidate_config == baseline_config
+                else self._score_slice(slice_records, candidate_config)
+            )
             delta_win, delta_ev, is_qualified = self._record_slice_comparison(
                 stats,
                 baseline_eval=baseline_eval,
@@ -404,6 +413,22 @@ class PlanGenerationWalkForwardService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _score_baseline_slice(
+        self, records: _RecordWindow, config: dict[str, float]
+    ) -> _SliceEvaluation:
+        config_key = tuple(sorted((key, str(value)) for key, value in config.items()))
+        key: tuple[object, ...] = (
+            id(records.records),
+            records.start_index,
+            records.end_index,
+            config_key,
+        )
+        cached = self._baseline_slice_cache.get(key)
+        if cached is None:
+            cached = self._score_slice(records, config)
+            self._baseline_slice_cache[key] = cached
+        return cached
 
     def _score_slice(self, records, config: dict[str, float]) -> _SliceEvaluation:
         actionable_count, win_count, expected_value, ambiguous_count = (

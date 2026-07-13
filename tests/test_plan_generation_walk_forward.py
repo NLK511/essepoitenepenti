@@ -63,6 +63,42 @@ class PlanGenerationWalkForwardServiceTests(unittest.TestCase):
         self.assertGreater(summary.total_slices, 0)
         self.assertTrue(seen_window_types)
 
+    def test_reuses_baseline_slice_scores_across_candidates(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        records = self._make_records(61, start)
+        baseline_calls = 0
+
+        def score_side_effect(window, config):
+            nonlocal baseline_calls
+            if config.get("name") == "baseline":
+                baseline_calls += 1
+                return (10, 5, 0.5, 0)
+            return (10, 6, 0.6, 0)
+
+        self.tuning_service._score_records.side_effect = score_side_effect
+        self.service.summarize_records(
+            records=records,
+            candidate_config={"name": "candidate-a"},
+            baseline_config={"name": "baseline"},
+            lookback_days=60,
+            validation_days=20,
+            step_days=10,
+            min_validation_resolved=1,
+        )
+        first_candidate_baseline_calls = baseline_calls
+        self.service.summarize_records(
+            records=records,
+            candidate_config={"name": "candidate-b"},
+            baseline_config={"name": "baseline"},
+            lookback_days=60,
+            validation_days=20,
+            step_days=10,
+            min_validation_resolved=1,
+        )
+
+        self.assertGreater(first_candidate_baseline_calls, 0)
+        self.assertEqual(first_candidate_baseline_calls, baseline_calls)
+
     def test_slices_dataset_according_to_window_and_step(self) -> None:
         """
         Verify that lookback, validation_days, and step_days produce the correct number of slices.

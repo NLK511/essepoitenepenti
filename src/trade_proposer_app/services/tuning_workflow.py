@@ -1030,6 +1030,25 @@ class TuningWorkflowService:
     def queue_large_discovery_search(self, experiment_id: int) -> dict[str, object]:
         record = self.get_experiment(experiment_id)
         discovery_settings = loads_json_object(record.discovery_settings_json)
+        windows = loads_json_object(record.windows_json)
+        ordered_boundaries = [
+            _date_string(windows.get(key))
+            for key in (
+                "discovery_start",
+                "discovery_end",
+                "replay_start",
+                "replay_end",
+                "holdout_start",
+                "holdout_end",
+            )
+        ]
+        has_explicit_boundaries = any(ordered_boundaries)
+        if has_explicit_boundaries and (
+            not all(ordered_boundaries)
+            or ordered_boundaries != sorted(ordered_boundaries)
+            or len(set(ordered_boundaries)) != len(ordered_boundaries)
+        ):
+            raise TuningWorkflowError("large discovery requires complete, chronological, non-overlapping discovery, replay-selection, and holdout windows")
         requested = max(1, min(1_000_000, int(discovery_settings.get("candidate_count") or 20_000)))
         keep_count = max(1, min(500, int(discovery_settings.get("candidate_pool_keep_count") or 100)))
         fine_candidates = max(0, min(500_000, int(discovery_settings.get("fine_candidate_count") or max(0, requested // 4))))
@@ -1056,6 +1075,18 @@ class TuningWorkflowService:
             "seed": max(1, int(discovery_settings.get("seed") or 20260614)),
             "limit": discovery_settings.get("record_limit"),
             "min_validation_actionable": max(1, min(500, int(discovery_settings.get("min_validation_actionable") or 50))),
+            "discovery_start": windows.get("discovery_start"),
+            "discovery_end": windows.get("discovery_end"),
+            "selection_start": windows.get("replay_start"),
+            "selection_end": windows.get("replay_end"),
+            "holdout_start": windows.get("holdout_start"),
+            "holdout_end": windows.get("holdout_end"),
+            "allow_derived_partitions": not has_explicit_boundaries,
+            "discovery_panel_dates": max(6, min(120, int(discovery_settings.get("discovery_panel_dates") or 24))),
+            "stability_panel_dates": max(12, min(365, int(discovery_settings.get("stability_panel_dates") or 60))),
+            "stage1_survivors": max(10, min(10_000, int(discovery_settings.get("stage1_survivors") or 2_000))),
+            "stage2_survivors": max(5, min(1_000, int(discovery_settings.get("stage2_survivors") or 100))),
+            "finalists": max(1, min(50, int(discovery_settings.get("finalists") or 10))),
             "batch_log_interval": 1000,
             "tuning_experiment_id": record.id,
             "candidate_pool_keep_count": keep_count,
@@ -1100,7 +1131,8 @@ class TuningWorkflowService:
             config = normalize_plan_generation_tuning_config(dict(item.get("config") or {}))
             changed_keys = [str(key) for key in item.get("changed_keys", [])] if isinstance(item.get("changed_keys"), list) else []
             depth = candidate_validation_depth(changed_keys)
-            candidates.append({"id": f"large-{run_id}-{index}", "label": f"large discovery #{index}", "source": "large_plan_generation_tuning_search", "status": "discovered", "rank": index, "config": config, "config_hash": stable_hash(config), "changed_keys": changed_keys, "validation_depth": depth["validation_depth"], "validation_depth_reason": depth["validation_depth_reason"], "promotion_capable": False, "computation_label": "large discovery candidate; requires replay and holdout before promotion", "discovery_metrics": {key: value for key, value in item.items() if key != "config"}})
+            holdout = item.get("holdout") if isinstance(item.get("holdout"), dict) else {}
+            candidates.append({"id": f"large-{run_id}-{index}", "label": f"large finalist #{index}", "source": "large_plan_generation_tuning_search", "status": "discovered", "rank": index, "config": config, "config_hash": stable_hash(config), "changed_keys": changed_keys, "validation_depth": depth["validation_depth"], "validation_depth_reason": depth["validation_depth_reason"], "promotion_capable": False, "computation_label": "stability-screened large-search finalist; canonical replay remains required before promotion", "stability_status": "stable" if item.get("stability_eligible") else "unstable", "holdout_status": holdout.get("status"), "discovery_metrics": {key: value for key, value in item.items() if key != "config"}})
         requested = summary.get("requested", {}) if isinstance(summary, dict) else {}
         evaluated = summary.get("evaluated", {}) if isinstance(summary, dict) else {}
         metadata["candidate_pool"] = {"status": "generated", "candidates": candidates, "generated_at": datetime.now(timezone.utc).isoformat(), "discovery_mode": "large_search", "discovery_run_id": run_id, "searched_candidate_count": requested.get("coarse_candidates") if isinstance(requested, dict) else None, "evaluated": evaluated, "retained_candidate_count": len(candidates), "label": "large discovery candidates imported; discovery evidence only"}
@@ -1349,10 +1381,10 @@ class TuningWorkflowService:
             missing.append("baseline selection")
         if int(replay_settings.get("max_candidates") or 0) > 10:
             warnings.append("candidate replay limit should stay within 5–10 on this VPS")
-        if windows.get("discovery_end") and windows.get("replay_start") and str(windows["discovery_end"]) > str(windows["replay_start"]):
+        if windows.get("discovery_end") and windows.get("replay_start") and str(windows["discovery_end"]) >= str(windows["replay_start"]):
             warnings.append("discovery window overlaps replay validation window")
-        if windows.get("discovery_end") and windows.get("holdout_start") and str(windows["discovery_end"]) > str(windows["holdout_start"]):
-            warnings.append("holdout overlaps discovery window")
+        if windows.get("replay_end") and windows.get("holdout_start") and str(windows["replay_end"]) >= str(windows["holdout_start"]):
+            warnings.append("holdout overlaps replay validation window")
         return {"complete": not missing, "missing_fields": missing, "warnings": warnings}
 
     def _require_historical_replay_service(self) -> object:

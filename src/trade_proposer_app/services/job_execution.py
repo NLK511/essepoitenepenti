@@ -3,7 +3,7 @@ import logging
 import os
 import socket
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
 
 from sqlalchemy import select
@@ -606,6 +606,10 @@ class JobExecutionService:
         search_started = perf_counter()
         artifact_path = str(request.get("artifact_path") or "").strip() or None
         cache_path = str(request.get("cache_path") or "").strip() or None
+        def optional_date(key: str) -> date | None:
+            value = str(request.get(key) or "").strip()
+            return date.fromisoformat(value) if value else None
+
         summary = run_large_parameter_search(
             self.runs.session,
             coarse_candidates_count=self._plan_generation_tuning_int(
@@ -630,6 +634,18 @@ class JobExecutionService:
             or 1000,
             artifact_path=Path(artifact_path) if artifact_path else None,
             cache_path=Path(cache_path) if cache_path else None,
+            discovery_start=optional_date("discovery_start"),
+            discovery_end=optional_date("discovery_end"),
+            selection_start=optional_date("selection_start"),
+            selection_end=optional_date("selection_end"),
+            holdout_start=optional_date("holdout_start"),
+            holdout_end=optional_date("holdout_end"),
+            allow_derived_partitions=bool(request.get("allow_derived_partitions", True)),
+            discovery_panel_dates=self._plan_generation_tuning_int(request.get("discovery_panel_dates"), 24) or 24,
+            stability_panel_dates=self._plan_generation_tuning_int(request.get("stability_panel_dates"), 60) or 60,
+            stage1_survivors=self._plan_generation_tuning_int(request.get("stage1_survivors"), 2_000) or 2_000,
+            stage2_survivors=self._plan_generation_tuning_int(request.get("stage2_survivors"), 100) or 100,
+            finalists=self._plan_generation_tuning_int(request.get("finalists"), 10) or 10,
         )
         timing["large_plan_generation_tuning_search_seconds"] = round(
             perf_counter() - search_started, 6

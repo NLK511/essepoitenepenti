@@ -39,6 +39,7 @@ These are the primary narrative source of truth for the product today:
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
 - `replay-validation-efficiency-remediation-plan.md` — replay validation depth, frozen-input reuse, and local-only input remediation plan
+- `robust-large-search-validation-improvement-plan.md` — successive-halving discovery, date/fold stability checks, and locked-holdout protection for large tuning searches
 
 ## Specs directory
 

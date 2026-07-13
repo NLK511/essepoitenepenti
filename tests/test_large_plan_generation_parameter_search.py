@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from scripts.large_plan_generation_parameter_search import (
     ResumeCache,
@@ -10,6 +13,7 @@ from scripts.large_plan_generation_parameter_search import (
     coarse_candidates,
     evaluate_stream,
     fine_candidates,
+    run_large_parameter_search,
 )
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     normalize_plan_generation_tuning_config,
@@ -29,9 +33,9 @@ def test_large_search_candidate_stream_is_deterministic_and_bounded() -> None:
         assert 40.0 <= config["global.actionable_confidence_floor_percent"] <= 70.0
 
 
-def test_large_search_top_k_keeps_best_validation_ev() -> None:
+def test_large_search_ranks_precision_before_expected_value() -> None:
     top: list[SearchResult] = []
-    for index, ev in enumerate([1.0, 3.0, 2.0]):
+    for index, (wins, ev) in enumerate([(5, 10.0), (7, 2.0), (6, 3.0)]):
         _keep_top(
             top,
             SearchResult(
@@ -39,11 +43,11 @@ def test_large_search_top_k_keeps_best_validation_ev() -> None:
                 config={"x": float(index)},
                 changed_keys=["x"],
                 search_actionable_count=10,
-                search_win_count=5,
+                search_win_count=wins,
                 search_expected_value=ev,
                 search_ambiguous_count=0,
                 validation_actionable_count=10,
-                validation_win_count=5,
+                validation_win_count=wins,
                 validation_expected_value=ev,
                 validation_ambiguous_count=0,
             ),
@@ -51,7 +55,7 @@ def test_large_search_top_k_keeps_best_validation_ev() -> None:
             min_validation_actionable=5,
         )
 
-    assert [item.validation_expected_value for item in top] == [3.0, 2.0]
+    assert [item.validation_win_count for item in top] == [7, 6]
 
 
 def test_large_search_resume_cache_reloads_compatible_results(tmp_path: Path) -> None:
@@ -139,6 +143,69 @@ def test_large_search_resume_cache_skips_already_evaluated_candidate(tmp_path: P
     assert evaluated == 0
     assert service.calls == 0
     assert top == []
+
+
+def test_staged_search_bounds_expensive_survivors_and_keeps_partitions_disjoint() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    records = [
+        SimpleNamespace(
+            plan=SimpleNamespace(
+                id=index + 1, ticker="TEST", computed_at=start + timedelta(days=index)
+            )
+        )
+        for index in range(100)
+    ]
+
+    class FakeService:
+        def __init__(self, session) -> None:  # noqa: ANN001, ARG002
+            pass
+
+        def _resolve_active_config_version(self):  # noqa: ANN202
+            return SimpleNamespace(id=7, config=active)
+
+        def _eligible_records(self, **kwargs):  # noqa: ANN003, ANN202
+            return records
+
+        def _score_records(self, rows, config):  # noqa: ANN001, ANN202
+            count = len(rows)
+            wins = count
+            return count, wins, round(count * 0.1, 4), 0
+
+        def _memory_guard(self, stage):  # noqa: ANN001, ANN202, ARG002
+            return None
+
+    with patch(
+        "scripts.large_plan_generation_parameter_search.PlanGenerationTuningService",
+        FakeService,
+    ):
+        artifact = run_large_parameter_search(
+            object(),
+            coarse_candidates_count=6,
+            fine_candidates_count=3,
+            top_k=5,
+            fine_seeds=2,
+            min_validation_actionable=1,
+            stage1_survivors=4,
+            stage2_survivors=3,
+            finalists=2,
+            discovery_panel_dates=12,
+            stability_panel_dates=24,
+        )
+
+    assert artifact["schema_version"] == 2
+    assert artifact["promotion_capable"] is False
+    assert artifact["stages"]["broad_discovery"]["survivor_count"] <= 4
+    assert artifact["stages"]["stability_screen"]["survivor_count"] <= 3
+    assert len(artifact["top_candidates"]) <= 2
+    partitions = artifact["partitions"]
+    date_sets = [
+        set(partitions[name]["evidence_dates"])
+        for name in ("discovery", "selection", "locked_holdout")
+    ]
+    assert date_sets[0].isdisjoint(date_sets[1])
+    assert date_sets[0].isdisjoint(date_sets[2])
+    assert date_sets[1].isdisjoint(date_sets[2])
 
 
 def test_large_search_fine_candidates_jitter_around_seed() -> None:

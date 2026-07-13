@@ -95,7 +95,8 @@ function largeSearchCandidates(run: JobRun | null): LargeSearchCandidate[] {
 }
 
 function largeCandidateLabel(candidate: LargeSearchCandidate, index: number): string {
-  return `${s(candidate.phase) || "large"} #${index + 1} · WR ${formatPercent(n(candidate.validation_win_rate_percent))} · EV ${formatNumber(n(candidate.validation_expected_value))}`;
+  const holdout = objectValue(candidate.holdout);
+  return `${s(candidate.stage) || s(candidate.phase) || "large"} #${index + 1} · WR ${formatPercent(n(candidate.validation_win_rate_percent))} · best-day removed ${formatPercent(n(objectValue(candidate.stability).win_rate_delta_without_best_date))} · ${s(holdout.status) || "holdout pending"}`;
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -163,6 +164,15 @@ export function PlanGenerationTuningPage() {
   const [standardMode, setStandardMode] = useState<"point_in_time_replay" | "wide_point_in_time_replay" | "stored_plan_rescore" | "explore">("point_in_time_replay");
   const [largeCoarseCandidates, setLargeCoarseCandidates] = useState(20000);
   const [largeFineCandidates, setLargeFineCandidates] = useState(5000);
+  const [discoveryStart, setDiscoveryStart] = useState("");
+  const [discoveryEnd, setDiscoveryEnd] = useState("");
+  const [selectionStart, setSelectionStart] = useState("");
+  const [selectionEnd, setSelectionEnd] = useState("");
+  const [holdoutStart, setHoldoutStart] = useState("");
+  const [holdoutEnd, setHoldoutEnd] = useState("");
+  const [stage1Survivors, setStage1Survivors] = useState(2000);
+  const [stage2Survivors, setStage2Survivors] = useState(100);
+  const [largeFinalists, setLargeFinalists] = useState(10);
   const [lookbackDays, setLookbackDays] = useState(365);
   const [validationDays, setValidationDays] = useState(90);
   const [stepDays, setStepDays] = useState(30);
@@ -248,9 +258,19 @@ export function PlanGenerationTuningPage() {
       const query = new URLSearchParams({
         coarse_candidates: String(largeCoarseCandidates),
         fine_candidates: String(largeFineCandidates),
-        top_k: "100",
+        top_k: String(Math.max(largeFinalists, 100)),
         fine_seeds: "20",
+        stage1_survivors: String(stage1Survivors),
+        stage2_survivors: String(stage2Survivors),
+        finalists: String(largeFinalists),
+        allow_derived_partitions: discoveryStart || discoveryEnd || selectionStart || selectionEnd || holdoutStart || holdoutEnd ? "false" : "true",
       });
+      if (discoveryStart) query.set("discovery_start", discoveryStart);
+      if (discoveryEnd) query.set("discovery_end", discoveryEnd);
+      if (selectionStart) query.set("selection_start", selectionStart);
+      if (selectionEnd) query.set("selection_end", selectionEnd);
+      if (holdoutStart) query.set("holdout_start", holdoutStart);
+      if (holdoutEnd) query.set("holdout_end", holdoutEnd);
       await postForm<unknown>(`/api/plan-generation-tuning/large-search/run?${query.toString()}`, {});
       await loadData(0);
     } catch (runError) {
@@ -357,10 +377,26 @@ export function PlanGenerationTuningPage() {
             <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(standardMode)}>{saving === `run-${standardMode}` ? "… Queueing" : "Queue discovery job"}</button>
           </div>
           <div className="cluster top-gap-medium">
-            <label className="form-field compact-field"><span>Coarse</span><input type="number" min="1" max="1000000" value={largeCoarseCandidates} onChange={(event) => setLargeCoarseCandidates(Number(event.target.value || 1))} /></label>
-            <label className="form-field compact-field"><span>Fine</span><input type="number" min="0" max="500000" value={largeFineCandidates} onChange={(event) => setLargeFineCandidates(Number(event.target.value || 0))} /></label>
-            <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runLargeSearch()}>{saving === "run-large" ? "… Queueing" : "Queue large search"}</button>
+            <label className="form-field compact-field"><span>Coarse discovery</span><input type="number" min="1" max="1000000" value={largeCoarseCandidates} onChange={(event) => setLargeCoarseCandidates(Number(event.target.value || 1))} /></label>
+            <label className="form-field compact-field"><span>Fine discovery</span><input type="number" min="0" max="500000" value={largeFineCandidates} onChange={(event) => setLargeFineCandidates(Number(event.target.value || 0))} /></label>
+            <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runLargeSearch()}>{saving === "run-large" ? "… Queueing" : "Queue staged large search"}</button>
           </div>
+          <details className="top-gap-small"><summary className="helper-text">Robust funnel windows and survivor budgets</summary>
+            <div className="helper-text top-gap-small">Leave all dates empty for a deterministic 60/20/20 research split. If one date is set, all six are required. The locked holdout is never used for refinement.</div>
+            <div className="cluster top-gap-small">
+              <label className="form-field compact-field"><span>Discovery start</span><input type="date" value={discoveryStart} onChange={(event) => setDiscoveryStart(event.target.value)} /></label>
+              <label className="form-field compact-field"><span>Discovery end</span><input type="date" value={discoveryEnd} onChange={(event) => setDiscoveryEnd(event.target.value)} /></label>
+              <label className="form-field compact-field"><span>Selection start</span><input type="date" value={selectionStart} onChange={(event) => setSelectionStart(event.target.value)} /></label>
+              <label className="form-field compact-field"><span>Selection end</span><input type="date" value={selectionEnd} onChange={(event) => setSelectionEnd(event.target.value)} /></label>
+              <label className="form-field compact-field"><span>Holdout start</span><input type="date" value={holdoutStart} onChange={(event) => setHoldoutStart(event.target.value)} /></label>
+              <label className="form-field compact-field"><span>Holdout end</span><input type="date" value={holdoutEnd} onChange={(event) => setHoldoutEnd(event.target.value)} /></label>
+            </div>
+            <div className="cluster top-gap-small">
+              <label className="form-field compact-field"><span>Stage 1 survivors</span><input type="number" min="10" max="10000" value={stage1Survivors} onChange={(event) => setStage1Survivors(Number(event.target.value || 2000))} /></label>
+              <label className="form-field compact-field"><span>Stage 2 survivors</span><input type="number" min="5" max="1000" value={stage2Survivors} onChange={(event) => setStage2Survivors(Number(event.target.value || 100))} /></label>
+              <label className="form-field compact-field"><span>Finalists</span><input type="number" min="1" max="50" value={largeFinalists} onChange={(event) => setLargeFinalists(Number(event.target.value || 10))} /></label>
+            </div>
+          </details>
         </Card>
       </section>
 
@@ -474,11 +510,24 @@ export function PlanGenerationTuningPage() {
           <div className="data-card">
             <div className="data-card-header"><div className="data-card-title">Large-search candidates</div><Badge tone="warning">research only</Badge></div>
             {selectedJobLargeCandidates.length > 0 ? (
-              <div className="cluster top-gap-small">
-                <select className="input" value={selectedLargeCandidateIndex} onChange={(event) => setSelectedLargeCandidateIndex(Number(event.target.value || 0))}>
-                  {selectedJobLargeCandidates.map((candidate, index) => <option key={`${selectedJob?.id ?? "large"}-${index}`} value={index}>{largeCandidateLabel(candidate, index)}</option>)}
-                </select>
-                <button className="button-secondary" type="button" disabled={saving !== null || !selectedLargeCandidate?.config} onClick={() => void runWalkForward("large-candidate")}>{saving === "walk-large-candidate" ? "… Validating" : "Walk-forward large candidate"}</button>
+              <div>
+                <div className="cluster top-gap-small">
+                  <select className="input" value={selectedLargeCandidateIndex} onChange={(event) => setSelectedLargeCandidateIndex(Number(event.target.value || 0))}>
+                    {selectedJobLargeCandidates.map((candidate, index) => <option key={`${selectedJob?.id ?? "large"}-${index}`} value={index}>{largeCandidateLabel(candidate, index)}</option>)}
+                  </select>
+                  <button className="button-secondary" type="button" disabled={saving !== null || !selectedLargeCandidate?.config} onClick={() => void runWalkForward("large-candidate")}>{saving === "walk-large-candidate" ? "… Validating" : "Walk-forward large candidate"}</button>
+                </div>
+                {selectedLargeCandidate ? (() => {
+                  const stability = objectValue(selectedLargeCandidate.stability);
+                  const holdout = objectValue(selectedLargeCandidate.holdout);
+                  const reasons = Array.isArray(stability.reasons) ? stability.reasons.map(s) : [];
+                  return <section className="metrics-grid top-gap-small">
+                    <StatCard label="Stability" value={selectedLargeCandidate.stability_eligible ? "eligible" : "unstable"} helper={reasons.join(", ") || "No blocking stability reason"} />
+                    <StatCard label="Best day share" value={formatPercent(n(stability.best_date_positive_share_percent))} helper={`Best date ${s(stability.best_date) || "—"}`} />
+                    <StatCard label="Without best day" value={formatPercent(n(stability.win_rate_delta_without_best_date))} helper={`EV delta ${formatNumber(n(stability.expected_value_delta_without_best_date))}`} />
+                    <StatCard label="Locked holdout" value={s(holdout.status) || "not run"} helper={holdout.canonical_candidate_replay_required ? "Canonical candidate replay still required" : "Research-only falsification result"} />
+                  </section>;
+                })() : null}
               </div>
             ) : <div className="helper-text top-gap-small">Select a completed large-search job in Job history to validate one of its top candidates. Large-search candidates are raw research configs and are not promotion-capable by themselves.</div>}
           </div>
