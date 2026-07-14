@@ -283,6 +283,13 @@ async def run_large_plan_generation_tuning_search(
         default="research_ev_per_trade",
         pattern="^(research_precision|research_ev_per_trade|promotion_candidate)$",
     ),
+    search_campaign: str = Query(
+        default="combined_small_delta",
+        pattern=(
+            "^(selectivity_only|entry_risk_only|stop_risk_only|take_profit_family_only|"
+            "combined_small_delta|high_risk_research)$"
+        ),
+    ),
     session: Session = Depends(get_db_session),
 ):
     boundaries = (
@@ -342,6 +349,7 @@ async def run_large_plan_generation_tuning_search(
                 "finalists": finalists,
                 "min_actionable_mode": min_actionable_mode,
                 "objective_profile": objective_profile,
+                "search_campaign": search_campaign,
                 "batch_log_interval": 1000,
                 "artifact_path": (
                     "artifacts/large-plan-generation-parameter-search-run-"

@@ -34,6 +34,41 @@ from trade_proposer_app.services.tuning_stability import TuningStabilityEvaluato
 Fingerprint = str
 MinActionableMode = Literal["rank_only", "hard_gate"]
 ObjectiveProfile = Literal["research_precision", "research_ev_per_trade", "promotion_candidate"]
+SearchCampaign = Literal[
+    "selectivity_only",
+    "entry_risk_only",
+    "stop_risk_only",
+    "take_profit_family_only",
+    "combined_small_delta",
+    "high_risk_research",
+]
+
+CAMPAIGN_PARAMETER_KEYS: dict[SearchCampaign, tuple[str, ...]] = {
+    "selectivity_only": ("global.actionable_confidence_floor_percent",),
+    "entry_risk_only": (
+        "global.entry_band_risk_fraction",
+        "setup_family.entry_band_multiplier",
+    ),
+    "stop_risk_only": (
+        "global.headwind_stop_multiplier",
+        "global.volatility_stop_multiplier",
+        "setup_family.breakout.stop_distance_multiplier",
+        "setup_family.mean_reversion.stop_distance_multiplier",
+    ),
+    "take_profit_family_only": tuple(
+        key for key, definition in PARAMETER_BY_KEY.items() if definition.category == "reward"
+    ),
+    "combined_small_delta": tuple(PARAMETER_BY_KEY.keys()),
+    "high_risk_research": tuple(PARAMETER_BY_KEY.keys()),
+}
+CAMPAIGN_MAX_CHANGED_KEYS: dict[SearchCampaign, int | None] = {
+    "selectivity_only": 1,
+    "entry_risk_only": 2,
+    "stop_risk_only": 2,
+    "take_profit_family_only": 1,
+    "combined_small_delta": 3,
+    "high_risk_research": None,
+}
 
 
 @dataclass(frozen=True)
@@ -53,6 +88,8 @@ class SearchResult:
     stability_eligible: bool = True
     stability: dict[str, object] | None = None
     holdout: dict[str, object] | None = None
+    campaign: str | None = None
+    gate_blockers: list[str] | None = None
 
     @property
     def validation_win_rate(self) -> float:
@@ -61,6 +98,12 @@ class SearchResult:
             if self.validation_actionable_count
             else 0.0
         )
+
+    @property
+    def validation_expected_value_per_actionable(self) -> float:
+        if self.validation_actionable_count <= 0:
+            return 0.0
+        return self.validation_expected_value / self.validation_actionable_count
 
     @property
     def search_win_rate(self) -> float:
@@ -93,6 +136,8 @@ class SearchResult:
             "stability_eligible": self.stability_eligible,
             "stability": self.stability,
             "holdout": self.holdout,
+            "campaign": self.campaign,
+            "gate_blockers": list(self.gate_blockers or []),
             "promotion_capable": False,
         }
 
@@ -202,6 +247,7 @@ class ResumeCache:
                         top_k=max(1, top_k),
                         min_validation_actionable=min_validation_actionable,
                         min_actionable_mode=min_actionable_mode,
+                        objective_profile="research_ev_per_trade",
                     )
         if top_k is not None:
             for stage, baseline in baseline_by_stage.items():
@@ -247,15 +293,44 @@ class ResumeCache:
         return SearchResult(**clean)  # type: ignore[arg-type]
 
 
-def _rank_key(result: SearchResult, *, min_validation_actionable: int) -> tuple[object, ...]:
-    """Canonical precision-first ordering after stage stability eligibility."""
+def _rank_key(
+    result: SearchResult,
+    *,
+    min_validation_actionable: int,
+    objective_profile: ObjectiveProfile = "research_precision",
+) -> tuple[object, ...]:
+    """Canonical ordering after stage gates; objective profile controls the primary metric."""
     enough_validation = result.validation_actionable_count >= min_validation_actionable
-    return (
+    common = (
         enough_validation,
         result.stability_eligible,
-        result.validation_win_rate,
-        result.validation_win_count,
-        result.validation_expected_value,
+    )
+    if objective_profile == "research_ev_per_trade":
+        primary = (
+            result.validation_expected_value_per_actionable,
+            result.validation_win_rate,
+            result.validation_expected_value,
+            result.validation_win_count,
+        )
+    elif objective_profile == "promotion_candidate":
+        positive_ev_per_trade = result.validation_expected_value_per_actionable > 0
+        primary = (
+            positive_ev_per_trade,
+            result.validation_expected_value_per_actionable,
+            result.validation_expected_value,
+            result.validation_win_rate,
+            result.validation_win_count,
+        )
+    else:
+        primary = (
+            result.validation_win_rate,
+            result.validation_win_count,
+            result.validation_expected_value_per_actionable,
+            result.validation_expected_value,
+        )
+    return (
+        *common,
+        *primary,
         result.search_win_rate,
         result.search_expected_value,
         -result.validation_ambiguous_count,
@@ -267,12 +342,48 @@ def _is_baseline_result(result: SearchResult) -> bool:
     return not result.changed_keys
 
 
-def _passes_min_actionable_gate(
-    result: SearchResult, *, min_validation_actionable: int, min_actionable_mode: MinActionableMode
-) -> bool:
+def _gate_blockers(
+    result: SearchResult,
+    *,
+    min_validation_actionable: int,
+    min_actionable_mode: MinActionableMode,
+) -> list[str]:
     if min_actionable_mode == "rank_only" or _is_baseline_result(result):
-        return True
-    return result.validation_actionable_count >= min_validation_actionable
+        return []
+    blockers: list[str] = []
+    if result.validation_actionable_count < min_validation_actionable:
+        blockers.append(
+            "selection_actionable_below_minimum"
+            if result.stage == "selection_walk_forward"
+            else "validation_actionable_below_minimum"
+        )
+    if not result.stability_eligible and result.stage in {
+        "stability_screen",
+        "selection_walk_forward",
+    }:
+        stability = result.stability if isinstance(result.stability, dict) else {}
+        qualified_slices = stability.get("qualified_slices")
+        qualified_folds = stability.get("qualified_fold_count")
+        if isinstance(qualified_slices, int) and qualified_slices < 3:
+            blockers.append("walk_forward_qualified_slices_below_minimum")
+        elif isinstance(qualified_folds, int) and qualified_folds < 3:
+            blockers.append("holdout_qualified_folds_below_minimum")
+        else:
+            blockers.append("stability_gate_failed")
+    return blockers
+
+
+def _passes_min_actionable_gate(
+    result: SearchResult,
+    *,
+    min_validation_actionable: int,
+    min_actionable_mode: MinActionableMode,
+) -> bool:
+    return not _gate_blockers(
+        result,
+        min_validation_actionable=min_validation_actionable,
+        min_actionable_mode=min_actionable_mode,
+    )
 
 
 def _keep_top(
@@ -282,6 +393,7 @@ def _keep_top(
     top_k: int,
     min_validation_actionable: int,
     min_actionable_mode: MinActionableMode = "rank_only",
+    objective_profile: ObjectiveProfile = "research_precision",
 ) -> list[SearchResult]:
     if not _passes_min_actionable_gate(
         result,
@@ -291,7 +403,11 @@ def _keep_top(
         return top
     top.append(result)
     top.sort(
-        key=lambda item: _rank_key(item, min_validation_actionable=min_validation_actionable),
+        key=lambda item: _rank_key(
+            item,
+            min_validation_actionable=min_validation_actionable,
+            objective_profile=objective_profile,
+        ),
         reverse=True,
     )
     if len(top) > top_k:
@@ -324,14 +440,20 @@ def _random_grid_value(key: str, rng: random.Random) -> float:
 
 
 def coarse_candidates(
-    active_config: dict[str, float], *, count: int, seed: int
+    active_config: dict[str, float],
+    *,
+    count: int,
+    seed: int,
+    campaign: SearchCampaign = "high_risk_research",
 ) -> Iterable[dict[str, float]]:
     rng = random.Random(seed)
-    keys = tuple(PARAMETER_BY_KEY.keys())
+    keys = CAMPAIGN_PARAMETER_KEYS[campaign]
+    max_changed_keys = CAMPAIGN_MAX_CHANGED_KEYS[campaign]
     yield normalize_plan_generation_tuning_config(active_config)
     for _ in range(max(0, count - 1)):
         config = dict(active_config)
-        for key in keys:
+        candidate_keys = _sample_campaign_keys(keys, rng=rng, max_changed_keys=max_changed_keys)
+        for key in candidate_keys:
             config[key] = _random_grid_value(key, rng)
         yield normalize_plan_generation_tuning_config(config)
 
@@ -342,16 +464,31 @@ def fine_candidates(
     *,
     count: int,
     seed: int,
+    campaign: SearchCampaign = "high_risk_research",
 ) -> Iterable[dict[str, float]]:
     if not seeds or count <= 0:
         return
     rng = random.Random(seed)
-    keys = tuple(PARAMETER_BY_KEY.keys())
+    keys = CAMPAIGN_PARAMETER_KEYS[campaign]
+    max_changed_keys = CAMPAIGN_MAX_CHANGED_KEYS[campaign]
     for index in range(count):
         source = seeds[index % len(seeds)]
         config = dict(active_config)
         config.update(source.config)
-        for key in keys:
+        changed = [
+            key
+            for key in keys
+            if round(float(config.get(key, active_config.get(key, 0.0))), 4)
+            != round(float(active_config.get(key, 0.0)), 4)
+        ]
+        candidate_keys = tuple(changed) or _sample_campaign_keys(
+            keys,
+            rng=rng,
+            max_changed_keys=max_changed_keys,
+        )
+        if max_changed_keys is not None and len(candidate_keys) > max_changed_keys:
+            candidate_keys = tuple(sorted(candidate_keys))[:max_changed_keys]
+        for key in candidate_keys:
             definition = PARAMETER_BY_KEY[key]
             radius = max(
                 definition.step,
@@ -361,6 +498,18 @@ def fine_candidates(
             stepped = round((float(config[key]) + jitter) / definition.step) * definition.step
             config[key] = _bounded(key, stepped)
         yield normalize_plan_generation_tuning_config(config)
+
+
+def _sample_campaign_keys(
+    keys: Sequence[str],
+    *,
+    rng: random.Random,
+    max_changed_keys: int | None,
+) -> tuple[str, ...]:
+    if max_changed_keys is None or len(keys) <= max_changed_keys:
+        return tuple(keys)
+    sample_size = rng.randint(1, max(1, max_changed_keys))
+    return tuple(rng.sample(tuple(keys), k=sample_size))
 
 
 def evaluate_stream(
@@ -378,6 +527,8 @@ def evaluate_stream(
     resume_cache: ResumeCache | None = None,
     stage: str = "legacy_discovery",
     min_actionable_mode: MinActionableMode = "rank_only",
+    objective_profile: ObjectiveProfile = "research_precision",
+    campaign: SearchCampaign | None = None,
 ) -> tuple[list[SearchResult], int]:
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
@@ -415,6 +566,7 @@ def evaluate_stream(
             validation_win_count=validation_win,
             validation_expected_value=validation_ev,
             validation_ambiguous_count=validation_ambiguous,
+            campaign=campaign,
         )
         if config == active_config:
             baseline_result = result
@@ -424,6 +576,7 @@ def evaluate_stream(
             top_k=top_k,
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode=min_actionable_mode,
+            objective_profile=objective_profile,
         )
         if resume_cache is not None:
             resume_cache.append_result(result)
@@ -450,6 +603,8 @@ def _evaluate_stability_stage(
     seen: set[Fingerprint],
     resume_cache: ResumeCache | None,
     min_actionable_mode: MinActionableMode,
+    objective_profile: ObjectiveProfile,
+    campaign: SearchCampaign,
 ) -> tuple[list[SearchResult], int]:
     evaluator = TuningStabilityEvaluator(service)
     top: list[SearchResult] = []
@@ -484,6 +639,7 @@ def _evaluate_stability_stage(
             validation_ambiguous_count=aggregate.ambiguous_count,
             stability_eligible=stability.stable or config == active_config,
             stability=stability.payload(include_dates=False),
+            campaign=campaign,
         )
         if config == active_config:
             baseline_result = result
@@ -493,6 +649,7 @@ def _evaluate_stability_stage(
             top_k=top_k,
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode=min_actionable_mode,
+            objective_profile=objective_profile,
         )
         if resume_cache is not None:
             resume_cache.append_result(result)
@@ -515,6 +672,8 @@ def _evaluate_walk_forward_stage(
     seen: set[Fingerprint],
     resume_cache: ResumeCache | None,
     min_actionable_mode: MinActionableMode,
+    objective_profile: ObjectiveProfile,
+    campaign: SearchCampaign,
 ) -> tuple[list[SearchResult], int]:
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
@@ -563,6 +722,7 @@ def _evaluate_walk_forward_stage(
             validation_ambiguous_count=ambiguous,
             stability_eligible=eligible,
             stability=stability,
+            campaign=campaign,
         )
         if config == active_config:
             baseline_result = result
@@ -572,6 +732,7 @@ def _evaluate_walk_forward_stage(
             top_k=top_k,
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode=min_actionable_mode,
+            objective_profile=objective_profile,
         )
         if resume_cache is not None:
             resume_cache.append_result(result)
@@ -587,6 +748,7 @@ def _evaluate_locked_holdout(
     records: Sequence,
     holdout_status: str,
     min_validation_actionable: int,
+    objective_profile: ObjectiveProfile,
 ) -> list[SearchResult]:
     if not records or holdout_status not in {"locked", "defer_thin_holdout"}:
         status = {"status": holdout_status, "scoreable": False, "promotion_capable": False}
@@ -610,7 +772,33 @@ def _evaluate_locked_holdout(
             and candidate_delta >= -0.25
         )
         canonical_required = depth != "rescore_only"
+        candidate_ev_per_actionable = stability.candidate.expected_value_per_actionable
+        baseline_ev_total = stability.baseline.expected_value_total
+        candidate_ev_total = stability.candidate.expected_value_total
+        promotion_blockers = list(stability.reasons)
+        if stability.qualified_fold_count < 3:
+            promotion_blockers.append("holdout_qualified_folds_below_minimum")
+        if candidate_ev_per_actionable is None or candidate_ev_per_actionable < 0:
+            promotion_blockers.append("holdout_ev_per_actionable_negative")
+        if candidate_ev_total < baseline_ev_total:
+            promotion_blockers.append("exposure_expansion_loss")
+        if canonical_required:
+            promotion_blockers.append("requires_canonical_candidate_replay")
+        hard_holdout_blockers = {
+            "holdout_ev_per_actionable_negative",
+            "exposure_expansion_loss",
+            "holdout_qualified_folds_below_minimum",
+        }
+        if not _is_baseline_result(item) and any(
+            blocker in hard_holdout_blockers for blocker in promotion_blockers
+        ):
+            proxy_passed = False
+        if objective_profile == "promotion_candidate" and promotion_blockers:
+            proxy_passed = False
         status = (
+            "baseline_holdout_reference"
+            if _is_baseline_result(item)
+            else
             "requires_canonical_candidate_replay"
             if proxy_passed and canonical_required
             else "passed_holdout"
@@ -627,6 +815,8 @@ def _evaluate_locked_holdout(
                 "proxy_passed": proxy_passed,
                 "canonical_candidate_replay_required": canonical_required,
                 "promotion_capable": False,
+                "promotion_blockers": sorted(set(promotion_blockers)),
+                "objective_profile": objective_profile,
                 "note": (
                     "Stored-plan holdout is a falsification screen; geometry-changing "
                     "configs require canonical candidate replay."
@@ -664,6 +854,7 @@ def run_large_parameter_search(
     finalists: int = 10,
     min_actionable_mode: MinActionableMode = "hard_gate",
     objective_profile: ObjectiveProfile = "research_ev_per_trade",
+    search_campaign: SearchCampaign = "combined_small_delta",
 ) -> dict[str, object]:
     service = PlanGenerationTuningService(session)
     baseline_version = service._resolve_active_config_version()  # noqa: SLF001
@@ -694,6 +885,7 @@ def run_large_parameter_search(
         "finalists": finalists,
         "min_actionable_mode": min_actionable_mode,
         "objective_profile": objective_profile,
+        "search_campaign": search_campaign,
     }
     discovery_dates = select_stratified_dates(
         partitions.discovery.evidence_dates, limit=discovery_panel_dates, seed=seed
@@ -714,7 +906,10 @@ def run_large_parameter_search(
         "stage1_survivors": min(max(1, stage1_survivors), max(1, top_k, coarse_candidates_count)),
         "stage2_survivors": min(max(1, stage2_survivors), max(1, stage1_survivors)),
         "finalists": min(max(1, finalists), max(1, stage2_survivors)),
-        "objective": "canonical_precision_first_after_stability",
+        "objective": objective_profile,
+        "search_campaign": search_campaign,
+        "campaign_parameter_keys": list(CAMPAIGN_PARAMETER_KEYS[search_campaign]),
+        "campaign_max_changed_keys": CAMPAIGN_MAX_CHANGED_KEYS[search_campaign],
     }
     cache_metadata = {
         "schema_version": 2,
@@ -748,7 +943,12 @@ def run_large_parameter_search(
     try:
         coarse_top, stage_counts["coarse_discovery"] = evaluate_stream(
             service,
-            coarse_candidates(active_config, count=coarse_candidates_count, seed=seed),
+            coarse_candidates(
+                active_config,
+                count=coarse_candidates_count,
+                seed=seed,
+                campaign=search_campaign,
+            ),
             active_config=active_config,
             search_records=discovery_records,
             validation_records=discovery_records,
@@ -760,6 +960,8 @@ def run_large_parameter_search(
             seen=seen,
             resume_cache=resume_cache,
             min_actionable_mode="rank_only",
+            objective_profile=objective_profile,
+            campaign=search_campaign,
         )
         coarse_top = _merged_top(
             loaded_by_stage.get("coarse_discovery", []),
@@ -767,6 +969,7 @@ def run_large_parameter_search(
             top_k=int(stage_policy["stage1_survivors"]),
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode="rank_only",
+            objective_profile=objective_profile,
         )
         fine_top, stage_counts["fine_discovery"] = evaluate_stream(
             service,
@@ -775,6 +978,7 @@ def run_large_parameter_search(
                 coarse_top[: max(1, fine_seeds)],
                 count=fine_candidates_count,
                 seed=seed + 1,
+                campaign=search_campaign,
             ),
             active_config=active_config,
             search_records=discovery_records,
@@ -787,6 +991,8 @@ def run_large_parameter_search(
             seen=seen,
             resume_cache=resume_cache,
             min_actionable_mode="rank_only",
+            objective_profile=objective_profile,
+            campaign=search_campaign,
         )
         fine_top = _merged_top(
             loaded_by_stage.get("fine_discovery", []),
@@ -794,6 +1000,7 @@ def run_large_parameter_search(
             top_k=int(stage_policy["stage1_survivors"]),
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode="rank_only",
+            objective_profile=objective_profile,
         )
         stage1 = _deduplicated_top(
             [*coarse_top, *fine_top],
@@ -801,6 +1008,7 @@ def run_large_parameter_search(
             top_k=int(stage_policy["stage1_survivors"]),
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode="rank_only",
+            objective_profile=objective_profile,
         )
         stage2, stage_counts["stability_screen"] = _evaluate_stability_stage(
             service,
@@ -816,6 +1024,8 @@ def run_large_parameter_search(
             seen=seen,
             resume_cache=resume_cache,
             min_actionable_mode=min_actionable_mode,
+            objective_profile=objective_profile,
+            campaign=search_campaign,
         )
         stage2 = _merged_top(
             loaded_by_stage.get("stability_screen", []),
@@ -823,6 +1033,7 @@ def run_large_parameter_search(
             top_k=int(stage_policy["stage2_survivors"]),
             min_validation_actionable=min_validation_actionable,
             min_actionable_mode=min_actionable_mode,
+            objective_profile=objective_profile,
         )
         selection_records = list(partitions.selection.records)
         if selection_records:
@@ -836,6 +1047,8 @@ def run_large_parameter_search(
                 seen=seen,
                 resume_cache=resume_cache,
                 min_actionable_mode=min_actionable_mode,
+                objective_profile=objective_profile,
+                campaign=search_campaign,
             )
             stage3 = _merged_top(
                 loaded_by_stage.get("selection_walk_forward", []),
@@ -843,6 +1056,7 @@ def run_large_parameter_search(
                 top_k=int(stage_policy["finalists"]),
                 min_validation_actionable=min_validation_actionable,
                 min_actionable_mode=min_actionable_mode,
+                objective_profile=objective_profile,
             )
         else:
             stage_counts["selection_walk_forward"] = 0
@@ -854,6 +1068,7 @@ def run_large_parameter_search(
             records=partitions.locked_holdout.records,
             holdout_status=partitions.holdout_status,
             min_validation_actionable=min_validation_actionable,
+            objective_profile=objective_profile,
         )
     finally:
         if resume_cache:
@@ -906,6 +1121,7 @@ def run_large_parameter_search(
         "promotion_capable": False,
         "objective_profile": objective_profile,
         "min_actionable_mode": min_actionable_mode,
+        "search_campaign": search_campaign,
         "baseline_config_version_id": baseline_version.id,
         "baseline_config": active_config,
         "baseline_config_hash": _fingerprint(active_config),
@@ -957,6 +1173,7 @@ def _merged_top(
     top_k: int,
     min_validation_actionable: int,
     min_actionable_mode: MinActionableMode,
+    objective_profile: ObjectiveProfile,
 ) -> list[SearchResult]:
     return _deduplicated_top(
         [*first, *second],
@@ -964,6 +1181,7 @@ def _merged_top(
         top_k=top_k,
         min_validation_actionable=min_validation_actionable,
         min_actionable_mode=min_actionable_mode,
+        objective_profile=objective_profile,
     )
 
 
@@ -974,6 +1192,7 @@ def _deduplicated_top(
     top_k: int,
     min_validation_actionable: int,
     min_actionable_mode: MinActionableMode,
+    objective_profile: ObjectiveProfile,
 ) -> list[SearchResult]:
     best_by_config: dict[str, SearchResult] = {}
     for item in results:
@@ -986,12 +1205,22 @@ def _deduplicated_top(
         fingerprint = _fingerprint(item.config)
         previous = best_by_config.get(fingerprint)
         if previous is None or _rank_key(
-            item, min_validation_actionable=min_validation_actionable
-        ) > _rank_key(previous, min_validation_actionable=min_validation_actionable):
+            item,
+            min_validation_actionable=min_validation_actionable,
+            objective_profile=objective_profile,
+        ) > _rank_key(
+            previous,
+            min_validation_actionable=min_validation_actionable,
+            objective_profile=objective_profile,
+        ):
             best_by_config[fingerprint] = item
     ordered = sorted(
         best_by_config.values(),
-        key=lambda item: _rank_key(item, min_validation_actionable=min_validation_actionable),
+        key=lambda item: _rank_key(
+            item,
+            min_validation_actionable=min_validation_actionable,
+            objective_profile=objective_profile,
+        ),
         reverse=True,
     )
     if active_config is not None and _fingerprint(active_config) not in {
@@ -1085,6 +1314,11 @@ def main() -> None:
         default="research_ev_per_trade",
     )
     parser.add_argument(
+        "--search-campaign",
+        choices=tuple(CAMPAIGN_PARAMETER_KEYS),
+        default="combined_small_delta",
+    )
+    parser.add_argument(
         "--artifact",
         type=Path,
         default=Path("artifacts/large-plan-generation-parameter-search.json"),
@@ -1120,6 +1354,7 @@ def main() -> None:
             finalists=args.finalists,
             min_actionable_mode=args.min_actionable_mode,
             objective_profile=args.objective_profile,
+            search_campaign=args.search_campaign,
         )
         print(
             json.dumps(

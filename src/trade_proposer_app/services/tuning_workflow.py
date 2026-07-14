@@ -1087,6 +1087,9 @@ class TuningWorkflowService:
             "stage1_survivors": max(10, min(10_000, int(discovery_settings.get("stage1_survivors") or 2_000))),
             "stage2_survivors": max(5, min(1_000, int(discovery_settings.get("stage2_survivors") or 100))),
             "finalists": max(1, min(50, int(discovery_settings.get("finalists") or 10))),
+            "min_actionable_mode": str(discovery_settings.get("min_actionable_mode") or "hard_gate"),
+            "objective_profile": str(discovery_settings.get("objective_profile") or "research_ev_per_trade"),
+            "search_campaign": str(discovery_settings.get("search_campaign") or "combined_small_delta"),
             "batch_log_interval": 1000,
             "tuning_experiment_id": record.id,
             "candidate_pool_keep_count": keep_count,
@@ -1132,7 +1135,7 @@ class TuningWorkflowService:
             changed_keys = [str(key) for key in item.get("changed_keys", [])] if isinstance(item.get("changed_keys"), list) else []
             depth = candidate_validation_depth(changed_keys)
             holdout = item.get("holdout") if isinstance(item.get("holdout"), dict) else {}
-            candidates.append({"id": f"large-{run_id}-{index}", "label": f"large finalist #{index}", "source": "large_plan_generation_tuning_search", "status": "discovered", "rank": index, "config": config, "config_hash": stable_hash(config), "changed_keys": changed_keys, "validation_depth": depth["validation_depth"], "validation_depth_reason": depth["validation_depth_reason"], "promotion_capable": False, "computation_label": "stability-screened large-search finalist; canonical replay remains required before promotion", "stability_status": "stable" if item.get("stability_eligible") else "unstable", "holdout_status": holdout.get("status"), "discovery_metrics": {key: value for key, value in item.items() if key != "config"}})
+            candidates.append({"id": f"large-{run_id}-{index}", "label": f"large finalist #{index}", "source": "large_plan_generation_tuning_search", "status": "discovered", "rank": index, "config": config, "config_hash": stable_hash(config), "changed_keys": changed_keys, "validation_depth": depth["validation_depth"], "validation_depth_reason": depth["validation_depth_reason"], "promotion_capable": False, "promotion_blockers": holdout.get("promotion_blockers") if isinstance(holdout.get("promotion_blockers"), list) else [], "canonical_candidate_replay_required": bool(holdout.get("canonical_candidate_replay_required") or depth["validation_depth"] != "rescore_only"), "campaign": item.get("campaign"), "computation_label": "stability-screened large-search finalist; canonical replay remains required before promotion", "stability_status": "stable" if item.get("stability_eligible") else "unstable", "holdout_status": holdout.get("status"), "discovery_metrics": {key: value for key, value in item.items() if key != "config"}})
         requested = summary.get("requested", {}) if isinstance(summary, dict) else {}
         evaluated = summary.get("evaluated", {}) if isinstance(summary, dict) else {}
         metadata["candidate_pool"] = {"status": "generated", "candidates": candidates, "generated_at": datetime.now(timezone.utc).isoformat(), "discovery_mode": "large_search", "discovery_run_id": run_id, "searched_candidate_count": requested.get("coarse_candidates") if isinstance(requested, dict) else None, "evaluated": evaluated, "retained_candidate_count": len(candidates), "label": "large discovery candidates imported; discovery evidence only"}

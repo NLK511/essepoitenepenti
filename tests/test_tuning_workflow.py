@@ -109,7 +109,16 @@ class TuningWorkflowServiceTests(unittest.TestCase):
                     "evaluated": {"coarse": 50000},
                     "top_candidates": [
                         {"changed_keys": ["global.actionable_confidence_floor_percent"], "config": {"global.actionable_confidence_floor_percent": 66.0}, "validation_win_rate_percent": 55.0},
-                        {"changed_keys": ["setup_family.breakout.take_profit_distance_multiplier"], "config": {"setup_family.breakout.take_profit_distance_multiplier": 1.2}, "validation_win_rate_percent": 52.0},
+                        {
+                            "changed_keys": ["setup_family.breakout.take_profit_distance_multiplier"],
+                            "config": {"setup_family.breakout.take_profit_distance_multiplier": 1.2},
+                            "validation_win_rate_percent": 52.0,
+                            "campaign": "take_profit_family_only",
+                            "holdout": {
+                                "canonical_candidate_replay_required": True,
+                                "promotion_blockers": ["requires_canonical_candidate_replay"],
+                            },
+                        },
                     ],
                 }
             })
@@ -125,6 +134,12 @@ class TuningWorkflowServiceTests(unittest.TestCase):
             self.assertEqual("generated", pool["status"])
             self.assertEqual(2, len(pool["candidates"]))
             self.assertEqual("large_search", pool["discovery_mode"])
+            self.assertEqual("take_profit_family_only", pool["candidates"][1]["campaign"])
+            self.assertTrue(pool["candidates"][1]["canonical_candidate_replay_required"])
+            self.assertIn(
+                "requires_canonical_candidate_replay",
+                pool["candidates"][1]["promotion_blockers"],
+            )
         finally:
             session.close()
 

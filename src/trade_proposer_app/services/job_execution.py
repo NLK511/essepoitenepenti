@@ -648,6 +648,7 @@ class JobExecutionService:
             finalists=self._plan_generation_tuning_int(request.get("finalists"), 10) or 10,
             min_actionable_mode=str(request.get("min_actionable_mode") or "hard_gate"),
             objective_profile=str(request.get("objective_profile") or "research_ev_per_trade"),
+            search_campaign=str(request.get("search_campaign") or "combined_small_delta"),
         )
         timing["large_plan_generation_tuning_search_seconds"] = round(
             perf_counter() - search_started, 6

@@ -103,6 +103,8 @@ For staged large searches, ranking is not enough when sample counts are thin. In
 
 Operator-facing tuning summaries must not collapse actionability quality into one ambiguous "best" statement. They must report, at minimum, actionable count, actionable win rate, EV per actionable, and total traded EV on the same evidence as baseline. Non-actionable rows contribute no EV and should be described only as non-actionable/ambiguous coverage.
 
+Large staged searches must be campaign scoped. The safe default is `combined_small_delta`, which caps non-baseline finalists at three changed keys. Narrow campaigns are preferred for diagnosis: `selectivity_only`, `entry_risk_only`, `stop_risk_only`, and `take_profit_family_only`. Any run that can produce wider multi-key geometry changes must explicitly use `high_risk_research` and remains research-only.
+
 ## Parameter schema
 
 Every tunable key must be registered before use. Candidate configs containing unknown keys must be rejected.

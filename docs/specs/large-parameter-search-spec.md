@@ -66,6 +66,19 @@ Hard-gate behavior:
 
 A candidate selected from fewer actionables than the configured minimum must not appear as a non-baseline finalist in `hard_gate` mode.
 
+## Campaign-scoped search
+
+Large search must persist `search_campaign` and the allowed key set in schema-v2 artifacts. Supported campaigns are:
+
+- `selectivity_only` — only `global.actionable_confidence_floor_percent`;
+- `entry_risk_only` — entry band risk fraction and setup-family entry band multiplier;
+- `stop_risk_only` — headwind/volatility stop controls and stop-distance family multipliers;
+- `take_profit_family_only` — one reward/take-profit multiplier at a time;
+- `combined_small_delta` — default; any registered key may move, but at most three keys may change;
+- `high_risk_research` — explicit all-knobs research mode with no changed-key cap.
+
+The default large-search campaign is `combined_small_delta`. A finalist that changes more than three keys is valid only when `search_campaign=high_risk_research`.
+
 ## Stability and ranking rules
 
 Pooled expected value and win rate remain visible, but they are insufficient for ranking or promotion by themselves.

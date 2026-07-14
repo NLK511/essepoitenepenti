@@ -58,6 +58,32 @@ def test_large_search_ranks_precision_before_expected_value() -> None:
     assert [item.validation_win_count for item in top] == [7, 6]
 
 
+def test_large_search_ev_per_trade_objective_ranks_ev_per_actionable_first() -> None:
+    top: list[SearchResult] = []
+    for wins, actionable, ev in [(8, 20, 8.0), (4, 5, 5.0)]:
+        _keep_top(
+            top,
+            SearchResult(
+                phase="selection_walk_forward",
+                config={"wins": float(wins)},
+                changed_keys=["wins"],
+                search_actionable_count=actionable,
+                search_win_count=wins,
+                search_expected_value=ev,
+                search_ambiguous_count=0,
+                validation_actionable_count=actionable,
+                validation_win_count=wins,
+                validation_expected_value=ev,
+                validation_ambiguous_count=0,
+            ),
+            top_k=2,
+            min_validation_actionable=1,
+            objective_profile="research_ev_per_trade",
+        )
+
+    assert top[0].validation_expected_value_per_actionable == 1.0
+
+
 def test_large_search_hard_gate_rejects_low_sample_non_baseline_but_keeps_baseline() -> None:
     active = normalize_plan_generation_tuning_config(None)
     top: list[SearchResult] = []
@@ -105,6 +131,36 @@ def test_large_search_hard_gate_rejects_low_sample_non_baseline_but_keeps_baseli
 
     assert len(top) == 1
     assert top[0].changed_keys == []
+
+
+def test_large_search_hard_gate_rejects_unstable_non_baseline() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    top: list[SearchResult] = []
+
+    _keep_top(
+        top,
+        SearchResult(
+            phase="stability_screen",
+            stage="stability_screen",
+            config={**active, "global.actionable_confidence_floor_percent": 50.0},
+            changed_keys=["global.actionable_confidence_floor_percent"],
+            search_actionable_count=80,
+            search_win_count=50,
+            search_expected_value=20.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=80,
+            validation_win_count=50,
+            validation_expected_value=20.0,
+            validation_ambiguous_count=0,
+            stability_eligible=False,
+            stability={"qualified_fold_count": 1, "reasons": ["insufficient_qualified_folds"]},
+        ),
+        top_k=5,
+        min_validation_actionable=50,
+        min_actionable_mode="hard_gate",
+    )
+
+    assert top == []
 
 
 def test_large_search_rank_only_keeps_low_sample_research_candidate() -> None:
@@ -169,6 +225,23 @@ def test_large_search_resume_cache_reloads_compatible_results(tmp_path: Path) ->
 
     assert _fingerprint(active) in loaded.seen
     assert loaded.results[0].validation_expected_value == 2.0
+
+
+def test_large_search_combined_small_delta_campaign_limits_changed_keys() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+
+    candidates = list(
+        coarse_candidates(active, count=25, seed=123, campaign="combined_small_delta")
+    )
+
+    assert len(candidates) == 25
+    for candidate in candidates:
+        changed = [
+            key
+            for key, value in candidate.items()
+            if round(value, 4) != round(active.get(key, value), 4)
+        ]
+        assert len(changed) <= 3
 
 
 def test_large_search_resume_cache_skips_already_evaluated_candidate(tmp_path: Path) -> None:

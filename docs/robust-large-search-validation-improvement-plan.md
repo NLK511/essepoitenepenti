@@ -1,6 +1,6 @@
 # Robust large-search validation improvement plan
 
-**Status:** substantially implemented; 2026-07-14 thin-evidence remediation, shadow validation, and production-default rollout remain
+**Status:** substantially implemented; 2026-07-14 thin-evidence remediation is implemented for large-search gating, objective profiles, campaign scoping, and reporting metadata. Shadow validation and production-default rollout remain.
 
 Canonical contracts:
 - `specs/large-parameter-search-spec.md`
@@ -110,6 +110,8 @@ Acceptance:
 - Artifacts separately report `finalist_count`, `improvement_finalist_count`, and `baseline_included`.
 - Existing legacy artifacts remain readable.
 
+Implementation note: `hard_gate` now rejects non-baseline candidates with insufficient actionables or failed stability/fold evidence from expensive survivor stages while always retaining the baseline for comparison.
+
 Tests:
 
 - add a focused unit test around `_keep_top()` or its replacement proving low-actionable candidates are rejected in hard-gate mode;
@@ -143,6 +145,8 @@ Acceptance:
 
 - The UI and artifact can explain why a candidate with better WR and EV/actionable still fails when total traded EV is worse or EV/actionable remains negative.
 - Operators can intentionally inspect a "less bad per trade" research lead without confusing it with a promotable config.
+
+Implementation note: large-search runs now persist `objective_profile`, use the profile in survivor ordering, and attach holdout promotion blockers such as `holdout_ev_per_actionable_negative`, `exposure_expansion_loss`, and `requires_canonical_candidate_replay`.
 
 Tests:
 
@@ -181,6 +185,8 @@ Acceptance:
 - A single finalist cannot change seven parameters unless the run explicitly uses a high-risk research profile.
 - Artifacts group finalists by campaign and report campaign-specific sample counts.
 - Promotion candidate workflow only accepts narrow or previously validated combined campaigns.
+
+Implementation note: large search now supports `selectivity_only`, `entry_risk_only`, `stop_risk_only`, `take_profit_family_only`, `combined_small_delta`, and explicit `high_risk_research`. The default is `combined_small_delta`; seven-key finalists require the explicit high-risk campaign.
 
 Tests:
 
