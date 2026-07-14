@@ -258,6 +258,8 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         self.assertEqual(report["summary"]["successes"], 1)
         self.assertEqual(report["label_policy"]["excluded_outcomes"], ["phantom_loss", "phantom_win"])
         self.assertEqual(report["source_outcome_counts"]["phantom_win"], 1)
+        self.assertEqual(report["calibration_health"]["sample_count"], 2)
+        self.assertTrue(report["calibration_health"]["blocks_promotion"])
 
     def test_confidence_report_can_calibrate_phantom_only(self) -> None:
         self.outcomes_repo.list_outcomes.return_value = [

@@ -8,6 +8,7 @@ from unittest.mock import patch
 from scripts.large_plan_generation_parameter_search import (
     ResumeCache,
     SearchResult,
+    _apply_calibration_promotion_blockers,
     _fingerprint,
     _keep_top,
     coarse_candidates,
@@ -190,6 +191,52 @@ def test_large_search_rank_only_keeps_low_sample_research_candidate() -> None:
 
     assert len(top) == 1
     assert top[0].changed_keys == ["global.actionable_confidence_floor_percent"]
+
+
+def test_large_search_calibration_blocker_marks_non_baseline_finalist_failed() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    baseline = SearchResult(
+        phase="selection_walk_forward",
+        config=active,
+        changed_keys=[],
+        search_actionable_count=10,
+        search_win_count=5,
+        search_expected_value=1.0,
+        search_ambiguous_count=0,
+        validation_actionable_count=10,
+        validation_win_count=5,
+        validation_expected_value=1.0,
+        validation_ambiguous_count=0,
+        holdout={"status": "baseline_holdout_reference", "promotion_blockers": []},
+    )
+    candidate = SearchResult(
+        phase="selection_walk_forward",
+        config={**active, "global.actionable_confidence_floor_percent": 45.0},
+        changed_keys=["global.actionable_confidence_floor_percent"],
+        search_actionable_count=100,
+        search_win_count=60,
+        search_expected_value=20.0,
+        search_ambiguous_count=0,
+        validation_actionable_count=100,
+        validation_win_count=60,
+        validation_expected_value=20.0,
+        validation_ambiguous_count=0,
+        holdout={"status": "passed_holdout", "proxy_passed": True, "promotion_blockers": []},
+    )
+
+    blocked = _apply_calibration_promotion_blockers(
+        [baseline, candidate],
+        calibration_blockers=["selection:calibration_non_monotonic_confidence_buckets"],
+    )
+
+    assert blocked[0].holdout["status"] == "baseline_holdout_reference"
+    assert blocked[1].holdout["status"] == "failed_holdout"
+    assert blocked[1].holdout["proxy_passed"] is False
+    assert "calibration_health_blocks_promotion" in blocked[1].holdout["promotion_blockers"]
+    assert (
+        "selection:calibration_non_monotonic_confidence_buckets"
+        in blocked[1].holdout["promotion_blockers"]
+    )
 
 
 def test_large_search_resume_cache_reloads_compatible_results(tmp_path: Path) -> None:

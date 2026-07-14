@@ -87,4 +87,14 @@ class ConfidenceCalibrationSnapshotService:
         summary = execution_only_report.get("summary") if isinstance(execution_only_report, dict) else None
         if isinstance(summary, dict) and summary.get("sample_status") in {"empty", "sparse", "thin"}:
             warnings.append("execution_only_calibration_sample_below_usable_threshold")
+        health = (
+            execution_only_report.get("calibration_health")
+            if isinstance(execution_only_report, dict)
+            else None
+        )
+        if isinstance(health, dict) and health.get("blocks_promotion"):
+            warnings.append("execution_only_calibration_health_blocks_promotion")
+            for blocker in health.get("blockers", []):
+                if isinstance(blocker, str):
+                    warnings.append(blocker)
         return warnings

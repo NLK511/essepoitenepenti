@@ -11,6 +11,10 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from trade_proposer_app.services.confidence_calibration_health import (
+    ConfidenceCalibrationObservation,
+    calibration_health_report,
+)
 from trade_proposer_app.services.recommendation_outcome_cohorts import (
     MIN_RESOLVED_COUNTS as OUTCOME_COHORT_MIN_RESOLVED_COUNTS,
 )
@@ -129,6 +133,7 @@ class RecommendationPlanCalibrationService:
             },
             "calibration_report": calibration_report,
             "smoothed_calibration_report": smoothed_calibration_report,
+            "calibration_health": self._calibration_health(normalized_outcomes),
             "cohorts": {
                 "by_confidence_bucket": self._grouped_summary(normalized_outcomes, group_by="confidence_bucket"),
                 "by_setup_family": self._grouped_summary(normalized_outcomes, group_by="setup_family"),
@@ -223,6 +228,26 @@ class RecommendationPlanCalibrationService:
         for item in outcomes:
             counts[item.outcome] = counts.get(item.outcome, 0) + 1
         return dict(sorted(counts.items()))
+
+    @staticmethod
+    def _calibration_health(outcomes: list[RecommendationPlanOutcome]) -> dict[str, object]:
+        observations = [
+            ConfidenceCalibrationObservation(
+                confidence_percent=float(item.confidence_percent or 0.0),
+                outcome=str(item.outcome),
+                evidence_date=item.evaluated_at.date().isoformat()
+                if item.evaluated_at is not None
+                else None,
+                ticker=item.ticker,
+                setup_family=item.setup_family,
+                context_bias=item.transmission_bias or item.context_regime,
+                expected_value=item.horizon_return_5d,
+            )
+            for item in outcomes
+            if isinstance(item.confidence_percent, (int, float))
+            and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
+        ]
+        return calibration_health_report(observations)
 
     @staticmethod
     def _confidence_sample_status(sample_count: int) -> str:

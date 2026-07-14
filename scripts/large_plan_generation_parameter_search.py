@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Literal
 
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.services.confidence_calibration_health import (
+    ConfidenceCalibrationObservation,
+    calibration_health_report,
+)
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_parameters import (
     PARAMETER_BY_KEY,
@@ -827,6 +831,76 @@ def _evaluate_locked_holdout(
     return output
 
 
+def _calibration_health_for_records(
+    service: PlanGenerationTuningService,
+    records: Sequence,
+    active_config: dict[str, float],
+) -> dict[str, object]:
+    if not hasattr(service, "_candidate_resolution"):
+        return calibration_health_report([])
+    config = dict(active_config)
+    # The tuning scorer treats falsy floors as "use default"; use a near-zero
+    # floor to inspect confidence reliability without applying the action gate.
+    config["global.actionable_confidence_floor_percent"] = 0.01
+    observations: list[ConfidenceCalibrationObservation] = []
+    for record in records:
+        resolution = service._candidate_resolution(record, config)  # noqa: SLF001
+        if resolution is None:
+            continue
+        outcome, reward_pct, risk_pct = resolution
+        expected_value = reward_pct if outcome == "win" else -risk_pct
+        computed_at = getattr(record.plan, "computed_at", None)
+        evidence_date = computed_at.date().isoformat() if computed_at is not None else None
+        observations.append(
+            ConfidenceCalibrationObservation(
+                confidence_percent=float(record.plan.confidence_percent or 0.0),
+                outcome=outcome,
+                evidence_date=evidence_date,
+                ticker=str(record.plan.ticker or ""),
+                setup_family=str(record.setup_family or ""),
+                context_bias=str(record.context_bias or ""),
+                expected_value=expected_value,
+            )
+        )
+    return calibration_health_report(observations)
+
+
+def _apply_calibration_promotion_blockers(
+    results: Sequence[SearchResult],
+    *,
+    calibration_blockers: Sequence[str],
+) -> list[SearchResult]:
+    output: list[SearchResult] = []
+    for item in results:
+        if _is_baseline_result(item):
+            output.append(item)
+            continue
+        holdout = dict(item.holdout or {})
+        existing = [
+            str(value)
+            for value in holdout.get("promotion_blockers", [])
+            if isinstance(value, str)
+        ]
+        holdout.update(
+            {
+                "status": "failed_holdout",
+                "proxy_passed": False,
+                "promotion_capable": False,
+                "promotion_blockers": sorted(
+                    set(
+                        [
+                            *existing,
+                            "calibration_health_blocks_promotion",
+                            *calibration_blockers,
+                        ]
+                    )
+                ),
+            }
+        )
+        output.append(replace(item, holdout=holdout))
+    return output
+
+
 def run_large_parameter_search(
     session,
     *,
@@ -899,6 +973,31 @@ def run_large_parameter_search(
         discovery_records = partitions.discovery.records
     if not stability_records:
         stability_records = partitions.discovery.records
+    calibration_health = {
+        "schema_version": "large-search-calibration-health-v1",
+        "discovery": _calibration_health_for_records(
+            service, discovery_records, active_config
+        ),
+        "selection": _calibration_health_for_records(
+            service, partitions.selection.records, active_config
+        ),
+        "locked_holdout": _calibration_health_for_records(
+            service, partitions.locked_holdout.records, active_config
+        ),
+    }
+    calibration_blockers = sorted(
+        {
+            f"{name}:{blocker}"
+            for name, report in calibration_health.items()
+            if name != "schema_version" and isinstance(report, dict)
+            for blocker in report.get("blockers", [])
+        }
+    )
+    calibration_blocks_promotion = any(
+        isinstance(report, dict) and bool(report.get("blocks_promotion"))
+        for name, report in calibration_health.items()
+        if name != "schema_version"
+    )
 
     stage_policy = {
         "discovery_panel_hash": stable_hash([item.isoformat() for item in discovery_dates]),
@@ -1070,6 +1169,11 @@ def run_large_parameter_search(
             min_validation_actionable=min_validation_actionable,
             objective_profile=objective_profile,
         )
+        if objective_profile == "promotion_candidate" and calibration_blocks_promotion:
+            final_results = _apply_calibration_promotion_blockers(
+                final_results,
+                calibration_blockers=calibration_blockers,
+            )
     finally:
         if resume_cache:
             resume_cache.close()
@@ -1144,6 +1248,9 @@ def run_large_parameter_search(
         "resume_cache_path": str(resolved_cache_path) if resolved_cache_path else None,
         "resume_cache_compatible": loaded_cache.compatible,
         "locked_holdout_status": partitions.holdout_status,
+        "calibration_health": calibration_health,
+        "calibration_blocks_promotion": calibration_blocks_promotion,
+        "calibration_blockers": calibration_blockers,
         "holdout_contamination_status": "clean_not_used_for_refinement",
         "note": (
             "Research artifact only. Discovery and selection are not holdout evidence. "
