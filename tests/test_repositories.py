@@ -2679,8 +2679,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(calibration_review["review_status"], "usable_for_gating")
         self.assertEqual(calibration_review["review_status_label"], "usable for gating")
         self.assertGreaterEqual(calibration_review["effective_confidence_threshold"], 72.0)
-        self.assertLess(calibration_review["calibrated_confidence_percent"], calibration_review["raw_confidence_percent"])
-        self.assertLess(plan_map["AAPL"].confidence_percent, calibration_review["raw_confidence_percent"])
+        self.assertEqual(calibration_review["calibrated_confidence_percent"], calibration_review["raw_confidence_percent"])
+        self.assertEqual(plan_map["AAPL"].confidence_percent, calibration_review["raw_confidence_percent"])
+        self.assertIn("legacy_confidence_adjustment_suppressed", calibration_review["reasons"])
         self.assertEqual(calibration_review["horizon"]["key"], "1w")
         self.assertEqual(calibration_review["transmission_bias"]["key"], "tailwind")
         self.assertEqual(calibration_review["transmission_bias"]["label"], "tailwind")
@@ -2784,11 +2785,12 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(baseline_calibration["calibrated_confidence_percent"], 58.0)
 
         self.assertEqual(tuned_result["summary"]["shortlist_count"], 1)
-        self.assertEqual(tuned_plan.action, "long")
-        self.assertEqual(tuned_plan.evidence_summary["action_reason"], "actionable_setup")
+        self.assertEqual(tuned_plan.action, "no_action")
+        self.assertEqual(tuned_plan.evidence_summary["action_reason"], "below_action_confidence_threshold")
         tuned_calibration = tuned_plan.signal_breakdown["calibration_review"]
         self.assertEqual(tuned_calibration["effective_confidence_threshold"], 56.0)
-        self.assertEqual(tuned_calibration["calibrated_confidence_percent"], 62.0)
+        self.assertEqual(tuned_calibration["calibrated_confidence_percent"], 58.0)
+        self.assertEqual(tuned_calibration["confidence_adjustment"], 0.0)
 
     def test_recommendation_evaluation_resolves_phantom_trade_for_no_action_plan_with_trade_levels(self) -> None:
         session = create_session()

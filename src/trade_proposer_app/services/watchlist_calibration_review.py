@@ -41,13 +41,12 @@ class WatchlistCalibrationReviewService:
         )
         bucket_review = self._bucket_review_adjustments(calibration_summary, confidence_percent, overall_win_rate=overall_win_rate, buckets=buckets)
         threshold_adjustment = bucket_review["threshold_adjustment"]
-        confidence_adjustment = bucket_review["confidence_adjustment"]
+        legacy_confidence_adjustment = bucket_review["confidence_adjustment"]
         reasons = bucket_review["reasons"]
         calibration_curve = bucket_review["calibration_curve"]
         usable_bucket_count = bucket_review["usable_bucket_count"]
         strong_bucket_count = bucket_review["strong_bucket_count"]
         threshold_adjustment += o._signal_gating_tuning_value("threshold_offset", 0.0)
-        confidence_adjustment += o._signal_gating_tuning_value("confidence_adjustment", 0.0)
         review_scale = 1.0
         if strong_bucket_count >= 3 and usable_bucket_count >= 5:
             review_scale = 1.0
@@ -58,11 +57,12 @@ class WatchlistCalibrationReviewService:
         else:
             review_scale = 0.4
         threshold_adjustment *= review_scale
-        confidence_adjustment *= review_scale
         threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
-        confidence_adjustment = max(-4.0, min(2.5, confidence_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
-        calibrated_confidence = max(5.0, min(95.0, confidence_percent + confidence_adjustment))
+        confidence_adjustment = 0.0
+        if legacy_confidence_adjustment:
+            reasons.append("legacy_confidence_adjustment_suppressed")
+        calibrated_confidence = max(5.0, min(95.0, confidence_percent))
         review_status = self.calibration_review_status(usable_bucket_count, strong_bucket_count)
         return {
             "enabled": True,
@@ -90,14 +90,13 @@ class WatchlistCalibrationReviewService:
     def _disabled_review(self, confidence_percent: float) -> dict[str, object]:
         o = self._orchestration
         threshold_offset = o._signal_gating_tuning_value("threshold_offset", 0.0)
-        confidence_adjustment = o._signal_gating_tuning_value("confidence_adjustment", 0.0)
         return {
             "enabled": False,
             "review_status": "disabled",
             "review_status_label": o._calibration_review_status_label("disabled"),
             "raw_confidence_percent": round(confidence_percent, 2),
-            "calibrated_confidence_percent": round(confidence_percent + confidence_adjustment, 2),
-            "confidence_adjustment": round(confidence_adjustment, 2),
+            "calibrated_confidence_percent": round(confidence_percent, 2),
+            "confidence_adjustment": 0.0,
             "base_confidence_threshold": round(o.confidence_threshold, 2),
             "effective_confidence_threshold": round(o.confidence_threshold + threshold_offset, 2),
             "threshold_adjustment": round(threshold_offset, 2),
