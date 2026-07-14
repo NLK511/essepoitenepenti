@@ -646,6 +646,8 @@ class JobExecutionService:
             stage1_survivors=self._plan_generation_tuning_int(request.get("stage1_survivors"), 2_000) or 2_000,
             stage2_survivors=self._plan_generation_tuning_int(request.get("stage2_survivors"), 100) or 100,
             finalists=self._plan_generation_tuning_int(request.get("finalists"), 10) or 10,
+            min_actionable_mode=str(request.get("min_actionable_mode") or "hard_gate"),
+            objective_profile=str(request.get("objective_profile") or "research_ev_per_trade"),
         )
         timing["large_plan_generation_tuning_search_seconds"] = round(
             perf_counter() - search_started, 6

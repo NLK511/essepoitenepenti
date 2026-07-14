@@ -10,6 +10,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Literal
 
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
@@ -31,6 +32,8 @@ from trade_proposer_app.services.tuning_evidence_partitions import (
 from trade_proposer_app.services.tuning_stability import TuningStabilityEvaluator
 
 Fingerprint = str
+MinActionableMode = Literal["rank_only", "hard_gate"]
+ObjectiveProfile = Literal["research_precision", "research_ev_per_trade", "promotion_candidate"]
 
 
 @dataclass(frozen=True)
@@ -143,7 +146,11 @@ class ResumeCache:
         )
 
     def load_existing(
-        self, *, top_k: int | None = None, min_validation_actionable: int = 1
+        self,
+        *,
+        top_k: int | None = None,
+        min_validation_actionable: int = 1,
+        min_actionable_mode: MinActionableMode = "rank_only",
     ) -> LoadedResumeCache:
         if not self.path.exists():
             return LoadedResumeCache(seen=set(), results=[], compatible=False)
@@ -194,6 +201,7 @@ class ResumeCache:
                         result,
                         top_k=max(1, top_k),
                         min_validation_actionable=min_validation_actionable,
+                        min_actionable_mode=min_actionable_mode,
                     )
         if top_k is not None:
             for stage, baseline in baseline_by_stage.items():
@@ -255,13 +263,32 @@ def _rank_key(result: SearchResult, *, min_validation_actionable: int) -> tuple[
     )
 
 
+def _is_baseline_result(result: SearchResult) -> bool:
+    return not result.changed_keys
+
+
+def _passes_min_actionable_gate(
+    result: SearchResult, *, min_validation_actionable: int, min_actionable_mode: MinActionableMode
+) -> bool:
+    if min_actionable_mode == "rank_only" or _is_baseline_result(result):
+        return True
+    return result.validation_actionable_count >= min_validation_actionable
+
+
 def _keep_top(
     top: list[SearchResult],
     result: SearchResult,
     *,
     top_k: int,
     min_validation_actionable: int,
+    min_actionable_mode: MinActionableMode = "rank_only",
 ) -> list[SearchResult]:
+    if not _passes_min_actionable_gate(
+        result,
+        min_validation_actionable=min_validation_actionable,
+        min_actionable_mode=min_actionable_mode,
+    ):
+        return top
     top.append(result)
     top.sort(
         key=lambda item: _rank_key(item, min_validation_actionable=min_validation_actionable),
@@ -350,6 +377,7 @@ def evaluate_stream(
     seen: set[Fingerprint],
     resume_cache: ResumeCache | None = None,
     stage: str = "legacy_discovery",
+    min_actionable_mode: MinActionableMode = "rank_only",
 ) -> tuple[list[SearchResult], int]:
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
@@ -390,7 +418,13 @@ def evaluate_stream(
         )
         if config == active_config:
             baseline_result = result
-        _keep_top(top, result, top_k=top_k, min_validation_actionable=min_validation_actionable)
+        _keep_top(
+            top,
+            result,
+            top_k=top_k,
+            min_validation_actionable=min_validation_actionable,
+            min_actionable_mode=min_actionable_mode,
+        )
         if resume_cache is not None:
             resume_cache.append_result(result)
         evaluated += 1
@@ -415,6 +449,7 @@ def _evaluate_stability_stage(
     batch_log_interval: int,
     seen: set[Fingerprint],
     resume_cache: ResumeCache | None,
+    min_actionable_mode: MinActionableMode,
 ) -> tuple[list[SearchResult], int]:
     evaluator = TuningStabilityEvaluator(service)
     top: list[SearchResult] = []
@@ -452,7 +487,13 @@ def _evaluate_stability_stage(
         )
         if config == active_config:
             baseline_result = result
-        _keep_top(top, result, top_k=top_k, min_validation_actionable=min_validation_actionable)
+        _keep_top(
+            top,
+            result,
+            top_k=top_k,
+            min_validation_actionable=min_validation_actionable,
+            min_actionable_mode=min_actionable_mode,
+        )
         if resume_cache is not None:
             resume_cache.append_result(result)
         evaluated += 1
@@ -473,6 +514,7 @@ def _evaluate_walk_forward_stage(
     min_validation_actionable: int,
     seen: set[Fingerprint],
     resume_cache: ResumeCache | None,
+    min_actionable_mode: MinActionableMode,
 ) -> tuple[list[SearchResult], int]:
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
@@ -524,7 +566,13 @@ def _evaluate_walk_forward_stage(
         )
         if config == active_config:
             baseline_result = result
-        _keep_top(top, result, top_k=top_k, min_validation_actionable=min_validation_actionable)
+        _keep_top(
+            top,
+            result,
+            top_k=top_k,
+            min_validation_actionable=min_validation_actionable,
+            min_actionable_mode=min_actionable_mode,
+        )
         if resume_cache is not None:
             resume_cache.append_result(result)
         evaluated += 1
@@ -614,6 +662,8 @@ def run_large_parameter_search(
     stage1_survivors: int = 2_000,
     stage2_survivors: int = 100,
     finalists: int = 10,
+    min_actionable_mode: MinActionableMode = "hard_gate",
+    objective_profile: ObjectiveProfile = "research_ev_per_trade",
 ) -> dict[str, object]:
     service = PlanGenerationTuningService(session)
     baseline_version = service._resolve_active_config_version()  # noqa: SLF001
@@ -642,6 +692,8 @@ def run_large_parameter_search(
         "stage1_survivors": stage1_survivors,
         "stage2_survivors": stage2_survivors,
         "finalists": finalists,
+        "min_actionable_mode": min_actionable_mode,
+        "objective_profile": objective_profile,
     }
     discovery_dates = select_stratified_dates(
         partitions.discovery.evidence_dates, limit=discovery_panel_dates, seed=seed
@@ -680,6 +732,7 @@ def run_large_parameter_search(
         resume_cache.load_existing(
             top_k=max(stage_policy["stage1_survivors"], top_k),
             min_validation_actionable=min_validation_actionable,
+            min_actionable_mode=min_actionable_mode,
         )
         if resume_cache
         else LoadedResumeCache(set(), [], False)
@@ -706,12 +759,14 @@ def run_large_parameter_search(
             batch_log_interval=batch_log_interval,
             seen=seen,
             resume_cache=resume_cache,
+            min_actionable_mode="rank_only",
         )
         coarse_top = _merged_top(
             loaded_by_stage.get("coarse_discovery", []),
             coarse_top,
             top_k=int(stage_policy["stage1_survivors"]),
             min_validation_actionable=min_validation_actionable,
+            min_actionable_mode="rank_only",
         )
         fine_top, stage_counts["fine_discovery"] = evaluate_stream(
             service,
@@ -731,18 +786,21 @@ def run_large_parameter_search(
             batch_log_interval=batch_log_interval,
             seen=seen,
             resume_cache=resume_cache,
+            min_actionable_mode="rank_only",
         )
         fine_top = _merged_top(
             loaded_by_stage.get("fine_discovery", []),
             fine_top,
             top_k=int(stage_policy["stage1_survivors"]),
             min_validation_actionable=min_validation_actionable,
+            min_actionable_mode="rank_only",
         )
         stage1 = _deduplicated_top(
             [*coarse_top, *fine_top],
             active_config=active_config,
             top_k=int(stage_policy["stage1_survivors"]),
             min_validation_actionable=min_validation_actionable,
+            min_actionable_mode="rank_only",
         )
         stage2, stage_counts["stability_screen"] = _evaluate_stability_stage(
             service,
@@ -757,12 +815,14 @@ def run_large_parameter_search(
             batch_log_interval=max(1, batch_log_interval // 10),
             seen=seen,
             resume_cache=resume_cache,
+            min_actionable_mode=min_actionable_mode,
         )
         stage2 = _merged_top(
             loaded_by_stage.get("stability_screen", []),
             stage2,
             top_k=int(stage_policy["stage2_survivors"]),
             min_validation_actionable=min_validation_actionable,
+            min_actionable_mode=min_actionable_mode,
         )
         selection_records = list(partitions.selection.records)
         if selection_records:
@@ -775,12 +835,14 @@ def run_large_parameter_search(
                 min_validation_actionable=min_validation_actionable,
                 seen=seen,
                 resume_cache=resume_cache,
+                min_actionable_mode=min_actionable_mode,
             )
             stage3 = _merged_top(
                 loaded_by_stage.get("selection_walk_forward", []),
                 stage3,
                 top_k=int(stage_policy["finalists"]),
                 min_validation_actionable=min_validation_actionable,
+                min_actionable_mode=min_actionable_mode,
             )
         else:
             stage_counts["selection_walk_forward"] = 0
@@ -842,6 +904,8 @@ def run_large_parameter_search(
         "generated_at": datetime.now(UTC).isoformat(),
         "run_role": "research_only",
         "promotion_capable": False,
+        "objective_profile": objective_profile,
+        "min_actionable_mode": min_actionable_mode,
         "baseline_config_version_id": baseline_version.id,
         "baseline_config": active_config,
         "baseline_config_hash": _fingerprint(active_config),
@@ -859,6 +923,8 @@ def run_large_parameter_search(
             "unique_stage_evaluations": len(seen),
         },
         "top_candidates": [item.payload() for item in final_results],
+        "improvement_finalist_count": sum(1 for item in final_results if item.changed_keys),
+        "baseline_included": any(not item.changed_keys for item in final_results),
         "resume_cache_path": str(resolved_cache_path) if resolved_cache_path else None,
         "resume_cache_compatible": loaded_cache.compatible,
         "locked_holdout_status": partitions.holdout_status,
@@ -890,12 +956,14 @@ def _merged_top(
     *,
     top_k: int,
     min_validation_actionable: int,
+    min_actionable_mode: MinActionableMode,
 ) -> list[SearchResult]:
     return _deduplicated_top(
         [*first, *second],
         active_config=None,
         top_k=top_k,
         min_validation_actionable=min_validation_actionable,
+        min_actionable_mode=min_actionable_mode,
     )
 
 
@@ -905,9 +973,16 @@ def _deduplicated_top(
     active_config: dict[str, float] | None,
     top_k: int,
     min_validation_actionable: int,
+    min_actionable_mode: MinActionableMode,
 ) -> list[SearchResult]:
     best_by_config: dict[str, SearchResult] = {}
     for item in results:
+        if not _passes_min_actionable_gate(
+            item,
+            min_validation_actionable=min_validation_actionable,
+            min_actionable_mode=min_actionable_mode,
+        ):
+            continue
         fingerprint = _fingerprint(item.config)
         previous = best_by_config.get(fingerprint)
         if previous is None or _rank_key(
@@ -1000,6 +1075,16 @@ def main() -> None:
     parser.add_argument("--stage2-survivors", type=int, default=100)
     parser.add_argument("--finalists", type=int, default=10)
     parser.add_argument(
+        "--min-actionable-mode",
+        choices=("rank_only", "hard_gate"),
+        default="hard_gate",
+    )
+    parser.add_argument(
+        "--objective-profile",
+        choices=("research_precision", "research_ev_per_trade", "promotion_candidate"),
+        default="research_ev_per_trade",
+    )
+    parser.add_argument(
         "--artifact",
         type=Path,
         default=Path("artifacts/large-plan-generation-parameter-search.json"),
@@ -1033,6 +1118,8 @@ def main() -> None:
             stage1_survivors=args.stage1_survivors,
             stage2_survivors=args.stage2_survivors,
             finalists=args.finalists,
+            min_actionable_mode=args.min_actionable_mode,
+            objective_profile=args.objective_profile,
         )
         print(
             json.dumps(

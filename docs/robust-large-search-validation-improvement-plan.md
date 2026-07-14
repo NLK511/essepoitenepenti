@@ -1,6 +1,6 @@
 # Robust large-search validation improvement plan
 
-**Status:** substantially implemented; shadow validation and production-default rollout remain
+**Status:** substantially implemented; 2026-07-14 thin-evidence remediation, shadow validation, and production-default rollout remain
 
 Canonical contracts:
 - `specs/large-parameter-search-spec.md`
@@ -43,6 +43,277 @@ There was also a documentation conflict:
 - `plan-generation-tuning-spec.md` required rolling walk-forward exploration ranking and canonical win-rate-first promotion ordering.
 
 The canonical specs have now been reconciled: a broad search may use cheap discovery panels, but survivor selection requires stability and rolling evidence, and a locked holdout may not feed refinement.
+
+## 2026-07-14 concrete remediation plan
+
+### Triggering evidence
+
+Two July 2026 large-search attempts showed that the current workflow can spend a large candidate budget without producing promotion-grade evidence:
+
+- run `4277` evaluated about 911k unique candidates and found no candidate meeting the requested 40% validation win-rate floor;
+- a follow-up validation of run `4277` top-250 candidates on the recent slice `2026-06-18` through `2026-07-10` found no stable positive-EV holdout candidate;
+- the staged best-effort run `artifacts/large-plan-generation-parameter-search-validated-best-effort-20260714.json` evaluated 946,754 unique stage evaluations and produced 25 finalists, but only the baseline/no-change config passed the holdout proxy;
+- the best non-baseline finalist improved holdout win rate and EV per actionable trade versus baseline, but still had negative holdout EV per actionable and worse total traded EV:
+  - candidate: 57 actionable trades, 14 wins, 24.56% WR, -1.1077 EV/actionable, -63.14 total EV;
+  - baseline: 21 actionable trades, 3 wins, 14.29% WR, -2.1304 EV/actionable, -44.74 total EV;
+- the same non-baseline finalist was selected from only 12 actionable selection trades, despite the run requesting `min_validation_actionable=50`.
+
+This is not primarily a candidate-budget problem. It is a validation-policy problem.
+
+### Diagnosis
+
+The workflow is currently vulnerable to four failure modes:
+
+1. Thin evidence is being allowed to select finalists.
+   The selection window had 8 distinct dates and 1,032 records, but the leading non-baseline finalist had only 12 actionable selection trades. The holdout had 12 distinct dates and 697 records, with sparse actionability and only one qualified fold for the leading non-baseline candidate.
+
+2. Minimum actionability is a ranking preference, not a hard gate.
+   `scripts/large_plan_generation_parameter_search.py` passes `min_validation_actionable`, but `_keep_top()` only sorts lower-sample candidates behind higher-sample candidates. If every candidate is weak or thin, low-sample candidates can still become finalists.
+
+3. The search can change too many geometry parameters on too little evidence.
+   The leading non-baseline finalist changed confidence floor, entry risk, headwind stop multiplier, and multiple take-profit multipliers. That amount of freedom is not justified by 12 selection actionables and a thin holdout.
+
+4. Stored-plan rescore is being asked to answer geometry questions.
+   It is useful for cheap falsification, but geometry-changing candidates need candidate-specific replay/regeneration before promotion review. Rescore-only evidence should not be used as promotion evidence for entry/stop/take-profit changes.
+
+### Remediation objective
+
+Before running another million-candidate search, make the tuning workflow fail closed when evidence is thin, and make every finalist answer three explicit questions:
+
+1. Does it trade enough plans to be measurable?
+2. Is its actionable-trade quality better than baseline without relying on one date/fold?
+3. Is the candidate eligible for canonical replay, or only a research lead?
+
+### Phase A - hard evidence gates
+
+Implement hard gates before a candidate can become a finalist.
+
+- Add a stage-level `min_actionable_mode` with values:
+  - `rank_only` for exploratory legacy behavior;
+  - `hard_gate` for staged large search default.
+- In staged large search, reject non-baseline candidates from Stage 2, Stage 3, and Stage 4 finalist sets when:
+  - selection actionable count is below `min_validation_actionable`;
+  - walk-forward has fewer than 3 qualified slices;
+  - holdout has fewer than 3 qualified folds unless status is explicitly `research_thin_holdout`;
+  - holdout EV/actionable is negative when the objective is promotion-oriented.
+- Preserve baseline regardless of gates, but label it as baseline/no-change and exclude it from "improvement candidate" counts.
+- Persist rejection reasons:
+  - `selection_actionable_below_minimum`;
+  - `walk_forward_qualified_slices_below_minimum`;
+  - `holdout_qualified_folds_below_minimum`;
+  - `holdout_ev_per_actionable_negative`;
+  - `baseline_only_survivor`.
+
+Acceptance:
+
+- A candidate with 12 selection actionables cannot appear as a non-baseline finalist when `min_validation_actionable=50` and `min_actionable_mode=hard_gate`.
+- Artifacts separately report `finalist_count`, `improvement_finalist_count`, and `baseline_included`.
+- Existing legacy artifacts remain readable.
+
+Tests:
+
+- add a focused unit test around `_keep_top()` or its replacement proving low-actionable candidates are rejected in hard-gate mode;
+- add a staged-search regression fixture based on the July 2026 shape: many records, sparse actionability, one low-sample high-WR candidate;
+- assert baseline still survives.
+
+### Phase B - explicit objective contract
+
+Replace implicit "best" language with objective profiles.
+
+Add objective profiles:
+
+- `research_precision`: maximize WR with minimum actionables; EV may be diagnostic but cannot be hidden.
+- `research_ev_per_trade`: maximize EV/actionable with WR and sample floors.
+- `promotion_candidate`: require positive EV/actionable, non-negative total EV delta, minimum actionables, and fold stability.
+
+Every large-search run must persist:
+
+- selected objective profile;
+- primary ranking metrics;
+- hard gates;
+- tie-break order;
+- whether total EV or EV/actionable is the promotion blocker.
+
+Default recommendation:
+
+- use `research_ev_per_trade` for exploratory analysis;
+- use `promotion_candidate` before any candidate is proposed for config promotion.
+
+Acceptance:
+
+- The UI and artifact can explain why a candidate with better WR and EV/actionable still fails when total traded EV is worse or EV/actionable remains negative.
+- Operators can intentionally inspect a "less bad per trade" research lead without confusing it with a promotable config.
+
+Tests:
+
+- candidate with better WR but negative EV/actionable is not promotion-eligible;
+- candidate with better EV/actionable but worse total EV is labelled `exposure_expansion_loss`;
+- candidate with positive EV/actionable but too few actionables is labelled `thin_evidence`.
+
+### Phase C - reduce search freedom by campaign
+
+Split tuning into smaller campaigns with separate evidence requirements.
+
+Campaign order:
+
+1. `selectivity_only`
+   - keys: confidence floor and narrow actionability filters only;
+   - goal: improve quality without changing trade geometry.
+
+2. `entry_risk_only`
+   - keys: entry band risk fraction and entry band multiplier;
+   - goal: test whether actionability improves by changing entry tolerance.
+
+3. `stop_risk_only`
+   - keys: headwind and volatility stop multipliers;
+   - goal: reduce downside without widening take-profit search.
+
+4. `take_profit_family_only`
+   - one setup family at a time;
+   - goal: avoid cross-family overfit.
+
+5. `combined_small_delta`
+   - only after at least one narrow campaign passes validation;
+   - max changed keys should be bounded, for example 3.
+
+Acceptance:
+
+- A single finalist cannot change seven parameters unless the run explicitly uses a high-risk research profile.
+- Artifacts group finalists by campaign and report campaign-specific sample counts.
+- Promotion candidate workflow only accepts narrow or previously validated combined campaigns.
+
+Tests:
+
+- candidate-generation tests prove each campaign emits only allowed keys;
+- artifact tests prove changed-key count and campaign name are persisted;
+- promotion-gate tests reject high-risk multi-key research candidates.
+
+### Phase D - evidence expansion before more tuning
+
+Do not spend more large-search budget until the evidence base is improved.
+
+Required work:
+
+- audit eligible record coverage by date, setup family, ticker, action, and current actionability;
+- identify why recent holdout has many records but few actionables;
+- extend local replay/cache-only evidence to produce at least:
+  - 90 distinct evidence dates for any automatic locked-holdout search;
+  - 20+ selection dates;
+  - 20+ holdout dates;
+  - 100+ candidate actionables for any promotion-candidate run;
+- preserve chronological boundaries and source hashes.
+
+Acceptance:
+
+- automatic derived holdout no longer reports `insufficient_dates_for_locked_holdout` for the main tuning campaign;
+- recent holdout can produce at least 3 qualified folds for baseline and candidate;
+- coverage report is attached to tuning artifacts or stored in `artifacts/`.
+
+Suggested diagnostic artifact:
+
+```text
+artifacts/plan-generation-tuning-evidence-coverage-YYYYMMDD.json
+```
+
+It should include:
+
+- records by date;
+- actionables by current baseline;
+- actionables by candidate family;
+- outcome mix;
+- setup family coverage;
+- ticker concentration;
+- dates/folds that are too thin.
+
+### Phase E - canonical replay gate for geometry changes
+
+Treat stored-plan rescore as a cheap screen only.
+
+Rules:
+
+- if changed keys alter entry, stop, or take-profit geometry, label finalist `requires_canonical_candidate_replay`;
+- do not mark such candidates promotion-eligible from stored-plan holdout alone;
+- create candidate-specific replay batches for the chosen finalist and current baseline over the same holdout period;
+- compare regenerated candidate plans to regenerated baseline plans, not only rescored stored plans.
+
+Acceptance:
+
+- geometry-changing candidates cannot be promoted from `large_plan_generation_parameter_search.py` artifacts alone;
+- workflow action exists to create baseline/candidate replay batches for a finalist config hash;
+- replay comparison reports WR, EV/actionable, total EV, actionables, ticker/setup concentration, and fold stability.
+
+Tests:
+
+- geometry-changing finalist with positive stored-rescore holdout still reports `promotion_capable=false`;
+- replay batch creation persists candidate config hash and window hash;
+- mismatched hashes block promotion.
+
+### Phase F - recent-loser audit
+
+Before tuning more knobs, audit why recent holdout actionables lose.
+
+For `2026-06-18` through `2026-07-10`, produce:
+
+- losing trades by setup family;
+- losing trades by ticker;
+- losing trades by actionability confidence band;
+- loss contribution by date;
+- stop-loss versus take-profit geometry contribution;
+- current-config actionables versus candidate-only actionables;
+- whether losses came from plan direction, entry tolerance, stop placement, or take-profit distance.
+
+Acceptance:
+
+- the next tuning campaign is justified by a specific observed failure mode;
+- if losses are concentrated in a setup family, tune or suppress that family first;
+- if losses are broad across families, do not tune geometry; improve upstream plan quality or actionability classification.
+
+### Phase G - operator-facing reporting
+
+Update tuning result summaries to avoid misleading statements.
+
+Report candidates with four separate metrics:
+
+- WR/actionable;
+- EV/actionable;
+- total traded EV;
+- actionable count.
+
+Always compare with baseline on the same records and dates:
+
+- baseline actionables;
+- candidate actionables;
+- overlap count when available;
+- candidate-only actionables;
+- baseline-only actionables.
+
+Acceptance:
+
+- a candidate that is better per trade but worse in total EV is described exactly that way;
+- non-actionable records are never described as contributing EV;
+- summaries distinguish "research lead" from "promotion candidate".
+
+### Execution order
+
+1. Implement Phase A hard gates and tests.
+2. Implement Phase G reporting fixes so operators stop receiving ambiguous summaries.
+3. Run Phase F recent-loser audit on the July holdout slice.
+4. Run Phase D evidence coverage report and decide whether to expand replay history.
+5. Implement Phase B objective profiles.
+6. Implement Phase C campaign-scoped candidate generation.
+7. Implement Phase E canonical replay gate for selected geometry candidates.
+8. Only then run another large search.
+
+### Stop conditions
+
+Stop tuning and return to upstream plan-quality work if any of these remain true after evidence expansion:
+
+- baseline and candidate holdout EV/actionable are both negative;
+- no campaign can produce 100+ actionables with positive EV/actionable;
+- recent losses are broad across tickers and setup families;
+- canonical replay disagrees materially with stored-plan rescore.
+
+The expected output after this remediation is not necessarily a promoted config. A valid outcome is a clear proof that parameter tuning is not the current bottleneck.
 
 ## Goals
 

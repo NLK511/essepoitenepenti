@@ -42,6 +42,30 @@ The baseline config must survive every stage. Each stage must persist its input-
 
 Broad discovery may be large because it is cheap. Expensive evidence must be allocated through successive halving rather than by running every candidate over the largest window. Default budgets and fallback behavior are defined in `../robust-large-search-validation-improvement-plan.md`.
 
+## Objective profiles and hard sample gates
+
+Large search must persist an `objective_profile` and `min_actionable_mode` in every schema-v2 artifact.
+
+Supported objective profiles:
+
+- `research_precision` — maximize actionable win rate after sample floors; EV remains visible but can be secondary.
+- `research_ev_per_trade` — maximize expected value per actionable trade after sample and WR floors.
+- `promotion_candidate` — require positive EV per actionable, non-negative total EV delta versus baseline, sufficient actionables, fold stability, and normal replay/promotion gates.
+
+Supported minimum-actionable modes:
+
+- `rank_only` — legacy exploratory behavior; low-sample candidates may be ranked below adequate-sample candidates but are not rejected solely by the sample floor.
+- `hard_gate` — staged large-search default; non-baseline candidates below the stage minimum are rejected before they can become stability-screen survivors, walk-forward finalists, or holdout finalists.
+
+Hard-gate behavior:
+
+- baseline/no-change config always survives and is labelled separately;
+- non-baseline candidates below `min_validation_actionable` receive `selection_actionable_below_minimum` or equivalent stage-specific rejection;
+- non-baseline candidates with insufficient qualified walk-forward slices or holdout folds are research-only and cannot be counted as improvement finalists;
+- artifacts must report baseline inclusion separately from `improvement_finalist_count`.
+
+A candidate selected from fewer actionables than the configured minimum must not appear as a non-baseline finalist in `hard_gate` mode.
+
 ## Stability and ranking rules
 
 Pooled expected value and win rate remain visible, but they are insufficient for ranking or promotion by themselves.
@@ -59,6 +83,15 @@ Stability eligibility is applied before the canonical objective from `plan-gener
 Uncertainty resampling must use market dates or contiguous date blocks as the independent unit, never individual trades from the same date. Thin or unstable evidence produces `research_only`/rejection status; it must not be converted into a positive score.
 
 The locked holdout is a final falsification check, not another optimization set. Any candidate or search bounds changed after inspecting it require a new future holdout period or an explicit `holdout_contaminated` status.
+
+Operator-facing summaries must keep these metrics separate:
+
+- actionable win rate;
+- expected value per actionable;
+- total traded expected value;
+- actionable count.
+
+Non-actionable records do not contribute EV. They may be reported as ambiguous/non-actionable coverage only.
 
 ## UI
 

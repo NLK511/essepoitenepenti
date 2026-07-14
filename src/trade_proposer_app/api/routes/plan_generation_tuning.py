@@ -278,6 +278,11 @@ async def run_large_plan_generation_tuning_search(
     stage1_survivors: int = Query(default=2_000, ge=10, le=10_000),
     stage2_survivors: int = Query(default=100, ge=5, le=1_000),
     finalists: int = Query(default=10, ge=1, le=50),
+    min_actionable_mode: str = Query(default="hard_gate", pattern="^(rank_only|hard_gate)$"),
+    objective_profile: str = Query(
+        default="research_ev_per_trade",
+        pattern="^(research_precision|research_ev_per_trade|promotion_candidate)$",
+    ),
     session: Session = Depends(get_db_session),
 ):
     boundaries = (
@@ -335,6 +340,8 @@ async def run_large_plan_generation_tuning_search(
                 "stage1_survivors": stage1_survivors,
                 "stage2_survivors": stage2_survivors,
                 "finalists": finalists,
+                "min_actionable_mode": min_actionable_mode,
+                "objective_profile": objective_profile,
                 "batch_log_interval": 1000,
                 "artifact_path": (
                     "artifacts/large-plan-generation-parameter-search-run-"

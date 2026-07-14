@@ -99,6 +99,10 @@ A materially lower win-rate candidate must not outrank a higher win-rate candida
 
 For normal bounded exploration runs, ranking metrics must come from rolling walk-forward validation, not one tail split. Very large searches may use deterministic stratified discovery panels and successive-halving stability screens to control cost, but only the bounded survivor set may be ranked for selection using rolling walk-forward evidence. A locked holdout is a one-time falsification check and must not be reused for candidate generation, refinement, or repeated reranking.
 
+For staged large searches, ranking is not enough when sample counts are thin. In `hard_gate` mode, a non-baseline candidate must meet the configured minimum actionable count and minimum qualified validation/fold counts before it can become an improvement finalist. The baseline/no-change config is retained for comparison even when it is thin, but it must not be counted as an improvement candidate.
+
+Operator-facing tuning summaries must not collapse actionability quality into one ambiguous "best" statement. They must report, at minimum, actionable count, actionable win rate, EV per actionable, and total traded EV on the same evidence as baseline. Non-actionable rows contribute no EV and should be described only as non-actionable/ambiguous coverage.
+
 ## Parameter schema
 
 Every tunable key must be registered before use. Candidate configs containing unknown keys must be rejected.
@@ -245,6 +249,8 @@ Minimum improvement for auto-promotion:
 - improves by at least `0.5pp` and actionable win count increases by at least `10%`
 
 Auto-promotion must pass both full-backtest and recent holdout/rolling validation. For bounded non-adaptive runs, the default split remains oldest `80%` for search/aggregation and newest `20%` for validation. For adaptive or very large exploration, any partition repeatedly scored across candidates is discovery/selection evidence rather than holdout; the locked holdout must be non-overlapping, immutable, evaluated only after finalist selection, and never used to generate refinements. Insufficient samples or a contaminated/reused holdout force research-only mode.
+
+Geometry-changing candidates discovered through stored-plan rescore remain research-only until candidate-specific replay/regeneration confirms them over the same window hashes. Stored-plan rescore may reject a geometry candidate, but it must not be the only positive promotion evidence for entry, stop-loss, or take-profit changes.
 
 Promotion modes:
 - `dry_run`

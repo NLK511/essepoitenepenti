@@ -58,6 +58,84 @@ def test_large_search_ranks_precision_before_expected_value() -> None:
     assert [item.validation_win_count for item in top] == [7, 6]
 
 
+def test_large_search_hard_gate_rejects_low_sample_non_baseline_but_keeps_baseline() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    top: list[SearchResult] = []
+
+    _keep_top(
+        top,
+        SearchResult(
+            phase="selection_walk_forward",
+            config=active,
+            changed_keys=[],
+            search_actionable_count=1,
+            search_win_count=0,
+            search_expected_value=-1.0,
+            search_ambiguous_count=99,
+            validation_actionable_count=1,
+            validation_win_count=0,
+            validation_expected_value=-1.0,
+            validation_ambiguous_count=99,
+            stage="selection_walk_forward",
+        ),
+        top_k=5,
+        min_validation_actionable=50,
+        min_actionable_mode="hard_gate",
+    )
+    _keep_top(
+        top,
+        SearchResult(
+            phase="selection_walk_forward",
+            config={**active, "global.actionable_confidence_floor_percent": 50.0},
+            changed_keys=["global.actionable_confidence_floor_percent"],
+            search_actionable_count=12,
+            search_win_count=7,
+            search_expected_value=28.0,
+            search_ambiguous_count=88,
+            validation_actionable_count=12,
+            validation_win_count=7,
+            validation_expected_value=28.0,
+            validation_ambiguous_count=88,
+            stage="selection_walk_forward",
+        ),
+        top_k=5,
+        min_validation_actionable=50,
+        min_actionable_mode="hard_gate",
+    )
+
+    assert len(top) == 1
+    assert top[0].changed_keys == []
+
+
+def test_large_search_rank_only_keeps_low_sample_research_candidate() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    top: list[SearchResult] = []
+
+    _keep_top(
+        top,
+        SearchResult(
+            phase="selection_walk_forward",
+            config={**active, "global.actionable_confidence_floor_percent": 50.0},
+            changed_keys=["global.actionable_confidence_floor_percent"],
+            search_actionable_count=12,
+            search_win_count=7,
+            search_expected_value=28.0,
+            search_ambiguous_count=88,
+            validation_actionable_count=12,
+            validation_win_count=7,
+            validation_expected_value=28.0,
+            validation_ambiguous_count=88,
+            stage="selection_walk_forward",
+        ),
+        top_k=5,
+        min_validation_actionable=50,
+        min_actionable_mode="rank_only",
+    )
+
+    assert len(top) == 1
+    assert top[0].changed_keys == ["global.actionable_confidence_floor_percent"]
+
+
 def test_large_search_resume_cache_reloads_compatible_results(tmp_path: Path) -> None:
     cache_path = tmp_path / "large-search.cache.jsonl"
     active = normalize_plan_generation_tuning_config(None)
@@ -195,6 +273,10 @@ def test_staged_search_bounds_expensive_survivors_and_keeps_partitions_disjoint(
 
     assert artifact["schema_version"] == 2
     assert artifact["promotion_capable"] is False
+    assert artifact["objective_profile"] == "research_ev_per_trade"
+    assert artifact["min_actionable_mode"] == "hard_gate"
+    assert artifact["baseline_included"] is True
+    assert artifact["improvement_finalist_count"] <= len(artifact["top_candidates"])
     assert artifact["stages"]["broad_discovery"]["survivor_count"] <= 4
     assert artifact["stages"]["stability_screen"]["survivor_count"] <= 3
     assert len(artifact["top_candidates"]) <= 2
