@@ -523,6 +523,8 @@ raw plan features and raw confidence
 
 Each layer has its own artifact fields, diagnostics, and promotion gates. A tuning run may not hide calibration instability behind a better actionability threshold.
 
+Raw confidence remains an upstream rank score until calibration health proves otherwise. The July 2026 audit found that the old raw-confidence blend over-weighted weak technical, execution, and catalyst components, and over-scored `catalyst_follow_through` and `breakout` setups. The generator therefore uses a more conservative raw blend, emphasizes directional evidence, and applies small setup-family penalties before calibration.
+
 ### Phase 1 - calibration data contract
 
 Add a reusable calibration dataset builder that creates frozen rows with:

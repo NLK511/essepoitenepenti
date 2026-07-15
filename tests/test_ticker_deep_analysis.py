@@ -264,9 +264,9 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
     def test_compose_confidence_applies_data_quality_cap(self) -> None:
         """
         Verify weighted confidence and quality cap.
-        Weighted components sum to 80.
+        Weighted components sum to 70.4.
         Data quality cap of 0.5 (50%).
-        Result = 80 * 0.5 = 40.
+        Result = 70.4 * 0.5 = 35.2.
         """
         components = {
             "context_confidence": 80.0,
@@ -277,14 +277,40 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
             "execution_clarity": 80.0,
             "data_quality_cap": 50.0 # 50% multiplier
         }
-        # 80 * (0.16+0.27+0.11+0.12+0.18+0.16) = 80 * 1.0 = 80.0
-        # 80 * 0.5 = 40.0
+        # 80 * (0.10+0.42+0.06+0.04+0.16+0.10) = 80 * 0.88 = 70.4
+        # 70.4 * 0.5 = 35.2
         result = self.service._compose_confidence(components)
-        self.assertEqual(result, 40.0)
+        self.assertEqual(result, 35.2)
+
+    def test_compose_confidence_penalizes_weak_setup_families(self) -> None:
+        components = {
+            "context_confidence": 80.0,
+            "directional_confidence": 80.0,
+            "catalyst_confidence": 80.0,
+            "market_intelligence_confidence": 80.0,
+            "technical_clarity": 80.0,
+            "execution_clarity": 80.0,
+            "data_quality_cap": 100.0,
+        }
+
+        neutral_result = self.service._compose_confidence(components)
+        catalyst_result = self.service._compose_confidence(
+            components,
+            setup_family="catalyst_follow_through",
+        )
+        breakout_result = self.service._compose_confidence(
+            components,
+            setup_family="breakout",
+        )
+
+        self.assertEqual(neutral_result, 70.4)
+        self.assertEqual(catalyst_result, 64.4)
+        self.assertEqual(breakout_result, 65.4)
 
     def test_compose_confidence_clamps_to_95(self) -> None:
         """System never reports 100% confidence."""
-        components = {k: 100.0 for k in ["context_confidence", "directional_confidence", "catalyst_confidence", "market_intelligence_confidence", "technical_clarity", "execution_clarity", "data_quality_cap"]}
+        components = {k: 200.0 for k in ["context_confidence", "directional_confidence", "catalyst_confidence", "market_intelligence_confidence", "technical_clarity", "execution_clarity"]}
+        components["data_quality_cap"] = 100.0
         result = self.service._compose_confidence(components)
         self.assertEqual(result, 95.0)
 

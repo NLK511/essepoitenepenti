@@ -89,14 +89,17 @@ class TickerDeepAnalysisService:
             )
             direction = self._resolve_direction(context, aggregations)
             confidence_components = self._build_confidence_components(context, direction)
-            confidence = self._compose_confidence(confidence_components)
+            setup_family = self._classify_setup(context, aggregations, direction)
+            confidence = self._compose_confidence(
+                confidence_components,
+                setup_family=setup_family,
+            )
             entry_price, stop_loss, take_profit = self._suggest_price_levels(
                 direction,
                 float(context.get("price", 0.0) or 0.0),
                 float(context.get("atr", 0.0) or 0.0),
                 aggregations,
             )
-            setup_family = self._classify_setup(context, aggregations, direction)
             transmission_analysis = self._build_transmission_analysis(context, direction)
             analysis = self._build_analysis_payload(
                 ticker=normalized_ticker,
@@ -577,17 +580,25 @@ class TickerDeepAnalysisService:
         return max(0.0, min(100.0, value * 100.0))
 
     @staticmethod
-    def _compose_confidence(components: dict[str, float]) -> float:
+    def _compose_confidence(
+        components: dict[str, float],
+        *,
+        setup_family: str | None = None,
+    ) -> float:
         weighted = (
-            components.get("context_confidence", 0.0) * 0.16
-            + components.get("directional_confidence", 0.0) * 0.27
-            + components.get("catalyst_confidence", 0.0) * 0.11
-            + components.get("market_intelligence_confidence", 0.0) * 0.12
-            + components.get("technical_clarity", 0.0) * 0.18
-            + components.get("execution_clarity", 0.0) * 0.16
+            components.get("context_confidence", 0.0) * 0.10
+            + components.get("directional_confidence", 0.0) * 0.42
+            + components.get("catalyst_confidence", 0.0) * 0.06
+            + components.get("market_intelligence_confidence", 0.0) * 0.04
+            + components.get("technical_clarity", 0.0) * 0.16
+            + components.get("execution_clarity", 0.0) * 0.10
         )
+        setup_penalty = {
+            "catalyst_follow_through": 6.0,
+            "breakout": 5.0,
+        }.get(str(setup_family or "").strip().lower(), 0.0)
         quality_cap = components.get("data_quality_cap", 100.0) / 100.0
-        return round(max(0.0, min(95.0, weighted * quality_cap)), 2)
+        return round(max(0.0, min(95.0, max(0.0, weighted - setup_penalty) * quality_cap)), 2)
 
     def _build_transmission_analysis(
         self,
