@@ -69,6 +69,7 @@ async def summarize_recommendation_outcomes(
 ) -> RecommendationCalibrationSummary:
     normalized_resolved = resolved.strip().lower() if resolved else None
     return RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(
+        mode="execution_plus_simulation",
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
@@ -117,6 +118,7 @@ async def get_recommendation_calibration_report(
 ) -> dict[str, object]:
     normalized_resolved = resolved.strip().lower() if resolved else None
     summary = RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(
+        mode="execution_plus_simulation",
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,

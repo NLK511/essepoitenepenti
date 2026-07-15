@@ -1432,15 +1432,15 @@ class JobExecutionService:
         timing["calibration_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
 
         persistence_started = perf_counter()
-        execution_report = snapshot.get("reports", {}).get("execution_only", {}) if isinstance(snapshot.get("reports"), dict) else {}
-        execution_summary = execution_report.get("summary", {}) if isinstance(execution_report, dict) else {}
+        broker_report = snapshot.get("reports", {}).get("broker_only", {}) if isinstance(snapshot.get("reports"), dict) else {}
+        broker_summary = broker_report.get("summary", {}) if isinstance(broker_report, dict) else {}
         run_summary = {
             "mode": "recommendation_calibration_refresh",
-            "live_mode": snapshot.get("live_mode", "execution_only"),
+            "live_mode": snapshot.get("live_mode", "broker_only"),
             "limit": snapshot.get("limit"),
-            "sample_status": execution_summary.get("sample_status"),
-            "included_outcomes": execution_summary.get("included_outcomes"),
-            "success_rate_percent": execution_summary.get("success_rate_percent"),
+            "sample_status": broker_summary.get("sample_status"),
+            "included_outcomes": broker_summary.get("included_outcomes"),
+            "success_rate_percent": broker_summary.get("success_rate_percent"),
             "warnings": snapshot.get("warnings", []),
         }
         self.runs.set_summary(run.id or 0, run_summary)

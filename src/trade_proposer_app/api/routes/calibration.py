@@ -14,7 +14,7 @@ router = APIRouter(prefix="/calibration", tags=["calibration"])
 
 @router.get("/confidence")
 async def get_confidence_calibration(
-    mode: str = Query(default="execution_only"),
+    mode: str = Query(default="broker_only"),
     window: str | None = Query(default=None),
     ticker: str | None = Query(default=None),
     run_id: int | None = Query(default=None),

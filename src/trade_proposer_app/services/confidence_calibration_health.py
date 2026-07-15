@@ -9,6 +9,7 @@ from dataclasses import dataclass
 class ConfidenceCalibrationObservation:
     confidence_percent: float
     outcome: str
+    label_source: str = "unknown"
     evidence_date: str | None = None
     ticker: str | None = None
     setup_family: str | None = None
@@ -95,6 +96,9 @@ def calibration_health_report(
 
     return {
         "schema_version": "confidence-calibration-health-v1",
+        "label_sources": sorted(
+            {str(item.label_source or "unknown") for item in rows if item.label_source}
+        ),
         "status": status,
         "blocks_promotion": status != "usable",
         "blockers": sorted(set(blockers)),

@@ -29,7 +29,7 @@ class RecommendationEvidenceConcentrationService:
         evaluated_before: datetime | None = None,
         limit: int = 500,
     ) -> RecommendationEvidenceConcentrationSummary:
-        summary = self.calibration.summarize(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, evaluated_after=evaluated_after, evaluated_before=evaluated_before, limit=limit)
+        summary = self.calibration.summarize(mode="execution_plus_simulation", ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, evaluated_after=evaluated_after, evaluated_before=evaluated_before, limit=limit)
         overall_win_rate = summary.overall_win_rate_percent
         overall_return = self._overall_average_return_5d(summary)
         candidate_groups = [

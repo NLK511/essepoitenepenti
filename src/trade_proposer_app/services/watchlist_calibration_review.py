@@ -23,6 +23,7 @@ class WatchlistCalibrationReviewService:
         o = self._orchestration
         if calibration_summary is None:
             return self._disabled_review(confidence_percent)
+        calibration_source = str(getattr(calibration_summary, "label_source", "unknown") or "unknown")
         bucket_key = self.confidence_bucket(confidence_percent)
         base_threshold = float(o.confidence_threshold)
         overall_win_rate = self.safe_rate(getattr(calibration_summary, "overall_win_rate_percent", None))
@@ -66,6 +67,7 @@ class WatchlistCalibrationReviewService:
         review_status = self.calibration_review_status(usable_bucket_count, strong_bucket_count)
         return {
             "enabled": True,
+            "calibration_source": calibration_source,
             "review_status": review_status,
             "raw_confidence_percent": round(confidence_percent, 2),
             "calibration_curve": calibration_curve,
@@ -92,6 +94,7 @@ class WatchlistCalibrationReviewService:
         threshold_offset = o._signal_gating_tuning_value("threshold_offset", 0.0)
         return {
             "enabled": False,
+            "calibration_source": "disabled",
             "review_status": "disabled",
             "review_status_label": o._calibration_review_status_label("disabled"),
             "raw_confidence_percent": round(confidence_percent, 2),

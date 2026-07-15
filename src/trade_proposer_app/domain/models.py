@@ -906,6 +906,7 @@ class RecommendationCalibrationReliabilityBin(BaseModel):
 class RecommendationCalibrationReport(BaseModel):
     version_label: str = "v1"
     method: str = "confidence_binned_reliability"
+    label_source: str = "unknown"
     sample_count: int = 0
     resolved_count: int = 0
     brier_score: float | None = None
@@ -914,6 +915,7 @@ class RecommendationCalibrationReport(BaseModel):
 
 
 class RecommendationCalibrationSummary(BaseModel):
+    label_source: str = "unknown"
     total_outcomes: int = 0
     resolved_outcomes: int = 0
     open_outcomes: int = 0

@@ -221,6 +221,7 @@ class RecommendationQualitySummaryService:
             computed_after = review_window_start(label, now)
             evaluated_after = computed_after
             calibration = RecommendationPlanCalibrationService(self.effective_outcomes).summarize(
+                mode="execution_plus_simulation",
                 limit=self.METRIC_SAMPLE_LIMIT, evaluated_after=evaluated_after
             )
             baselines = RecommendationPlanBaselineService(self.plans).summarize(

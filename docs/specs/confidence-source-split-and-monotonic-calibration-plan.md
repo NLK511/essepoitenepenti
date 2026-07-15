@@ -1,6 +1,6 @@
 # Confidence Source Split and Monotonic Calibration Plan
 
-Status: planned after July 2026 raw-confidence backfill
+Status: source split and monotonic calibration implemented; segment shrinkage remains planned
 
 ## Problem
 
@@ -51,6 +51,8 @@ Source-aware means:
 
 ### 1. Add Outcome Source as a First-Class Calibration Dimension
 
+Implementation status: implemented.
+
 Persist and expose a normalized label source on calibration observations:
 
 - `broker`
@@ -74,6 +76,8 @@ Acceptance criteria:
 
 ### 2. Make Live Actionability Use Broker-First Calibration
 
+Implementation status: implemented.
+
 For live plan framing and broker steering:
 
 - prefer broker-only calibration when broker sample status is usable or strong;
@@ -88,6 +92,8 @@ Acceptance criteria:
 - promotion gates block live promotion when broker-only data is thin unless explicitly overridden.
 
 ### 3. Replace Free Empirical Buckets With Monotonic Calibration
+
+Implementation status: implemented.
 
 Use monotonic pooling across confidence buckets so calibrated probability cannot go down as raw confidence rises.
 
@@ -113,6 +119,8 @@ Acceptance criteria:
 
 ### 4. Separate Rank Health From Probability Calibration Health
 
+Implementation status: implemented.
+
 Keep two different diagnostics:
 
 1. raw-rank health:
@@ -132,6 +140,8 @@ Acceptance criteria:
 - actionability uses calibrated-probability health, not raw bucket monotonicity alone.
 
 ### 5. Add Segment Shrinkage Only After Source Split
+
+Implementation status: planned after source split and monotonic calibration are stable.
 
 Do not fit a separate model per setup family yet. Instead:
 
@@ -155,6 +165,8 @@ Acceptance criteria:
 - segment effects are validated on holdout before promotion.
 
 ### 6. Backfill and Refresh Workflow
+
+Implementation status: implemented for source-aware refresh; future formula changes must still use this workflow.
 
 Any future raw confidence formula change must include:
 

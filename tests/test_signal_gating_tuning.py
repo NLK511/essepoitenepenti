@@ -511,13 +511,15 @@ class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
             )
         )
 
-        summary = RecommendationPlanCalibrationService(self.outcome_repository).summarize(limit=20)
+        summary = RecommendationPlanCalibrationService(self.outcome_repository).summarize(
+            mode="execution_plus_simulation",
+            limit=20,
+        )
         self.assertEqual(summary.total_outcomes, 3)
         self.assertEqual(summary.by_action[0].key, "long")
         self.assertEqual(summary.by_action[0].win_rate_percent, 100.0)
         action_keys = {bucket.key for bucket in summary.by_action}
-        self.assertIn("no_action", action_keys)
-        self.assertIn("watchlist", action_keys)
+        self.assertEqual(action_keys, {"long"})
         self.assertIsNotNone(summary.calibration_report)
         self.assertEqual(summary.calibration_report.version_label, "confidence-reliability-v1")
         self.assertGreater(summary.calibration_report.sample_count, 0)

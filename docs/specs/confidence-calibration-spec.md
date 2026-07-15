@@ -88,12 +88,16 @@ Mixed calibration must not be used for live broker execution confidence unless e
 
 Operators must be able to select one of these modes.
 
-### `execution_only`
+### `broker_only`
 
 Included labels:
 
 - `win`
 - `loss`
+
+Included source:
+
+- `broker`
 
 Excluded labels:
 
@@ -104,6 +108,7 @@ Excluded labels:
 - `no_action`
 - `watchlist`
 - unresolved outcomes
+- simulation fallback outcomes
 
 Use for:
 
@@ -116,18 +121,23 @@ This should remain the default.
 
 Large live calibration refreshes must read effective outcomes in bounded batches. They must not build a single broker/simulation lookup over tens of thousands of plan IDs, because that can stall the refresh worker and leave the persisted snapshot stale.
 
-### `phantom_only`
+### `simulation_only`
 
 Included labels:
 
+- `win`
+- `loss`
 - `phantom_win`
 - `phantom_loss`
 
+Included source:
+
+- `simulation`
+
 Excluded labels:
 
-- `win`
-- `loss`
 - unresolved outcomes
+- broker outcomes
 
 Use for:
 
@@ -138,7 +148,7 @@ Use for:
 
 This must not directly alter broker execution confidence.
 
-### `execution_plus_phantom`
+### `execution_plus_simulation`
 
 Included labels:
 
@@ -146,6 +156,11 @@ Included labels:
 - `loss`
 - `phantom_win`
 - `phantom_loss`
+
+Included sources:
+
+- `broker`
+- `simulation`
 
 Binary mapping:
 
@@ -157,6 +172,30 @@ Use for:
 - research comparisons
 - broad opportunity-quality diagnostics
 - operator experiments
+
+This must not directly alter broker execution confidence.
+
+Legacy aliases may be accepted temporarily for callers, but generated reports and persisted snapshots should use the source-aware names above:
+
+- `execution_only` -> `broker_only`
+- `phantom_only` -> `simulation_only`
+- `execution_plus_phantom` -> `execution_plus_simulation`
+
+## Monotonic Probability Calibration
+
+Smoothed calibration must use empirical win rates with monotonic pooling across ordered confidence buckets. The current method is:
+
+1. bucket resolved outcomes by raw confidence;
+2. compute empirical win rate per bucket;
+3. shrink bucket rates toward the report's source-specific prior;
+4. apply isotonic/PAVA pooling so calibrated probability cannot decrease as raw confidence increases.
+
+Raw rank health and calibrated probability health are separate:
+
+- raw rank health reports whether higher raw confidence buckets win more often;
+- calibrated probability health reports whether the monotonic calibrated curve is usable as a probability estimate.
+
+Live promotion should use calibrated probability health from `broker_only`. Raw rank health can still warn about upstream scoring quality, but a raw-rank warning is not the same as a calibrated-probability failure.
 
 This mode must be clearly labeled as mixed semantics.
 
@@ -207,7 +246,8 @@ Every calibration run/report should include:
 
 ```json
 {
-  "mode": "execution_only",
+  "mode": "broker_only",
+  "label_source": "broker",
   "window": {
     "label": "90d",
     "evaluated_after": "2026-03-20T00:00:00Z",
@@ -216,6 +256,8 @@ Every calibration run/report should include:
     "computed_before": null
   },
   "label_policy": {
+    "label_source": "broker",
+    "outcome_sources": ["broker"],
     "included_outcomes": ["win", "loss"],
     "success_outcomes": ["win"],
     "failure_outcomes": ["loss"],
@@ -326,7 +368,7 @@ GET /api/calibration/confidence
 
 Query parameters:
 
-- `mode`: `execution_only | phantom_only | execution_plus_phantom | side_by_side`
+- `mode`: `broker_only | simulation_only | execution_plus_simulation | side_by_side`
 - `window`: `7d | 14d | 30d | 90d | 180d | 365d | all`
 - `evaluated_after`
 - `evaluated_before`

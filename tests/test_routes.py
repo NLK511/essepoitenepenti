@@ -267,15 +267,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/api/calibration/confidence", params={"mode": "phantom_only", "limit": 20})
+            response = await client.get("/api/calibration/confidence", params={"mode": "simulation_only", "limit": 20})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["mode"], "phantom_only")
-        self.assertEqual(payload["summary"]["included_outcomes"], 1)
-        self.assertEqual(payload["summary"]["successes"], 1)
-        self.assertEqual(payload["label_policy"]["success_outcomes"], ["phantom_win"])
-        self.assertIn("phantom_only_research_view", payload["warnings"])
+        self.assertEqual(payload["mode"], "simulation_only")
+        self.assertEqual(payload["summary"]["included_outcomes"], 2)
+        self.assertEqual(payload["summary"]["successes"], 2)
+        self.assertEqual(payload["label_policy"]["success_outcomes"], ["phantom_win", "win"])
+        self.assertIn("non_broker_calibration_research_view", payload["warnings"])
 
     async def asyncTearDown(self) -> None:
         self.health_preflight_patcher.stop()

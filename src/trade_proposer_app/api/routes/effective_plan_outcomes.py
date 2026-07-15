@@ -56,6 +56,7 @@ async def summarize_effective_plan_outcomes(
     session: Session = Depends(get_db_session),
 ) -> RecommendationCalibrationSummary:
     return RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(
+        mode="execution_plus_simulation",
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,

@@ -21,22 +21,22 @@ class ConfidenceCalibrationSnapshotService:
     def refresh(self, *, limit: int = LIVE_CALIBRATION_LIMIT) -> dict[str, object]:
         if self.calibration_service is None:
             raise RuntimeError("calibration_service is required to refresh confidence calibration snapshots")
-        summary = self.calibration_service.summarize(limit=limit)
-        execution_only = self.calibration_service.confidence_report(mode="execution_only", window="all", limit=limit)
-        phantom_only = self.calibration_service.confidence_report(mode="phantom_only", window="all", limit=limit)
-        execution_plus_phantom = self.calibration_service.confidence_report(mode="execution_plus_phantom", window="all", limit=limit)
+        summary = self.calibration_service.summarize(mode="broker_only", limit=limit)
+        broker_only = self.calibration_service.confidence_report(mode="broker_only", window="all", limit=limit)
+        simulation_only = self.calibration_service.confidence_report(mode="simulation_only", window="all", limit=limit)
+        execution_plus_simulation = self.calibration_service.confidence_report(mode="execution_plus_simulation", window="all", limit=limit)
         return {
             "schema_version": "confidence-calibration-snapshot-v1",
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "live_mode": "execution_only",
+            "live_mode": "broker_only",
             "limit": limit,
             "live_calibration_summary": summary.model_dump(mode="json"),
             "reports": {
-                "execution_only": self._dump_model(execution_only),
-                "phantom_only": self._dump_model(phantom_only),
-                "execution_plus_phantom": self._dump_model(execution_plus_phantom),
+                "broker_only": self._dump_model(broker_only),
+                "simulation_only": self._dump_model(simulation_only),
+                "execution_plus_simulation": self._dump_model(execution_plus_simulation),
             },
-            "warnings": self._snapshot_warnings(execution_only),
+            "warnings": self._snapshot_warnings(broker_only),
         }
 
     def summarize(self, *_, **__) -> RecommendationCalibrationSummary | None:
@@ -82,19 +82,26 @@ class ConfidenceCalibrationSnapshotService:
         return value
 
     @staticmethod
-    def _snapshot_warnings(execution_only_report: dict[str, object]) -> list[str]:
+    def _snapshot_warnings(broker_report: dict[str, object]) -> list[str]:
         warnings = []
-        summary = execution_only_report.get("summary") if isinstance(execution_only_report, dict) else None
+        summary = broker_report.get("summary") if isinstance(broker_report, dict) else None
         if isinstance(summary, dict) and summary.get("sample_status") in {"empty", "sparse", "thin"}:
-            warnings.append("execution_only_calibration_sample_below_usable_threshold")
+            warnings.append("broker_calibration_sample_below_usable_threshold")
         health = (
-            execution_only_report.get("calibration_health")
-            if isinstance(execution_only_report, dict)
+            broker_report.get("calibration_health")
+            if isinstance(broker_report, dict)
             else None
         )
         if isinstance(health, dict) and health.get("blocks_promotion"):
-            warnings.append("execution_only_calibration_health_blocks_promotion")
+            warnings.append("broker_calibrated_probability_health_blocks_promotion")
             for blocker in health.get("blockers", []):
                 if isinstance(blocker, str):
                     warnings.append(blocker)
+        raw_rank_health = (
+            broker_report.get("raw_rank_health")
+            if isinstance(broker_report, dict)
+            else None
+        )
+        if isinstance(raw_rank_health, dict) and raw_rank_health.get("blocks_promotion"):
+            warnings.append("broker_raw_rank_health_unstable")
         return warnings

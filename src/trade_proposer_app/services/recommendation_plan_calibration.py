@@ -30,7 +30,16 @@ class RecommendationPlanCalibrationService:
     EXECUTION_FAILURE_OUTCOMES = {TradeOutcome.LOSS.value}
     PHANTOM_SUCCESS_OUTCOMES = {"phantom_win"}
     PHANTOM_FAILURE_OUTCOMES = {"phantom_loss"}
-    CALIBRATION_MODES = {"execution_only", "phantom_only", "execution_plus_phantom", "side_by_side"}
+    CALIBRATION_MODES = {
+        "broker_only",
+        "simulation_only",
+        "execution_plus_simulation",
+        "execution_only",
+        "phantom_only",
+        "execution_plus_phantom",
+        "side_by_side",
+    }
+    LIVE_CALIBRATION_MODE = "broker_only"
     RECENT_RESOLVED_WINDOW: int = 30
     RECENT_WINDOW_MIN_RESOLVED_FOR_CURVE: int = 20
 
@@ -42,7 +51,7 @@ class RecommendationPlanCalibrationService:
     def confidence_report(
         self,
         *,
-        mode: str = "execution_only",
+        mode: str = LIVE_CALIBRATION_MODE,
         window: str | None = None,
         ticker: str | None = None,
         run_id: int | None = None,
@@ -55,9 +64,9 @@ class RecommendationPlanCalibrationService:
         limit: int = 500,
         now: datetime | None = None,
     ) -> dict[str, object]:
-        normalized_mode = str(mode or "execution_only").strip().lower()
+        normalized_mode = self._normalize_mode(mode)
         if normalized_mode not in self.CALIBRATION_MODES:
-            normalized_mode = "execution_only"
+            normalized_mode = self.LIVE_CALIBRATION_MODE
         if normalized_mode == "side_by_side":
             resolved_after, resolved_before = self._resolve_window(window, evaluated_after, evaluated_before, now=now)
             reports = {
@@ -75,7 +84,7 @@ class RecommendationPlanCalibrationService:
                     limit=limit,
                     now=now,
                 )
-                for child_mode in ("execution_only", "phantom_only", "execution_plus_phantom")
+                for child_mode in ("broker_only", "simulation_only", "execution_plus_simulation")
             }
             return {
                 "mode": "side_by_side",
@@ -102,24 +111,33 @@ class RecommendationPlanCalibrationService:
             method=f"{normalized_mode}_confidence_binned_reliability",
             version_label="confidence-reliability-v1",
             smoothing_strength=0.0,
+            label_source=str(policy["label_source"]),
         )
         smoothed_calibration_report = self._build_smoothed_calibration_report(
             normalized_outcomes,
-            method=f"{normalized_mode}_confidence_binned_bayesian_reliability",
-            version_label="confidence-reliability-v2-smoothed",
+            method=f"{normalized_mode}_confidence_monotonic_pooled_reliability",
+            version_label="confidence-reliability-v3-monotonic",
             smoothing_strength=8.0,
+            label_source=str(policy["label_source"]),
         )
         source_counts = self._outcome_counts(outcomes)
         included_count = len(normalized_outcomes)
         successes = sum(1 for item in normalized_outcomes if item.outcome == TradeOutcome.WIN.value)
         failures = sum(1 for item in normalized_outcomes if item.outcome == TradeOutcome.LOSS.value)
         warnings = self._window_warnings(computed_after=computed_after, computed_before=computed_before)
-        if normalized_mode != "execution_only":
-            warnings.append("phantom_outcomes_included" if normalized_mode == "execution_plus_phantom" else "phantom_only_research_view")
+        if normalized_mode != self.LIVE_CALIBRATION_MODE:
+            warnings.append("non_broker_calibration_research_view")
         if included_count < 50:
             warnings.append("calibration_sample_below_usable_threshold")
+        raw_rank_health = self._calibration_health(normalized_outcomes, label_source=str(policy["label_source"]))
+        calibrated_probability_health = self._calibrated_probability_health(
+            smoothed_calibration_report,
+            sample_count=included_count,
+            label_source=str(policy["label_source"]),
+        )
         return {
             "mode": normalized_mode,
+            "label_source": policy["label_source"],
             "window": self._window_payload(window, resolved_after, resolved_before, computed_after, computed_before, outcomes),
             "label_policy": policy,
             "source_outcome_counts": source_counts,
@@ -133,7 +151,9 @@ class RecommendationPlanCalibrationService:
             },
             "calibration_report": calibration_report,
             "smoothed_calibration_report": smoothed_calibration_report,
-            "calibration_health": self._calibration_health(normalized_outcomes),
+            "raw_rank_health": raw_rank_health,
+            "calibrated_probability_health": calibrated_probability_health,
+            "calibration_health": calibrated_probability_health,
             "cohorts": {
                 "by_confidence_bucket": self._grouped_summary(normalized_outcomes, group_by="confidence_bucket"),
                 "by_setup_family": self._grouped_summary(normalized_outcomes, group_by="setup_family"),
@@ -149,6 +169,7 @@ class RecommendationPlanCalibrationService:
     def summarize(
         self,
         *,
+        mode: str = LIVE_CALIBRATION_MODE,
         ticker: str | None = None,
         run_id: int | None = None,
         setup_family: str | None = None,
@@ -158,19 +179,22 @@ class RecommendationPlanCalibrationService:
         evaluated_before: datetime | None = None,
         limit: int = 500,
     ) -> RecommendationCalibrationSummary:
+        normalized_mode = self._normalize_mode(mode)
+        policy = self._label_policy(normalized_mode)
         outcomes = self.outcomes.list_outcomes(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, evaluated_after=evaluated_after, evaluated_before=evaluated_before, limit=limit)
-        resolved = [item for item in outcomes if item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
+        resolved = self._normalized_calibration_outcomes(outcomes, policy)
         recent_resolved = self._recent_resolved_outcomes(resolved, limit=self.RECENT_RESOLVED_WINDOW)
-        calibration_report = self._calibration_report(outcomes)
-        smoothed_calibration_report = self._smoothed_calibration_report(outcomes)
-        recent_calibration_report = self._calibration_report(recent_resolved)
-        recent_smoothed_calibration_report = self._smoothed_calibration_report(recent_resolved)
+        calibration_report = self._calibration_report(resolved, label_source=str(policy["label_source"]))
+        smoothed_calibration_report = self._smoothed_calibration_report(resolved, label_source=str(policy["label_source"]))
+        recent_calibration_report = self._calibration_report(recent_resolved, label_source=str(policy["label_source"]))
+        recent_smoothed_calibration_report = self._smoothed_calibration_report(recent_resolved, label_source=str(policy["label_source"]))
         return RecommendationCalibrationSummary(
+            label_source=str(policy["label_source"]),
             total_outcomes=len(outcomes),
             resolved_outcomes=len(resolved),
             open_outcomes=sum(1 for item in outcomes if item.status == OutcomeStatus.OPEN.value),
-            win_outcomes=sum(1 for item in outcomes if item.outcome == TradeOutcome.WIN.value),
-            loss_outcomes=sum(1 for item in outcomes if item.outcome == TradeOutcome.LOSS.value),
+            win_outcomes=sum(1 for item in resolved if item.outcome == TradeOutcome.WIN.value),
+            loss_outcomes=sum(1 for item in resolved if item.outcome == TradeOutcome.LOSS.value),
             no_action_outcomes=sum(1 for item in outcomes if item.outcome == TradeOutcome.NO_ACTION.value),
             watchlist_outcomes=sum(1 for item in outcomes if item.outcome == TradeOutcome.WATCHLIST.value),
             overall_win_rate_percent=self._win_rate(resolved),
@@ -178,30 +202,49 @@ class RecommendationPlanCalibrationService:
             smoothed_calibration_report=smoothed_calibration_report,
             recent_calibration_report=recent_calibration_report,
             recent_smoothed_calibration_report=recent_smoothed_calibration_report,
-            by_confidence_bucket=self._grouped_summary(outcomes, group_by="confidence_bucket"),
-            by_setup_family=self._grouped_summary(outcomes, group_by="setup_family"),
-            by_action=self._grouped_summary(outcomes, group_by="action", default_key="unknown_action"),
-            by_horizon=self._grouped_summary(outcomes, group_by="horizon", default_key="unknown_horizon"),
-            by_transmission_bias=self._grouped_summary(outcomes, group_by="transmission_bias", default_key="unknown"),
-            by_context_regime=self._grouped_summary(outcomes, group_by="context_regime", default_key="mixed_context"),
-            by_horizon_setup_family=self._combined_summary(outcomes, "horizon", "setup_family", default_left="unknown_horizon", default_right="uncategorized"),
+            by_confidence_bucket=self._grouped_summary(resolved, group_by="confidence_bucket"),
+            by_setup_family=self._grouped_summary(resolved, group_by="setup_family"),
+            by_action=self._grouped_summary(resolved, group_by="action", default_key="unknown_action"),
+            by_horizon=self._grouped_summary(resolved, group_by="horizon", default_key="unknown_horizon"),
+            by_transmission_bias=self._grouped_summary(resolved, group_by="transmission_bias", default_key="unknown"),
+            by_context_regime=self._grouped_summary(resolved, group_by="context_regime", default_key="mixed_context"),
+            by_horizon_setup_family=self._combined_summary(resolved, "horizon", "setup_family", default_left="unknown_horizon", default_right="uncategorized"),
         )
 
     @classmethod
+    def _normalize_mode(cls, mode: str | None) -> str:
+        normalized = str(mode or cls.LIVE_CALIBRATION_MODE).strip().lower()
+        aliases = {
+            "execution_only": "broker_only",
+            "phantom_only": "simulation_only",
+            "execution_plus_phantom": "execution_plus_simulation",
+        }
+        return aliases.get(normalized, normalized)
+
+    @classmethod
     def _label_policy(cls, mode: str) -> dict[str, object]:
-        if mode == "phantom_only":
-            success = sorted(cls.PHANTOM_SUCCESS_OUTCOMES)
-            failure = sorted(cls.PHANTOM_FAILURE_OUTCOMES)
-            excluded = sorted(cls.EXECUTION_SUCCESS_OUTCOMES | cls.EXECUTION_FAILURE_OUTCOMES)
-        elif mode == "execution_plus_phantom":
+        normalized = cls._normalize_mode(mode)
+        if normalized == "simulation_only":
             success = sorted(cls.EXECUTION_SUCCESS_OUTCOMES | cls.PHANTOM_SUCCESS_OUTCOMES)
             failure = sorted(cls.EXECUTION_FAILURE_OUTCOMES | cls.PHANTOM_FAILURE_OUTCOMES)
             excluded = []
+            sources = ["simulation"]
+            label_source = "simulation"
+        elif normalized == "execution_plus_simulation":
+            success = sorted(cls.EXECUTION_SUCCESS_OUTCOMES | cls.PHANTOM_SUCCESS_OUTCOMES)
+            failure = sorted(cls.EXECUTION_FAILURE_OUTCOMES | cls.PHANTOM_FAILURE_OUTCOMES)
+            excluded = []
+            sources = ["broker", "simulation"]
+            label_source = "execution_plus_simulation"
         else:
             success = sorted(cls.EXECUTION_SUCCESS_OUTCOMES)
             failure = sorted(cls.EXECUTION_FAILURE_OUTCOMES)
             excluded = sorted(cls.PHANTOM_SUCCESS_OUTCOMES | cls.PHANTOM_FAILURE_OUTCOMES)
+            sources = ["broker"]
+            label_source = "broker"
         return {
+            "label_source": label_source,
+            "outcome_sources": sources,
             "included_outcomes": success + failure,
             "success_outcomes": success,
             "failure_outcomes": failure,
@@ -215,11 +258,15 @@ class RecommendationPlanCalibrationService:
         success = {str(value) for value in policy.get("success_outcomes", []) if isinstance(value, str)}
         failure = {str(value) for value in policy.get("failure_outcomes", []) if isinstance(value, str)}
         normalized: list[RecommendationPlanOutcome] = []
+        allowed_sources = {str(value) for value in policy.get("outcome_sources", []) if isinstance(value, str)}
+        label_source = str(policy.get("label_source") or "unknown")
         for item in outcomes:
+            if allowed_sources and str(item.outcome_source or "simulation") not in allowed_sources:
+                continue
             if item.outcome in success:
-                normalized.append(item.model_copy(update={"outcome": TradeOutcome.WIN.value, "status": OutcomeStatus.RESOLVED.value}))
+                normalized.append(item.model_copy(update={"outcome": TradeOutcome.WIN.value, "status": OutcomeStatus.RESOLVED.value, "outcome_source": str(item.outcome_source or label_source)}))
             elif item.outcome in failure:
-                normalized.append(item.model_copy(update={"outcome": TradeOutcome.LOSS.value, "status": OutcomeStatus.RESOLVED.value}))
+                normalized.append(item.model_copy(update={"outcome": TradeOutcome.LOSS.value, "status": OutcomeStatus.RESOLVED.value, "outcome_source": str(item.outcome_source or label_source)}))
         return normalized
 
     @staticmethod
@@ -230,11 +277,12 @@ class RecommendationPlanCalibrationService:
         return dict(sorted(counts.items()))
 
     @staticmethod
-    def _calibration_health(outcomes: list[RecommendationPlanOutcome]) -> dict[str, object]:
+    def _calibration_health(outcomes: list[RecommendationPlanOutcome], *, label_source: str = "unknown") -> dict[str, object]:
         observations = [
             ConfidenceCalibrationObservation(
                 confidence_percent=float(item.confidence_percent or 0.0),
                 outcome=str(item.outcome),
+                label_source=str(item.outcome_source or label_source),
                 evidence_date=item.evaluated_at.date().isoformat()
                 if item.evaluated_at is not None
                 else None,
@@ -248,6 +296,47 @@ class RecommendationPlanCalibrationService:
             and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
         ]
         return calibration_health_report(observations)
+
+    @classmethod
+    def _calibrated_probability_health(
+        cls,
+        report: RecommendationCalibrationReport | None,
+        *,
+        sample_count: int,
+        label_source: str,
+        min_usable_samples: int = 50,
+        max_expected_calibration_error: float = 0.08,
+    ) -> dict[str, object]:
+        blockers: list[str] = []
+        warnings: list[str] = []
+        if report is None or sample_count <= 0:
+            status = "unavailable"
+            blockers.append("calibrated_probability_no_resolved_observations")
+        elif sample_count < min_usable_samples:
+            status = "thin"
+            blockers.append("calibrated_probability_sample_below_usable_threshold")
+        elif report.expected_calibration_error is not None and float(report.expected_calibration_error) > max_expected_calibration_error:
+            status = "unstable"
+            blockers.append("calibrated_probability_ece_exceeds_limit")
+        else:
+            status = "usable"
+        if report is not None and not cls._report_is_monotonic(report):
+            status = "non_monotonic"
+            blockers.append("calibrated_probability_non_monotonic_curve")
+        return {
+            "schema_version": "calibrated-probability-health-v1",
+            "label_source": label_source,
+            "status": status,
+            "blocks_promotion": status != "usable",
+            "blockers": sorted(set(blockers)),
+            "warnings": sorted(set(warnings)),
+            "sample_count": sample_count,
+            "min_usable_samples": min_usable_samples,
+            "max_expected_calibration_error": max_expected_calibration_error,
+            "expected_calibration_error": report.expected_calibration_error if report is not None else None,
+            "brier_score": report.brier_score if report is not None else None,
+            "bin_count": len(report.bins) if report is not None else 0,
+        }
 
     @staticmethod
     def _confidence_sample_status(sample_count: int) -> str:
@@ -379,15 +468,16 @@ class RecommendationPlanCalibrationService:
         wins = sum(1 for item in items if item.outcome == TradeOutcome.WIN.value)
         return round((wins / len(items)) * 100.0, 1)
 
-    def _calibration_report(self, outcomes: list[RecommendationPlanOutcome]) -> RecommendationCalibrationReport | None:
-        return self._build_calibration_report(outcomes, method="confidence_binned_reliability", version_label="confidence-reliability-v1", smoothing_strength=0.0)
+    def _calibration_report(self, outcomes: list[RecommendationPlanOutcome], *, label_source: str = "unknown") -> RecommendationCalibrationReport | None:
+        return self._build_calibration_report(outcomes, method="confidence_binned_reliability", version_label="confidence-reliability-v1", smoothing_strength=0.0, label_source=label_source)
 
-    def _smoothed_calibration_report(self, outcomes: list[RecommendationPlanOutcome]) -> RecommendationCalibrationReport | None:
+    def _smoothed_calibration_report(self, outcomes: list[RecommendationPlanOutcome], *, label_source: str = "unknown") -> RecommendationCalibrationReport | None:
         return self._build_smoothed_calibration_report(
             outcomes,
-            method="confidence_binned_bayesian_reliability",
-            version_label="confidence-reliability-v2-smoothed",
+            method="confidence_monotonic_pooled_reliability",
+            version_label="confidence-reliability-v3-monotonic",
             smoothing_strength=8.0,
+            label_source=label_source,
         )
 
     def _build_calibration_report(
@@ -397,6 +487,7 @@ class RecommendationPlanCalibrationService:
         method: str,
         version_label: str,
         smoothing_strength: float,
+        label_source: str = "unknown",
     ) -> RecommendationCalibrationReport | None:
         scored = [item for item in outcomes if isinstance(item.confidence_percent, (int, float)) and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
         if not scored:
@@ -438,6 +529,7 @@ class RecommendationPlanCalibrationService:
         return RecommendationCalibrationReport(
             version_label=version_label,
             method=method,
+            label_source=label_source,
             sample_count=total_count,
             resolved_count=total_count,
             brier_score=round(total_brier / total_count, 4),
@@ -452,14 +544,12 @@ class RecommendationPlanCalibrationService:
         smoothing_strength: float,
         method: str,
         version_label: str,
+        label_source: str = "unknown",
     ) -> RecommendationCalibrationReport | None:
         scored = [item for item in outcomes if isinstance(item.confidence_percent, (int, float)) and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
         if not scored:
             return None
-        bins = []
-        total_brier = 0.0
-        total_weighted_error = 0.0
-        total_count = 0
+        raw_bins = []
         overall_prob = sum(1.0 if item.outcome == TradeOutcome.WIN.value else 0.0 for item in scored) / len(scored)
         for lower, upper in ((0, 20), (20, 40), (40, 50), (50, 60), (60, 70), (70, 80), (80, 90), (90, 100)):
             bin_items = [item for item in scored if self._confidence_in_bin(float(item.confidence_percent), lower, upper)]
@@ -469,18 +559,41 @@ class RecommendationPlanCalibrationService:
             actuals = [1.0 if item.outcome == TradeOutcome.WIN.value else 0.0 for item in bin_items]
             avg_actual = sum(actuals) / resolved_count
             smoothed_predicted = avg_actual if smoothing_strength <= 0 else ((avg_actual * resolved_count) + (overall_prob * smoothing_strength)) / (resolved_count + smoothing_strength)
-            bin_brier = sum((smoothed_predicted - actual) ** 2 for actual in actuals) / resolved_count
-            calibration_error = abs(smoothed_predicted - avg_actual)
+            raw_bins.append(
+                {
+                    "lower": lower,
+                    "upper": upper,
+                    "items": bin_items,
+                    "actuals": actuals,
+                    "avg_actual": avg_actual,
+                    "sample_count": resolved_count,
+                    "predicted_probability": smoothed_predicted,
+                }
+            )
+        pooled_predictions = self._monotonic_pooled_predictions(
+            [float(item["predicted_probability"]) for item in raw_bins],
+            [int(item["sample_count"]) for item in raw_bins],
+        )
+        bins = []
+        total_brier = 0.0
+        total_weighted_error = 0.0
+        total_count = 0
+        for raw_bin, monotonic_predicted in zip(raw_bins, pooled_predictions, strict=True):
+            resolved_count = int(raw_bin["sample_count"])
+            actuals = list(raw_bin["actuals"])
+            avg_actual = float(raw_bin["avg_actual"])
+            bin_brier = sum((monotonic_predicted - actual) ** 2 for actual in actuals) / resolved_count
+            calibration_error = abs(monotonic_predicted - avg_actual)
             total_brier += bin_brier * resolved_count
             total_weighted_error += calibration_error * resolved_count
             total_count += resolved_count
             bins.append(
                 RecommendationCalibrationReliabilityBin(
-                    bin_key=f"{lower}_{upper}",
-                    bin_label=f"{lower}-{upper}",
+                    bin_key=f"{raw_bin['lower']}_{raw_bin['upper']}",
+                    bin_label=f"{raw_bin['lower']}-{raw_bin['upper']}",
                     sample_count=resolved_count,
                     resolved_count=resolved_count,
-                    predicted_probability=round(smoothed_predicted, 4),
+                    predicted_probability=round(monotonic_predicted, 4),
                     realized_win_rate_percent=round(avg_actual * 100.0, 1),
                     brier_score=round(bin_brier, 4),
                     calibration_error=round(calibration_error, 4),
@@ -491,12 +604,55 @@ class RecommendationPlanCalibrationService:
         return RecommendationCalibrationReport(
             version_label=version_label,
             method=method,
+            label_source=label_source,
             sample_count=total_count,
             resolved_count=total_count,
             brier_score=round(total_brier / total_count, 4),
             expected_calibration_error=round(total_weighted_error / total_count, 4),
             bins=bins,
         )
+
+    @staticmethod
+    def _monotonic_pooled_predictions(predictions: list[float], weights: list[int]) -> list[float]:
+        if not predictions:
+            return []
+        blocks: list[dict[str, object]] = []
+        for index, (prediction, weight) in enumerate(zip(predictions, weights, strict=True)):
+            blocks.append({"start": index, "end": index, "weight": max(1, int(weight)), "value": float(prediction)})
+            while len(blocks) >= 2 and float(blocks[-2]["value"]) > float(blocks[-1]["value"]):
+                right = blocks.pop()
+                left = blocks.pop()
+                combined_weight = int(left["weight"]) + int(right["weight"])
+                combined_value = (
+                    float(left["value"]) * int(left["weight"])
+                    + float(right["value"]) * int(right["weight"])
+                ) / combined_weight
+                blocks.append(
+                    {
+                        "start": int(left["start"]),
+                        "end": int(right["end"]),
+                        "weight": combined_weight,
+                        "value": combined_value,
+                    }
+                )
+        pooled = [0.0 for _ in predictions]
+        for block in blocks:
+            for index in range(int(block["start"]), int(block["end"]) + 1):
+                pooled[index] = float(block["value"])
+        return pooled
+
+    @staticmethod
+    def _report_is_monotonic(report: RecommendationCalibrationReport) -> bool:
+        previous: float | None = None
+        for bin_item in report.bins:
+            probability = bin_item.predicted_probability
+            if probability is None:
+                continue
+            value = float(probability)
+            if previous is not None and value + 0.0001 < previous:
+                return False
+            previous = value
+        return True
 
     @staticmethod
     def _confidence_in_bin(confidence: float, lower: int, upper: int) -> bool:

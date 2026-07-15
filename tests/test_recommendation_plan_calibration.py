@@ -118,6 +118,26 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         self.assertAlmostEqual(bin_90.predicted_probability, 0.75, places=4)
         self.assertAlmostEqual(bin_0.predicted_probability, 0.25, places=4)
 
+    def test_smoothed_report_pools_non_monotonic_bins_into_monotonic_curve(self) -> None:
+        outcomes = []
+        for index in range(10):
+            outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=index, outcome="win", confidence_percent=45.0))
+        for index in range(10, 20):
+            outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=index, outcome="loss", confidence_percent=55.0))
+
+        report = self.service._build_smoothed_calibration_report(
+            outcomes,
+            method="test",
+            version_label="v1",
+            smoothing_strength=0.0,
+        )
+
+        self.assertIsNotNone(report)
+        assert report is not None
+        probabilities = [item.predicted_probability for item in report.bins]
+        self.assertEqual(probabilities, sorted(probabilities))
+        self.assertEqual(probabilities, [0.5, 0.5])
+
     # ─── Grouping and Bucketization ───────────────────────────────────────────
 
     def test_summarize_groups_by_all_supported_dimensions(self) -> None:
@@ -127,13 +147,13 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
                 recommendation_plan_id=1, ticker="AAPL", action="long", outcome="win",
                 confidence_percent=80.0, confidence_bucket="80_plus",
                 setup_family="breakout", horizon="1w", transmission_bias="bullish",
-                context_regime="risk_on"
+                context_regime="risk_on", outcome_source="broker"
             ),
             RecommendationPlanOutcome(
                 recommendation_plan_id=2, ticker="TSLA", action="short", outcome="loss",
                 confidence_percent=60.0, confidence_bucket="50_to_64",
                 setup_family="continuation", horizon="1d", transmission_bias="bearish",
-                context_regime="risk_off"
+                context_regime="risk_off", outcome_source="broker"
             ),
         ]
         self.outcomes_repo.list_outcomes.return_value = outcomes
@@ -209,10 +229,10 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
 
     def test_summarize_builds_recent_calibration_reports_from_latest_resolved_outcomes(self) -> None:
         outcomes = [
-            RecommendationPlanOutcome(recommendation_plan_id=index + 1, outcome="loss", confidence_percent=80.0)
+            RecommendationPlanOutcome(recommendation_plan_id=index + 1, outcome="loss", confidence_percent=80.0, outcome_source="broker")
             for index in range(30)
         ] + [
-            RecommendationPlanOutcome(recommendation_plan_id=index + 31, outcome="win", confidence_percent=80.0)
+            RecommendationPlanOutcome(recommendation_plan_id=index + 31, outcome="win", confidence_percent=80.0, outcome_source="broker")
             for index in range(20)
         ]
         self.outcomes_repo.list_outcomes.return_value = outcomes
@@ -243,17 +263,18 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
     def test_average_returns_none_when_no_numeric_values(self) -> None:
         self.assertIsNone(self.service._average([None, "not_a_number"]))
 
-    def test_confidence_report_defaults_to_execution_only_and_excludes_phantoms(self) -> None:
+    def test_confidence_report_defaults_to_broker_only_and_excludes_simulation(self) -> None:
         self.outcomes_repo.list_outcomes.return_value = [
-            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0),
-            RecommendationPlanOutcome(recommendation_plan_id=2, outcome="loss", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0, outcome_source="broker"),
+            RecommendationPlanOutcome(recommendation_plan_id=2, outcome="loss", confidence_percent=80.0, outcome_source="broker"),
             RecommendationPlanOutcome(recommendation_plan_id=3, outcome="phantom_win", confidence_percent=80.0),
             RecommendationPlanOutcome(recommendation_plan_id=4, outcome="phantom_loss", confidence_percent=80.0),
         ]
 
         report = self.service.confidence_report()
 
-        self.assertEqual(report["mode"], "execution_only")
+        self.assertEqual(report["mode"], "broker_only")
+        self.assertEqual(report["label_source"], "broker")
         self.assertEqual(report["summary"]["included_outcomes"], 2)
         self.assertEqual(report["summary"]["successes"], 1)
         self.assertEqual(report["label_policy"]["excluded_outcomes"], ["phantom_loss", "phantom_win"])
@@ -261,19 +282,20 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         self.assertEqual(report["calibration_health"]["sample_count"], 2)
         self.assertTrue(report["calibration_health"]["blocks_promotion"])
 
-    def test_confidence_report_can_calibrate_phantom_only(self) -> None:
+    def test_confidence_report_can_calibrate_simulation_only(self) -> None:
         self.outcomes_repo.list_outcomes.return_value = [
-            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0, outcome_source="broker"),
             RecommendationPlanOutcome(recommendation_plan_id=2, outcome="phantom_win", confidence_percent=70.0),
             RecommendationPlanOutcome(recommendation_plan_id=3, outcome="phantom_loss", confidence_percent=70.0),
         ]
 
-        report = self.service.confidence_report(mode="phantom_only")
+        report = self.service.confidence_report(mode="simulation_only")
 
-        self.assertEqual(report["mode"], "phantom_only")
+        self.assertEqual(report["mode"], "simulation_only")
+        self.assertEqual(report["label_source"], "simulation")
         self.assertEqual(report["summary"]["included_outcomes"], 2)
         self.assertEqual(report["summary"]["success_rate_percent"], 50.0)
-        self.assertIn("phantom_only_research_view", report["warnings"])
+        self.assertIn("non_broker_calibration_research_view", report["warnings"])
         self.assertEqual(report["calibration_report"].sample_count, 2)
 
     def test_confidence_report_resolves_named_time_window(self) -> None:
@@ -289,7 +311,7 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
 
     def test_confidence_report_side_by_side_returns_separate_modes(self) -> None:
         self.outcomes_repo.list_outcomes.return_value = [
-            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0, outcome_source="broker"),
             RecommendationPlanOutcome(recommendation_plan_id=2, outcome="phantom_win", confidence_percent=70.0),
             RecommendationPlanOutcome(recommendation_plan_id=3, outcome="phantom_loss", confidence_percent=70.0),
         ]
@@ -297,13 +319,13 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         report = self.service.confidence_report(mode="side_by_side")
 
         self.assertEqual(report["mode"], "side_by_side")
-        self.assertEqual(report["reports"]["execution_only"]["summary"]["included_outcomes"], 1)
-        self.assertEqual(report["reports"]["phantom_only"]["summary"]["included_outcomes"], 2)
-        self.assertEqual(report["reports"]["execution_plus_phantom"]["summary"]["included_outcomes"], 3)
+        self.assertEqual(report["reports"]["broker_only"]["summary"]["included_outcomes"], 1)
+        self.assertEqual(report["reports"]["simulation_only"]["summary"]["included_outcomes"], 2)
+        self.assertEqual(report["reports"]["execution_plus_simulation"]["summary"]["included_outcomes"], 3)
 
 
 class ConfidenceCalibrationSnapshotServiceTests(unittest.TestCase):
-    def test_refresh_persists_execution_only_live_summary_and_research_reports(self) -> None:
+    def test_refresh_persists_broker_only_live_summary_and_research_reports(self) -> None:
         runs = Mock()
         calibration = Mock()
         calibration.summarize.return_value = Mock(model_dump=Mock(return_value={"total_outcomes": 10}))
@@ -316,14 +338,14 @@ class ConfidenceCalibrationSnapshotServiceTests(unittest.TestCase):
 
         snapshot = service.refresh(limit=123)
 
-        self.assertEqual(snapshot["live_mode"], "execution_only")
+        self.assertEqual(snapshot["live_mode"], "broker_only")
         self.assertEqual(snapshot["limit"], 123)
         self.assertEqual(snapshot["live_calibration_summary"], {"total_outcomes": 10})
-        self.assertEqual(set(snapshot["reports"].keys()), {"execution_only", "phantom_only", "execution_plus_phantom"})
-        calibration.summarize.assert_called_once_with(limit=123)
+        self.assertEqual(set(snapshot["reports"].keys()), {"broker_only", "simulation_only", "execution_plus_simulation"})
+        calibration.summarize.assert_called_once_with(mode="broker_only", limit=123)
         self.assertEqual(
             [call.kwargs["mode"] for call in calibration.confidence_report.call_args_list],
-            ["execution_only", "phantom_only", "execution_plus_phantom"],
+            ["broker_only", "simulation_only", "execution_plus_simulation"],
         )
 
     def test_latest_summary_loads_latest_completed_snapshot_artifact(self) -> None:
@@ -366,14 +388,14 @@ class CalibrationDimensionThresholdTests(unittest.TestCase):
     def test_horizon_dimension_requires_12_for_usable_status(self) -> None:
         # Horizon min is 12. 
         # 11 items -> limited
-        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=i, outcome="win", horizon="1w") for i in range(11)]
+        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=i, outcome="win", horizon="1w", outcome_source="broker") for i in range(11)]
         self.outcomes_repo.list_outcomes.return_value = outcomes
         summary = self.service.summarize()
         horizon_bucket = summary.by_horizon[0]
         self.assertEqual(horizon_bucket.sample_status, "limited")
         
         # 12 items -> usable
-        outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=12, outcome="win", horizon="1w"))
+        outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=12, outcome="win", horizon="1w", outcome_source="broker"))
         self.outcomes_repo.list_outcomes.return_value = outcomes
         summary = self.service.summarize()
         horizon_bucket = summary.by_horizon[0]
@@ -382,14 +404,14 @@ class CalibrationDimensionThresholdTests(unittest.TestCase):
     def test_action_dimension_requires_10_for_usable_status(self) -> None:
         # Action min is 10.
         # 9 items -> limited
-        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=i, outcome="win", action="long") for i in range(9)]
+        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=i, outcome="win", action="long", outcome_source="broker") for i in range(9)]
         self.outcomes_repo.list_outcomes.return_value = outcomes
         summary = self.service.summarize()
         action_bucket = summary.by_action[0]
         self.assertEqual(action_bucket.sample_status, "limited")
 
         # 10 items -> usable
-        outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=10, outcome="win", action="long"))
+        outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=10, outcome="win", action="long", outcome_source="broker"))
         self.outcomes_repo.list_outcomes.return_value = outcomes
         summary = self.service.summarize()
         action_bucket = summary.by_action[0]
@@ -404,7 +426,7 @@ class CalibrationKeyDefaultingTests(unittest.TestCase):
 
     def test_combined_key_defaults_to_unknown_and_uncategorized(self) -> None:
         # Pydantic RecommendationPlanOutcome requires strings for setup_family/action
-        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", horizon=None, setup_family="")]
+        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", horizon=None, setup_family="", outcome_source="broker")]
         self.outcomes_repo.list_outcomes.return_value = outcomes
         summary = self.service.summarize()
         bucket = summary.by_horizon_setup_family[0]
@@ -417,7 +439,7 @@ class CalibrationSmoothingConstantTests(unittest.TestCase):
         outcomes_repo = Mock(spec=RecommendationOutcomeRepository)
         service = RecommendationPlanCalibrationService(outcomes_repo)
         
-        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0)]
+        outcomes = [RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0, outcome_source="broker")]
         outcomes_repo.list_outcomes.return_value = outcomes
         
         with (
