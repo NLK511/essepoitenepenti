@@ -103,7 +103,7 @@ class RecommendationPlanCalibrationService:
             version_label="confidence-reliability-v1",
             smoothing_strength=0.0,
         )
-        smoothed_calibration_report = self._build_calibration_report(
+        smoothed_calibration_report = self._build_smoothed_calibration_report(
             normalized_outcomes,
             method=f"{normalized_mode}_confidence_binned_bayesian_reliability",
             version_label="confidence-reliability-v2-smoothed",
@@ -383,7 +383,7 @@ class RecommendationPlanCalibrationService:
         return self._build_calibration_report(outcomes, method="confidence_binned_reliability", version_label="confidence-reliability-v1", smoothing_strength=0.0)
 
     def _smoothed_calibration_report(self, outcomes: list[RecommendationPlanOutcome]) -> RecommendationCalibrationReport | None:
-        return self._build_calibration_report(
+        return self._build_smoothed_calibration_report(
             outcomes,
             method="confidence_binned_bayesian_reliability",
             version_label="confidence-reliability-v2-smoothed",

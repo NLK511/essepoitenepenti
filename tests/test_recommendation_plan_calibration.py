@@ -420,8 +420,10 @@ class CalibrationSmoothingConstantTests(unittest.TestCase):
         outcomes = [RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0)]
         outcomes_repo.list_outcomes.return_value = outcomes
         
-        with patch.object(service, "_build_calibration_report", return_value=None) as mock_build:
+        with (
+            patch.object(service, "_build_calibration_report", return_value=None) as mock_raw,
+            patch.object(service, "_build_smoothed_calibration_report", return_value=None) as mock_smoothed,
+        ):
             service.summarize(ticker="X")
-            # First call is raw (0.0), second is smoothed (8.0)
-            self.assertEqual(mock_build.call_args_list[0].kwargs["smoothing_strength"], 0.0)
-            self.assertEqual(mock_build.call_args_list[1].kwargs["smoothing_strength"], 8.0)
+            self.assertEqual(mock_raw.call_args_list[0].kwargs["smoothing_strength"], 0.0)
+            self.assertEqual(mock_smoothed.call_args_list[0].kwargs["smoothing_strength"], 8.0)
