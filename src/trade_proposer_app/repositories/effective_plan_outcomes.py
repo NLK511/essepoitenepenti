@@ -16,6 +16,7 @@ class EffectivePlanOutcomeRepository:
     """Canonical broker-preferred outcome view for recommendation plans."""
 
     BROKER_RESOLVED = BROKER_RESOLVED_POSITION_STATUSES
+    MAX_PLAN_BATCH_SIZE = 1000
 
     def __init__(self, session: Session, taxonomy_service: TickerTaxonomyService | None = None) -> None:
         self.session = session
@@ -53,7 +54,7 @@ class EffectivePlanOutcomeRepository:
             query = query.where(RecommendationPlanRecord.id.in_(candidate_ids))
         results: list[RecommendationPlanOutcome] = []
         window_filtered = evaluated_after is not None or evaluated_before is not None
-        batch_size = max(limit * 5, limit, 50)
+        batch_size = self._plan_batch_size(limit)
         max_scanned = max(len(candidate_ids) if window_filtered else 0, limit * 100, batch_size)
         offset = 0
         while (window_filtered or len(results) < limit) and offset < max_scanned:
@@ -94,6 +95,11 @@ class EffectivePlanOutcomeRepository:
         if evaluated_after is not None or evaluated_before is not None:
             results.sort(key=lambda item: self._normalize_datetime(item.evaluated_at), reverse=True)
         return results[:limit]
+
+    @classmethod
+    def _plan_batch_size(cls, limit: int) -> int:
+        requested = max(int(limit or 0), 50)
+        return min(max(requested, 50), cls.MAX_PLAN_BATCH_SIZE)
 
     def _candidate_plan_ids_for_evaluated_window(self, *, evaluated_after: datetime | None, evaluated_before: datetime | None) -> set[int]:
         candidate_ids: set[int] = set()

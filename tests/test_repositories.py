@@ -871,6 +871,11 @@ class RepositoryTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_effective_plan_outcome_repository_caps_large_internal_plan_batches(self) -> None:
+        self.assertEqual(EffectivePlanOutcomeRepository._plan_batch_size(10), 50)
+        self.assertEqual(EffectivePlanOutcomeRepository._plan_batch_size(500), 500)
+        self.assertEqual(EffectivePlanOutcomeRepository._plan_batch_size(50_000), 1000)
+
     def test_effective_plan_outcome_repository_uses_simulation_for_open_broker_position(self) -> None:
         session = create_session()
         try:

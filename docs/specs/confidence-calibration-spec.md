@@ -114,6 +114,8 @@ Use for:
 
 This should remain the default.
 
+Large live calibration refreshes must read effective outcomes in bounded batches. They must not build a single broker/simulation lookup over tens of thousands of plan IDs, because that can stall the refresh worker and leave the persisted snapshot stale.
+
 ### `phantom_only`
 
 Included labels:
