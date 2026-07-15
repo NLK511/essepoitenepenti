@@ -68,6 +68,16 @@ class WatchlistPlanFramingService:
         shortlisted = context.shortlisted
         shortlist_rank = context.shortlist_rank
         if deep_output is None or deep_error is not None:
+            decision_tier = self._claim_decision_tier("discarded")
+            decision_metadata = self._decision_tier_metadata(
+                decision_tier,
+                intended_action=None,
+                setup_family=setup_family,
+                calibration_review=calibration_review,
+                calibrated_confidence=calibrated_confidence,
+                risk_reward_ratio=None,
+                rejection_reason="deep_analysis_unavailable",
+            )
             return RecommendationPlan(
                 ticker=candidate.ticker,
                 horizon=watchlist.default_horizon,
@@ -77,8 +87,14 @@ class WatchlistPlanFramingService:
                 thesis_summary="Deep analysis did not complete; no actionable plan emitted.",
                 rationale_summary=rationale,
                 warnings=warnings,
-                evidence_summary=o._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                evidence_summary=self._with_decision_tier(
+                    o._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
+                    decision_metadata,
+                ),
+                signal_breakdown=self._with_decision_tier(
+                    o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                    decision_metadata,
+                ),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -113,6 +129,22 @@ class WatchlistPlanFramingService:
         )
 
         if action == "no_action":
+            preferred_tier = self._preferred_non_execution_tier(
+                action_reason=action_reason,
+                intended_action=intended_action,
+                setup_family=setup_family,
+                calibrated_confidence=calibrated_confidence,
+            )
+            decision_tier = self._claim_decision_tier(preferred_tier)
+            decision_metadata = self._decision_tier_metadata(
+                decision_tier,
+                intended_action=intended_action,
+                setup_family=setup_family,
+                calibration_review=calibration_review,
+                calibrated_confidence=calibrated_confidence,
+                risk_reward_ratio=risk_reward_ratio,
+                rejection_reason=action_reason,
+            )
             return RecommendationPlan(
                 ticker=candidate.ticker,
                 horizon=watchlist.default_horizon,
@@ -128,8 +160,14 @@ class WatchlistPlanFramingService:
                 thesis_summary=o._no_action_thesis(setup_family, action_reason, transmission_summary=transmission_summary),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
-                evidence_summary=o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                evidence_summary=self._with_decision_tier(
+                    o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                    decision_metadata,
+                ),
+                signal_breakdown=self._with_decision_tier(
+                    o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                    decision_metadata,
+                ),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -137,6 +175,16 @@ class WatchlistPlanFramingService:
                 ticker_signal_snapshot_id=signal.id,
             )
 
+        decision_tier = self._claim_decision_tier("execution_candidate")
+        decision_metadata = self._decision_tier_metadata(
+            decision_tier,
+            intended_action=intended_action,
+            setup_family=setup_family,
+            calibration_review=calibration_review,
+            calibrated_confidence=calibrated_confidence,
+            risk_reward_ratio=risk_reward_ratio,
+            rejection_reason=None,
+        )
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -153,8 +201,14 @@ class WatchlistPlanFramingService:
             rationale_summary=rationale,
             risks=o._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
-            evidence_summary=o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+            evidence_summary=self._with_decision_tier(
+                o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                decision_metadata,
+            ),
+            signal_breakdown=self._with_decision_tier(
+                o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                decision_metadata,
+            ),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -270,6 +324,85 @@ class WatchlistPlanFramingService:
         )
         return entry_price_low, entry_price_high, stop_loss, take_profit, o._risk_reward_ratio(recommendation)
 
+    def _preferred_non_execution_tier(
+        self,
+        *,
+        action_reason: str,
+        intended_action: str | None,
+        setup_family: str,
+        calibrated_confidence: float,
+    ) -> str:
+        if intended_action not in {"long", "short"}:
+            return "discarded"
+        threshold_reasons = {
+            "below_action_confidence_threshold",
+            "below_calibrated_action_threshold",
+            "context_transmission_headwind",
+        }
+        if action_reason not in threshold_reasons:
+            return "discarded"
+        o = self._orchestration
+        if calibrated_confidence >= o._research_plan_floor_percent(setup_family):
+            return "research_plan"
+        if calibrated_confidence >= o._shadow_tracking_floor_percent():
+            return "shadow_observation"
+        return "discarded"
+
+    def _claim_decision_tier(self, preferred_tier: str) -> str:
+        claim = getattr(self._orchestration, "_claim_plan_decision_tier", None)
+        if callable(claim):
+            return str(claim(preferred_tier))
+        return preferred_tier
+
+    def _decision_tier_metadata(
+        self,
+        decision_tier: str,
+        *,
+        intended_action: str | None,
+        setup_family: str,
+        calibration_review: dict[str, object],
+        calibrated_confidence: float,
+        risk_reward_ratio: float | None,
+        rejection_reason: str | None,
+    ) -> dict[str, object]:
+        o = self._orchestration
+        execution_floor = o._execution_confidence_floor_percent()
+        research_floor = o._research_plan_floor_percent(setup_family)
+        shadow_floor = o._shadow_tracking_floor_percent()
+        calibration_source = str(calibration_review.get("calibration_source") or "broker_only").strip() or "broker_only"
+        execution_eligible = decision_tier == "execution_candidate"
+        return {
+            "decision_tier": decision_tier,
+            "intended_action": intended_action,
+            "execution_eligible": execution_eligible,
+            "research_eligible": decision_tier == "research_plan",
+            "shadow_eligible": decision_tier == "shadow_observation",
+            "floor_source": "broker_only_calibrated_probability",
+            "execution_floor_percent": round(float(execution_floor), 2),
+            "research_floor_percent": round(float(research_floor), 2),
+            "shadow_tracking_floor_percent": round(float(shadow_floor), 2),
+            "calibration_source": calibration_source,
+            "calibrated_probability_percent": round(float(calibrated_confidence), 2),
+            "expected_value_estimate": None,
+            "risk_reward_ratio": risk_reward_ratio,
+            "rejection_reason": rejection_reason,
+            "would_have_executed_under_policy_version": bool(execution_eligible),
+            "policy_version": "research_actionability_floor_v1",
+        }
+
+    @staticmethod
+    def _with_decision_tier(payload: dict[str, object], decision_metadata: dict[str, object]) -> dict[str, object]:
+        enriched = dict(payload)
+        enriched.update(decision_metadata)
+        thresholds = enriched.get("decision_thresholds")
+        if isinstance(thresholds, dict):
+            thresholds = dict(thresholds)
+            thresholds["execution_floor_percent"] = decision_metadata["execution_floor_percent"]
+            thresholds["research_floor_percent"] = decision_metadata["research_floor_percent"]
+            thresholds["shadow_tracking_floor_percent"] = decision_metadata["shadow_tracking_floor_percent"]
+            enriched["decision_thresholds"] = thresholds
+        return enriched
+
     def build_no_action_plan(
         self,
         watchlist: Watchlist,
@@ -293,6 +426,17 @@ class WatchlistPlanFramingService:
             transmission_summary=transmission_summary,
         )
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
+        preferred_tier = "shadow_observation" if calibrated_confidence >= o._shadow_tracking_floor_percent() else "discarded"
+        decision_tier = self._claim_decision_tier(preferred_tier)
+        decision_metadata = self._decision_tier_metadata(
+            decision_tier,
+            intended_action=None,
+            setup_family=setup_family,
+            calibration_review=calibration_review,
+            calibrated_confidence=calibrated_confidence,
+            risk_reward_ratio=None,
+            rejection_reason="not_shortlisted",
+        )
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -302,8 +446,14 @@ class WatchlistPlanFramingService:
             thesis_summary=reason,
             rationale_summary=o._rationale_summary(signal, candidate, setup_family, transmission_summary),
             warnings=list(signal.warnings),
-            evidence_summary=o._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=False, shortlist_rank=None),
+            evidence_summary=self._with_decision_tier(
+                o._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review, transmission_summary=transmission_summary),
+                decision_metadata,
+            ),
+            signal_breakdown=self._with_decision_tier(
+                o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=False, shortlist_rank=None),
+                decision_metadata,
+            ),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,

@@ -61,6 +61,9 @@ class WatchlistExecutionService:
             logger.info(f"  Simulation mode active: as_of {as_of.isoformat()}")
 
         calibration_summary = o._load_calibration_summary()
+        reset_tiers = getattr(o, "_reset_plan_decision_tier_counts", None)
+        if callable(reset_tiers):
+            reset_tiers()
         candidates = self._run_cheap_scans(watchlist, normalized_tickers, as_of=as_of)
         shortlist_evaluation = self._evaluate_shortlist(o, watchlist, candidates, as_of=as_of)
         shortlist = shortlist_evaluation["shortlist"]
@@ -301,6 +304,10 @@ class WatchlistExecutionService:
             "recommendation_plan_count": len(stored_plans),
             "actionable_plan_count": len([plan for plan in stored_plans if plan.action in {"long", "short"}]),
             "no_action_plan_count": len([plan for plan in stored_plans if plan.action == "no_action"]),
+            "execution_candidate_plan_count": self._decision_tier_count(stored_plans, "execution_candidate"),
+            "research_plan_count": self._decision_tier_count(stored_plans, "research_plan"),
+            "shadow_observation_plan_count": self._decision_tier_count(stored_plans, "shadow_observation"),
+            "discarded_plan_count": self._decision_tier_count(stored_plans, "discarded"),
             "shortlist_rules": shortlist_evaluation["rules"],
             "shortlist_rejections": shortlist_evaluation["rejection_counts"],
             "shortlist_rejection_details": o._counted_shortlist_reason_details(shortlist_evaluation["rejection_counts"]),
@@ -325,3 +332,13 @@ class WatchlistExecutionService:
             "ticker_generation": ticker_generation,
             "warnings_found": warnings_found,
         }
+
+    @staticmethod
+    def _decision_tier_count(plans: list[RecommendationPlan], tier: str) -> int:
+        count = 0
+        for plan in plans:
+            breakdown = plan.signal_breakdown
+            value = breakdown.get("decision_tier") if hasattr(breakdown, "get") else None
+            if value == tier:
+                count += 1
+        return count

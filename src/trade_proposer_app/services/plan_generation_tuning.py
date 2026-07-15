@@ -117,6 +117,10 @@ class CandidateEvaluation:
     validation_win_count: int
     validation_expected_value: float
     validation_ambiguous_count: int
+    validation_research_plan_count: int = 0
+    validation_shadow_observation_count: int = 0
+    search_research_plan_count: int = 0
+    search_shadow_observation_count: int = 0
     validation_slice_count: int = 0
     validation_qualified_slice_count: int = 0
     validation_slice_win_count: int = 0
@@ -240,6 +244,7 @@ class PlanGenerationTuningService:
                 source="seed",
                 config={
                     **normalize_plan_generation_tuning_config(None),
+                    "global.execution_confidence_floor_percent": 60.0,
                     "global.actionable_confidence_floor_percent": 60.0,
                 },
                 parameter_schema_version=self.SCHEMA_VERSION,
@@ -1007,8 +1012,12 @@ class PlanGenerationTuningService:
                     sample_breakdown={
                         "search_actionable_count": evaluation.search_actionable_count,
                         "search_ambiguous_count": evaluation.search_ambiguous_count,
+                        "search_research_plan_count": evaluation.search_research_plan_count,
+                        "search_shadow_observation_count": evaluation.search_shadow_observation_count,
                         "validation_actionable_count": evaluation.validation_actionable_count,
                         "validation_ambiguous_count": evaluation.validation_ambiguous_count,
+                        "validation_research_plan_count": evaluation.validation_research_plan_count,
+                        "validation_shadow_observation_count": evaluation.validation_shadow_observation_count,
                         "validation_slice_count": evaluation.validation_slice_count,
                     },
                     validation_summary={
@@ -2065,12 +2074,18 @@ class PlanGenerationTuningService:
         search_actionable_count, search_win_count, search_expected_value, search_ambiguous_count = (
             self._score_records(search_records, config)
         )
+        search_research_plan_count, search_shadow_observation_count = self._research_shadow_counts(
+            search_records, config
+        )
         (
             validation_actionable_count,
             validation_win_count,
             validation_expected_value,
             validation_ambiguous_count,
         ) = self._score_records(validation_records, config)
+        validation_research_plan_count, validation_shadow_observation_count = self._research_shadow_counts(
+            validation_records, config
+        )
         return CandidateEvaluation(
             config=config,
             changed_keys=changed_keys,
@@ -2082,6 +2097,10 @@ class PlanGenerationTuningService:
             validation_win_count=validation_win_count,
             validation_expected_value=validation_expected_value,
             validation_ambiguous_count=validation_ambiguous_count,
+            search_research_plan_count=search_research_plan_count,
+            search_shadow_observation_count=search_shadow_observation_count,
+            validation_research_plan_count=validation_research_plan_count,
+            validation_shadow_observation_count=validation_shadow_observation_count,
         )
 
     def _score_records(
@@ -2104,6 +2123,67 @@ class PlanGenerationTuningService:
             else:
                 expected_value -= risk_pct
         return actionable_count, win_count, round(expected_value, 4), ambiguous_count
+
+    def _research_shadow_counts(
+        self, records: list[EligibleTuningRecord], config: dict[str, float]
+    ) -> tuple[int, int]:
+        research_count = 0
+        shadow_count = 0
+        execution_floor = self._execution_floor(config)
+        research_floor = self._research_floor(config)
+        shadow_floor = self._shadow_floor(config)
+        research_quota = max(0, int(config.get("global.research_plan_quota_per_run", 10.0) or 0))
+        shadow_quota = max(0, int(config.get("global.shadow_tracking_quota_per_run", 25.0) or 0))
+        for record in records:
+            if not self._has_trade_like_geometry(record):
+                continue
+            confidence = float(record.plan.confidence_percent)
+            if confidence >= execution_floor:
+                continue
+            if confidence >= research_floor and research_count < research_quota:
+                research_count += 1
+                continue
+            if confidence >= shadow_floor and shadow_count < shadow_quota:
+                shadow_count += 1
+        return research_count, shadow_count
+
+    def _has_trade_like_geometry(self, record: EligibleTuningRecord) -> bool:
+        entry = self._entry_reference(record.plan)
+        if entry is None or entry <= 0 or record.plan.stop_loss is None or record.plan.take_profit is None:
+            return False
+        signal_breakdown = self._plan_signal_breakdown(record.plan)
+        intended_action = str(signal_breakdown.get("intended_action") or "").strip().lower() or None
+        effective_action = (
+            intended_action
+            if record.plan.action in {"no_action", "watchlist"}
+            and intended_action in {"long", "short"}
+            else record.plan.action
+        )
+        return effective_action in {"long", "short"}
+
+    @staticmethod
+    def _execution_floor(config: dict[str, float]) -> float:
+        execution_floor = float(
+            config.get(
+                "global.execution_confidence_floor_percent",
+                config.get("global.actionable_confidence_floor_percent", 60.0),
+            )
+            or 60.0
+        )
+        legacy_floor = float(config.get("global.actionable_confidence_floor_percent", execution_floor) or execution_floor)
+        return max(execution_floor, legacy_floor)
+
+    @staticmethod
+    def _research_floor(config: dict[str, float]) -> float:
+        execution_floor = PlanGenerationTuningService._execution_floor(config)
+        base = float(config.get("global.research_plan_floor_percent", max(0.0, execution_floor - 15.0)) or 0.0)
+        delta = float(config.get("setup_family.research_floor_delta_percent", 0.0) or 0.0)
+        return max(0.0, min(100.0, base + delta))
+
+    @staticmethod
+    def _shadow_floor(config: dict[str, float]) -> float:
+        research_floor = PlanGenerationTuningService._research_floor(config)
+        return float(config.get("global.shadow_tracking_floor_percent", max(0.0, research_floor - 10.0)) or 0.0)
 
     def _candidate_resolution(
         self, record: EligibleTuningRecord, config: dict[str, float]
@@ -2129,9 +2209,7 @@ class PlanGenerationTuningService:
         if effective_action not in {"long", "short"}:
             return None
 
-        confidence_floor = float(
-            config.get("global.actionable_confidence_floor_percent", 60.0) or 60.0
-        )
+        confidence_floor = self._execution_floor(config)
         if float(record.plan.confidence_percent) < confidence_floor:
             return None
 
@@ -2332,11 +2410,15 @@ class PlanGenerationTuningService:
             "search_win_rate_percent": round(item.search_win_rate * 100.0, 2),
             "search_expected_value": round(item.search_expected_value, 4),
             "search_ambiguous_count": item.search_ambiguous_count,
+            "search_research_plan_count": item.search_research_plan_count,
+            "search_shadow_observation_count": item.search_shadow_observation_count,
             "validation_actionable_count": item.validation_actionable_count,
             "validation_win_count": item.validation_win_count,
             "validation_win_rate_percent": round(item.validation_win_rate * 100.0, 2),
             "validation_expected_value": round(item.validation_expected_value, 4),
             "validation_ambiguous_count": item.validation_ambiguous_count,
+            "validation_research_plan_count": item.validation_research_plan_count,
+            "validation_shadow_observation_count": item.validation_shadow_observation_count,
             "validation_slice_count": item.validation_slice_count,
             "validation_qualified_slice_count": item.validation_qualified_slice_count,
             "validation_slice_win_count": item.validation_slice_win_count,

@@ -1386,6 +1386,30 @@ class RepositoryTests(unittest.TestCase):
         self.assertFalse(result.is_candidate)
         self.assertEqual(result.skip_reason, "invalid_trade_levels")
 
+    def test_execution_candidate_builder_rejects_research_tier_plan_even_with_trade_action(self) -> None:
+        plan = RecommendationPlan(
+            id=44,
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70.0,
+            entry_price_low=99.0,
+            entry_price_high=101.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            thesis_summary="Research candidate",
+            signal_breakdown={
+                "decision_tier": "research_plan",
+                "execution_eligible": False,
+                "intended_action": "long",
+            },
+        )
+
+        result = ExecutionCandidateBuilder().build(plan, notional_per_plan=1000.0, run_id=7)
+
+        self.assertFalse(result.is_candidate)
+        self.assertEqual(result.skip_reason, "not_execution_eligible")
+
     def test_settings_domain_service_splits_strategy_risk_execution_and_operator_settings(self) -> None:
         session = create_session()
         try:

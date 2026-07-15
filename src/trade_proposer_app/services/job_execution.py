@@ -366,7 +366,18 @@ class JobExecutionService:
         if self.order_execution is None or self.recommendation_plans is None:
             return None
         actionable_plans = self.recommendation_plans.list_plans(run_id=run.id or 0, limit=1000)
-        actionable_plans = [plan for plan in actionable_plans if plan.action in {"long", "short"}]
+        actionable_plans = [
+            plan
+            for plan in actionable_plans
+            if plan.action in {"long", "short"}
+            and not (
+                hasattr(plan.signal_breakdown, "get")
+                and (
+                    plan.signal_breakdown.get("execution_eligible") is False
+                    or plan.signal_breakdown.get("decision_tier") in {"research_plan", "shadow_observation", "discarded"}
+                )
+            )
+        ]
         order_execution_result = self.order_execution.execute_plans(
             actionable_plans, run_id=run.id, job_id=run.job_id
         )

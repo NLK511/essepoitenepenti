@@ -53,6 +53,28 @@ class WatchlistDecisionSampleService:
             shortlisted=False,
             shortlist_rank=None,
         )
+        preferred_tier = "shadow_observation" if calibrated_confidence >= o._shadow_tracking_floor_percent() else "discarded"
+        claim_tier = getattr(o, "_claim_plan_decision_tier", None)
+        decision_tier = str(claim_tier(preferred_tier)) if callable(claim_tier) else preferred_tier
+        tier_metadata = {
+            "decision_tier": decision_tier,
+            "intended_action": None,
+            "execution_eligible": False,
+            "research_eligible": False,
+            "shadow_eligible": decision_tier == "shadow_observation",
+            "floor_source": "broker_only_calibrated_probability",
+            "execution_floor_percent": round(float(o._execution_confidence_floor_percent()), 2),
+            "research_floor_percent": round(float(o._research_plan_floor_percent(setup_family)), 2),
+            "shadow_tracking_floor_percent": round(float(o._shadow_tracking_floor_percent()), 2),
+            "calibration_source": str(calibration_review.get("calibration_source") or "broker_only").strip() or "broker_only",
+            "calibrated_probability_percent": round(float(calibrated_confidence), 2),
+            "expected_value_estimate": None,
+            "risk_reward_ratio": None,
+            "rejection_reason": "not_shortlisted",
+            "would_have_executed_under_policy_version": False,
+            "policy_version": "research_actionability_floor_v1",
+        }
+        signal_breakdown = {**signal_breakdown, **tier_metadata}
         evidence_summary = o._evidence_summary(
             candidate.indicator_summary,
             setup_family,
@@ -61,6 +83,7 @@ class WatchlistDecisionSampleService:
             calibration_review=calibration_review,
             transmission_summary=transmission_summary,
         )
+        evidence_summary = {**evidence_summary, **tier_metadata}
         shortlist_payload = {
             "shortlisted": False,
             "shortlist_rank": None,
@@ -101,6 +124,10 @@ class WatchlistDecisionSampleService:
                     "confidence_gap_percent": confidence_gap,
                     "threshold_semantics": "upstream_effective_confidence_threshold",
                     "decision_thresholds": signal_breakdown.get("decision_thresholds", {}),
+                    "decision_tier": decision_tier,
+                    "execution_eligible": False,
+                    "research_eligible": False,
+                    "shadow_eligible": decision_tier == "shadow_observation",
                     "action_reason": "not_shortlisted",
                     "review_priority": review_priority,
                 },
@@ -134,6 +161,10 @@ class WatchlistDecisionSampleService:
         if effective_threshold is None:
             effective_threshold = self.float_from_mapping(calibration_review, "effective_confidence_threshold")
         calibrated_confidence = self.float_from_mapping(calibration_review, "calibrated_confidence_percent")
+        decision_tier = str(signal_breakdown.get("decision_tier") or "")
+        execution_eligible = bool(signal_breakdown.get("execution_eligible")) if decision_tier else plan.action in {"long", "short"}
+        research_eligible = bool(signal_breakdown.get("research_eligible"))
+        shadow_eligible = bool(signal_breakdown.get("shadow_eligible"))
         confidence_gap = None
         if calibrated_confidence is not None and effective_threshold is not None:
             confidence_gap = round(calibrated_confidence - effective_threshold, 2)
@@ -183,6 +214,10 @@ class WatchlistDecisionSampleService:
                     "confidence_gap_percent": confidence_gap,
                     "threshold_semantics": "downstream_effective_action_threshold",
                     "decision_thresholds": decision_thresholds,
+                    "decision_tier": decision_tier,
+                    "execution_eligible": execution_eligible,
+                    "research_eligible": research_eligible,
+                    "shadow_eligible": shadow_eligible,
                     "action_reason": action_reason,
                     "review_priority": review_priority,
                 },

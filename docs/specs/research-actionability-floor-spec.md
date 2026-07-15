@@ -1,6 +1,6 @@
 # Research Actionability Floor Spec
 
-Status: planned
+Status: implemented
 
 ## Problem
 
@@ -291,7 +291,7 @@ Sample quality:
 
 ## Recommended First Implementation
 
-Start with the least risky path:
+Implemented with the least risky path:
 
 1. Use existing `recommendation_plans` with `decision_tier` stored in `signal_breakdown`.
 2. Add research and shadow floor parameters to plan-generation tuning config.

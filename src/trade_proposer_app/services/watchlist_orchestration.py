@@ -98,6 +98,7 @@ class WatchlistOrchestrationService:
         self.plan_framing = WatchlistPlanFramingService(self)
         self.decision_sample_recorder = WatchlistDecisionSampleService(self)
         self.replay_provenance: dict[str, object] | None = None
+        self._plan_decision_tier_counts: dict[str, int] = {}
 
     @staticmethod
     def _normalize_signal_gating_tuning_config(signal_gating_tuning_config: dict[str, float] | None) -> dict[str, float]:
@@ -153,6 +154,61 @@ class WatchlistOrchestrationService:
         if unknown_keys:
             raise ValueError(f"unknown plan-generation tuning override keys: {', '.join(unknown_keys)}")
         self.plan_generation_tuning_config = normalize_plan_generation_tuning_config(config)
+
+    def _reset_plan_decision_tier_counts(self) -> None:
+        self._plan_decision_tier_counts = {
+            "execution_candidate": 0,
+            "research_plan": 0,
+            "shadow_observation": 0,
+            "discarded": 0,
+        }
+
+    def _execution_confidence_floor_percent(self) -> float:
+        execution_floor = self._plan_generation_tuning_value(
+            "global.execution_confidence_floor_percent",
+            self._plan_generation_tuning_value("global.actionable_confidence_floor_percent", 60.0),
+        )
+        legacy_floor = self._plan_generation_tuning_value("global.actionable_confidence_floor_percent", execution_floor)
+        return max(execution_floor, legacy_floor)
+
+    def _research_plan_floor_percent(self, setup_family: str | None = None) -> float:
+        base = self._plan_generation_tuning_value(
+            "global.research_plan_floor_percent",
+            max(0.0, self._execution_confidence_floor_percent() - 15.0),
+        )
+        delta = self._plan_generation_tuning_value("setup_family.research_floor_delta_percent", 0.0)
+        return max(0.0, min(100.0, base + delta))
+
+    def _shadow_tracking_floor_percent(self) -> float:
+        return self._plan_generation_tuning_value(
+            "global.shadow_tracking_floor_percent",
+            max(0.0, self._research_plan_floor_percent() - 10.0),
+        )
+
+    def _plan_tier_quota(self, tier: str) -> int | None:
+        if tier == "research_plan":
+            value = self._plan_generation_tuning_value("global.research_plan_quota_per_run", 10.0)
+        elif tier == "shadow_observation":
+            value = self._plan_generation_tuning_value("global.shadow_tracking_quota_per_run", 25.0)
+        else:
+            return None
+        return max(0, int(value))
+
+    def _claim_plan_decision_tier(self, preferred_tier: str) -> str:
+        if not self._plan_decision_tier_counts:
+            self._reset_plan_decision_tier_counts()
+        tier = preferred_tier if preferred_tier in self._plan_decision_tier_counts else "discarded"
+        if tier in {"execution_candidate", "discarded"}:
+            self._plan_decision_tier_counts[tier] += 1
+            return tier
+        quota = self._plan_tier_quota(tier)
+        if quota is None or self._plan_decision_tier_counts[tier] < quota:
+            self._plan_decision_tier_counts[tier] += 1
+            return tier
+        if tier == "research_plan":
+            return self._claim_plan_decision_tier("shadow_observation")
+        self._plan_decision_tier_counts["discarded"] += 1
+        return "discarded"
 
     def _with_replay_provenance_signal(self, signal: TickerSignalSnapshot) -> TickerSignalSnapshot:
         if not self.replay_provenance:

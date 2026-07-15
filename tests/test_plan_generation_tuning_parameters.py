@@ -7,7 +7,10 @@ from trade_proposer_app.services.plan_generation_tuning_parameters import (
 def test_parameter_definitions_expose_validation_depth() -> None:
     parameters = {item["key"]: item for item in parameter_definitions()}
 
+    assert parameters["global.execution_confidence_floor_percent"]["validation_depth"] == "rescore_only"
     assert parameters["global.actionable_confidence_floor_percent"]["validation_depth"] == "rescore_only"
+    assert parameters["global.research_plan_floor_percent"]["validation_depth"] == "rescore_only"
+    assert parameters["global.shadow_tracking_floor_percent"]["validation_depth"] == "rescore_only"
     assert parameters["global.entry_band_risk_fraction"]["validation_depth"] == "frozen_input_plan_regeneration"
     assert parameters["setup_family.breakout.stop_distance_multiplier"]["validation_depth"] == "frozen_input_plan_regeneration"
 
@@ -15,12 +18,14 @@ def test_parameter_definitions_expose_validation_depth() -> None:
 def test_candidate_validation_depth_uses_deepest_changed_key() -> None:
     result = candidate_validation_depth([
         "global.actionable_confidence_floor_percent",
+        "global.research_plan_floor_percent",
         "setup_family.breakout.stop_distance_multiplier",
     ])
 
     assert result["validation_depth"] == "frozen_input_plan_regeneration"
     assert result["unknown_keys"] == []
     assert result["parameter_depths"]["global.actionable_confidence_floor_percent"]["validation_depth"] == "rescore_only"
+    assert result["parameter_depths"]["global.research_plan_floor_percent"]["validation_depth"] == "rescore_only"
 
 
 def test_candidate_validation_depth_fails_closed_for_unknown_keys() -> None:

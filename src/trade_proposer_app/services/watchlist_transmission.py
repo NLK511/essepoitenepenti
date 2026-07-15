@@ -83,18 +83,23 @@ class WatchlistTransmissionService:
         )
         policy_action_threshold = float(getattr(self._orchestration, "action_confidence_threshold", upstream_effective_threshold) or 0.0)
         try:
-            actionable_floor = float(
-                self._orchestration._plan_generation_tuning_value("global.actionable_confidence_floor_percent", 60.0)
-            )
+            execution_floor = float(self._orchestration._execution_confidence_floor_percent())
+            research_floor = float(self._orchestration._research_plan_floor_percent(setup_family))
+            shadow_floor = float(self._orchestration._shadow_tracking_floor_percent())
         except AttributeError:
-            actionable_floor = 60.0
-        effective_action_threshold = max(min(upstream_effective_threshold, policy_action_threshold), actionable_floor)
+            execution_floor = 60.0
+            research_floor = 45.0
+            shadow_floor = 35.0
+        effective_action_threshold = max(min(upstream_effective_threshold, policy_action_threshold), execution_floor)
         decision_thresholds = {
             "base_confidence_threshold_percent": round(base_confidence_threshold, 2),
             "signal_gating_threshold_offset_percent": round(threshold_offset, 2),
             "upstream_effective_confidence_threshold_percent": round(upstream_effective_threshold, 2),
             "policy_action_confidence_threshold_percent": round(policy_action_threshold, 2),
-            "actionable_confidence_floor_percent": round(actionable_floor, 2),
+            "execution_confidence_floor_percent": round(execution_floor, 2),
+            "actionable_confidence_floor_percent": round(execution_floor, 2),
+            "research_plan_floor_percent": round(research_floor, 2),
+            "shadow_tracking_floor_percent": round(shadow_floor, 2),
             "effective_action_threshold_percent": round(effective_action_threshold, 2),
         }
         payload = {

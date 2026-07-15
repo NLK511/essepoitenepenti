@@ -41,6 +41,8 @@ class ExecutionCandidateBuilder:
             return ExecutionCandidateResult(skip_reason="missing_plan_id")
         if plan.action not in {"long", "short"}:
             return ExecutionCandidateResult(skip_reason="non_actionable")
+        if not self.execution_eligible(plan):
+            return ExecutionCandidateResult(skip_reason="not_execution_eligible")
         entry_price = self.entry_reference(plan)
         if entry_price is None or entry_price <= 0:
             return ExecutionCandidateResult(skip_reason="missing_entry_price")
@@ -66,6 +68,15 @@ class ExecutionCandidateBuilder:
             stop_loss=stop_loss,
             take_profit=take_profit,
         )
+
+    @staticmethod
+    def execution_eligible(plan: RecommendationPlan) -> bool:
+        breakdown = plan.signal_breakdown
+        if hasattr(breakdown, "get") and breakdown.get("execution_eligible") is False:
+            return False
+        if hasattr(breakdown, "get") and breakdown.get("decision_tier") in {"research_plan", "shadow_observation", "discarded"}:
+            return False
+        return True
 
     @staticmethod
     def entry_reference(plan: RecommendationPlan) -> float | None:

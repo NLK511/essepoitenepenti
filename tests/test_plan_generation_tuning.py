@@ -755,10 +755,19 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"],
         )
         self.assertEqual(campaigns[0]["candidate_budget"], 4)
-        self.assertEqual(campaigns[1]["candidate_budget"], 1)
+        self.assertEqual(campaigns[1]["candidate_budget"], 4)
+        self.assertEqual(
+            campaigns[1]["parameter_keys"],
+            [
+                "global.execution_confidence_floor_percent",
+                "global.research_plan_floor_percent",
+                "global.shadow_tracking_floor_percent",
+                "global.research_plan_quota_per_run",
+            ],
+        )
         self.assertEqual(campaigns[2]["candidate_budget"], 4)
         self.assertEqual(campaigns[3]["candidate_budget"], 4)
-        self.assertEqual(sum(item["candidate_budget"] for item in campaigns), 13)
+        self.assertEqual(sum(item["candidate_budget"] for item in campaigns), 16)
 
     def test_describe_includes_the_ranked_exploration_campaign_plan(self) -> None:
         payload = self.service.describe()

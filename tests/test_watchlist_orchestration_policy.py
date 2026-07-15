@@ -588,6 +588,69 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         self.assertIsNone(plan.signal_breakdown["deep_analysis_confidence_percent"])
         self.assertEqual(plan.signal_breakdown["raw_plan_confidence_percent"], 42.0)
 
+    def test_threshold_miss_above_research_floor_persists_non_executing_research_plan(self) -> None:
+        service = WatchlistOrchestrationService(
+            context_snapshots=self.context_snapshots,
+            recommendation_plans=self.recommendation_plans,
+            cheap_scan_service=self.cheap_scan_service,
+            decision_samples=self.decision_samples,
+            deep_analysis_service=self.deep_analysis_service,
+            confidence_threshold=60.0,
+            plan_generation_tuning_config={
+                "global.execution_confidence_floor_percent": 60.0,
+                "global.actionable_confidence_floor_percent": 60.0,
+                "global.research_plan_floor_percent": 45.0,
+                "global.shadow_tracking_floor_percent": 35.0,
+                "global.research_plan_quota_per_run": 10.0,
+                "global.shadow_tracking_quota_per_run": 25.0,
+            },
+        )
+        service._reset_plan_decision_tier_counts()
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 52.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=52.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=52.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=112.0,
+            ),
+            diagnostics=RunDiagnostics(analysis_json=json.dumps({"summary": {"text": "Researchable setup"}})),
+        )
+
+        plan = service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=None,
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "no_action")
+        self.assertEqual(plan.signal_breakdown["decision_tier"], "research_plan")
+        self.assertEqual(plan.signal_breakdown["intended_action"], "long")
+        self.assertFalse(plan.signal_breakdown["execution_eligible"])
+        self.assertTrue(plan.signal_breakdown["research_eligible"])
+        self.assertFalse(plan.signal_breakdown["shadow_eligible"])
+        self.assertEqual(plan.signal_breakdown["execution_floor_percent"], 60.0)
+        self.assertEqual(plan.signal_breakdown["research_floor_percent"], 45.0)
+        self.assertEqual(plan.signal_breakdown["shadow_tracking_floor_percent"], 35.0)
+        self.assertIsNotNone(plan.entry_price_low)
+        self.assertIsNotNone(plan.stop_loss)
+        self.assertIsNotNone(plan.take_profit)
+
     def test_build_plan_allows_when_macro_is_blocked_but_industry_is_only_degraded(self) -> None:
         watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
         candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
