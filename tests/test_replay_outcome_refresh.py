@@ -126,3 +126,97 @@ def test_replay_outcome_refresh_updates_only_open_rows_by_default() -> None:
         assert untouched_resolved is not None and untouched_resolved.outcome == "loss"
     finally:
         session.close()
+
+
+def test_replay_outcome_refresh_filters_by_resolution_source() -> None:
+    session = create_session()
+    try:
+        as_of = datetime(2026, 1, 5, 23, 59, 59, tzinfo=timezone.utc)
+        session.add(
+            HistoricalReplayBatchRecord(
+                id=1,
+                name="refresh-pending-source-batch",
+                status="completed",
+                mode="research",
+                tickers_json='["AAPL", "MSFT"]',
+                as_of_start=as_of - timedelta(days=1),
+                as_of_end=as_of,
+            )
+        )
+        plans = RecommendationPlanRepository(session)
+        pending_source_plan = plans.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70,
+                entry_price_low=100,
+                entry_price_high=101,
+                stop_loss=95,
+                take_profit=105,
+                computed_at=as_of - timedelta(days=14),
+            )
+        )
+        clean_plan = plans.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70,
+                entry_price_low=200,
+                entry_price_high=201,
+                stop_loss=195,
+                take_profit=205,
+                computed_at=as_of,
+            )
+        )
+        session.add_all(
+            [
+                ReplayPlanOutcomeRecord(
+                    id=1,
+                    replay_batch_id=1,
+                    replay_slice_id=1,
+                    recommendation_plan_id=pending_source_plan.id or 0,
+                    candidate_config_hash="baseline",
+                    resolution_source="pending",
+                    outcome="expired",
+                    status="resolved",
+                    outcome_json=json.dumps({"outcome": "expired", "status": "resolved"}),
+                ),
+                ReplayPlanOutcomeRecord(
+                    id=2,
+                    replay_batch_id=1,
+                    replay_slice_id=1,
+                    recommendation_plan_id=clean_plan.id or 0,
+                    candidate_config_hash="baseline",
+                    resolution_source="intraday",
+                    outcome="loss",
+                    status="resolved",
+                    outcome_json=json.dumps({"outcome": "loss", "status": "resolved"}),
+                ),
+            ]
+        )
+        session.commit()
+
+        with patch(
+            "trade_proposer_app.services.recommendation_plan_evaluations.RecommendationPlanEvaluationService._download_price_history",
+            side_effect=AssertionError("cache-only refresh must not call remote price history"),
+        ):
+            summary = ReplayOutcomeRefreshService(session).refresh_batch(
+                1,
+                as_of=as_of,
+                include_resolved=True,
+                reclassify=False,
+                resolution_sources={"pending"},
+            )
+
+        assert summary.selected_outcome_count == 1
+        assert summary.refreshed_outcome_count == 1
+        refreshed_pending = session.get(ReplayPlanOutcomeRecord, 1)
+        untouched_clean = session.get(ReplayPlanOutcomeRecord, 2)
+        assert refreshed_pending is not None and refreshed_pending.resolution_source == "pending"
+        assert untouched_clean is not None
+        assert untouched_clean.resolution_source == "intraday"
+        assert untouched_clean.outcome == "loss"
+    finally:
+        session.close()

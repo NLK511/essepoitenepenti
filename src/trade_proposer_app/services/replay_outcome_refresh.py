@@ -56,10 +56,12 @@ class ReplayOutcomeRefreshService:
         include_resolved: bool = False,
         reclassify: bool = True,
         input_access_policy: str = "cache_only",
+        resolution_sources: set[str] | None = None,
     ) -> ReplayOutcomeRefreshSummary:
         resolution_as_of = self._normalize(as_of or datetime.now(timezone.utc))
         policy = normalize_input_access_policy(input_access_policy, default="cache_only")
         allow_remote_fetch = input_policy_allows_remote_fetch(policy)
+        source_filter = {str(item).strip() for item in resolution_sources or set() if str(item).strip()}
         query = (
             select(ReplayPlanOutcomeRecord)
             .where(ReplayPlanOutcomeRecord.replay_batch_id == replay_batch_id)
@@ -67,6 +69,8 @@ class ReplayOutcomeRefreshService:
         )
         if not include_resolved:
             query = query.where(ReplayPlanOutcomeRecord.status != "resolved")
+        if source_filter:
+            query = query.where(ReplayPlanOutcomeRecord.resolution_source.in_(source_filter))
         rows = self.session.scalars(query).all()
         before_status = Counter(str(row.status or "") for row in rows)
         before_outcomes = Counter(str(row.outcome or "") for row in rows)

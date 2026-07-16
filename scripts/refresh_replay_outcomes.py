@@ -28,6 +28,12 @@ def main() -> None:
     parser.add_argument("--include-resolved", action="store_true")
     parser.add_argument("--no-reclassify", action="store_true")
     parser.add_argument("--policy", default="cache_only", choices=INPUT_ACCESS_POLICIES)
+    parser.add_argument(
+        "--resolution-source",
+        action="append",
+        default=[],
+        help="Only refresh outcomes with this resolution_source. May be passed multiple times.",
+    )
     parser.add_argument("--artifact-dir", default="artifacts")
     args = parser.parse_args()
     session = SessionLocal()
@@ -38,6 +44,7 @@ def main() -> None:
             include_resolved=bool(args.include_resolved),
             reclassify=not args.no_reclassify,
             input_access_policy=args.policy,
+            resolution_sources=set(args.resolution_source or []),
         )
         payload = summary.to_dict()
         artifact_dir = Path(args.artifact_dir)
