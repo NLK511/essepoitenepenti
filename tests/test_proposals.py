@@ -262,6 +262,18 @@ class ProposalServiceTests(unittest.TestCase):
         self.assertEqual(len(result), len(history))
         self.assertEqual(float(result.iloc[-1]["Close"]), float(history.iloc[-1]["Close"]))
 
+    def test_fetch_price_history_replay_does_not_fall_back_to_remote_when_cache_empty(self) -> None:
+        repo = Mock()
+        repo.list_bars.return_value = []
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), historical_market_data=repo)
+        as_of = pd.Timestamp("2026-06-15T14:30:00Z").to_pydatetime()
+
+        with patch.object(service, "_fetch_price_history_remote", return_value=make_sample_history()) as remote_fetch:
+            with self.assertRaisesRegex(ProposalExecutionError, "no cached replay price history"):
+                service._fetch_price_history("AAPL", as_of=as_of)
+
+        remote_fetch.assert_not_called()
+
     def test_build_news_summary_handles_mixed_inputs(self) -> None:
         article = NewsArticle(title="Article", summary=None, publisher=None, link=None, published_at=None)
         summary = self.service._build_news_summary([{"title": "Dict"}, article])

@@ -52,6 +52,8 @@ class PriceHistoryFetcher:
         if is_replay and not local_history.empty:
             diagnostics.update({"source": "local_replay", "selected_bar_count": local_bar_count, "fallback_used": False})
             return local_history, diagnostics
+        if is_replay:
+            raise self.error_type(f"no cached replay price history available for '{normalized_ticker}'")
 
         remote_error: Exception | None = None
         remote_attempts = 1 if is_replay else self.live_attempts
