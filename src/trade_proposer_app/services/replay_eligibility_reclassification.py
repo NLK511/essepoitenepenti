@@ -67,18 +67,65 @@ class ReplayEligibilityReclassificationService:
             .where(ReplayPlanOutcomeRecord.replay_batch_id == replay_batch_id)
             .order_by(ReplayPlanOutcomeRecord.id.asc())
         ).all()
+        slice_ids = {
+            row.replay_slice_id
+            for row in outcome_rows
+            if row.replay_slice_id is not None
+        }
+        plan_ids = {
+            row.recommendation_plan_id
+            for row in outcome_rows
+            if row.recommendation_plan_id is not None
+        }
+        if slice_ids:
+            slice_rows = {
+                row.id: row
+                for row in self.session.scalars(
+                    select(HistoricalReplaySliceRecord).where(
+                        HistoricalReplaySliceRecord.id.in_(slice_ids)
+                    )
+                ).all()
+            }
+        else:
+            slice_rows = {}
+        if plan_ids:
+            plan_rows = {
+                row.id: row
+                for row in self.session.scalars(
+                    select(RecommendationPlanRecord).where(
+                        RecommendationPlanRecord.id.in_(plan_ids)
+                    )
+                ).all()
+            }
+        else:
+            plan_rows = {}
+        coverage_report_by_slice_id: dict[int, dict[str, object] | None] = {}
+        coverage_by_slice_id_and_ticker: dict[tuple[int, str], dict[str, object] | None] = {}
         reclassified = 0
         blockers: Counter[str] = Counter()
         for outcome_row in outcome_rows:
-            slice_row = self.session.get(HistoricalReplaySliceRecord, outcome_row.replay_slice_id)
-            plan_row = self.session.get(RecommendationPlanRecord, outcome_row.recommendation_plan_id)
+            slice_row = slice_rows.get(outcome_row.replay_slice_id)
+            plan_row = plan_rows.get(outcome_row.recommendation_plan_id)
             if slice_row is None or plan_row is None:
                 blockers["missing_slice_or_plan"] += 1
                 continue
             input_summary = loads_json_object(slice_row.input_summary_json)
             ticker = str(plan_row.ticker or "").strip().upper()
-            coverage_report = self._coverage_report_for_slice(input_summary, slice_row, input_access_policy=policy)
-            coverage = self._coverage_for_ticker(coverage_report, ticker)
+            slice_id = slice_row.id or 0
+            if slice_id not in coverage_report_by_slice_id:
+                coverage_report_by_slice_id[slice_id] = self._coverage_report_for_slice(
+                    input_summary,
+                    slice_row,
+                    input_access_policy=policy,
+                )
+            coverage_report = coverage_report_by_slice_id[slice_id]
+            coverage_key = (slice_id, ticker)
+            if coverage_key not in coverage_by_slice_id_and_ticker:
+                coverage_by_slice_id_and_ticker[coverage_key] = self._coverage_for_ticker(
+                    coverage_report,
+                    ticker,
+                )
+            coverage = coverage_by_slice_id_and_ticker[coverage_key]
             signal_breakdown = loads_json_object(plan_row.signal_breakdown_json)
             replay_provenance = signal_breakdown.get("replay_provenance")
             if not isinstance(replay_provenance, dict):

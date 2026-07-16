@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import HistoricalMarketBar, IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, RecommendationPlan, TickerSignalSnapshot
-from trade_proposer_app.persistence.models import Base, RecommendationPlanRecord, ReplayEligibilityRecord
+from trade_proposer_app.persistence.models import (
+    Base,
+    HistoricalReplayBatchRecord,
+    HistoricalReplaySliceRecord,
+    RecommendationPlanRecord,
+    ReplayEligibilityRecord,
+    ReplayPlanOutcomeRecord,
+)
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
@@ -440,6 +447,89 @@ class HistoricalReplayTests(unittest.TestCase):
             repaired_plan = session.query(RecommendationPlanRecord).one()
             repaired_signal_breakdown = json.loads(repaired_plan.signal_breakdown_json or "{}")
             self.assertEqual("historical_replay_reclassification", repaired_signal_breakdown["replay_provenance"]["source"])
+        finally:
+            session.close()
+
+    def test_replay_eligibility_reclassification_reuses_slice_coverage(self) -> None:
+        session = create_session()
+        try:
+            replay_as_of = datetime(2024, 2, 5, 23, 59, 59, tzinfo=timezone.utc)
+            batch = HistoricalReplayBatchRecord(
+                name="Replay reclassify coverage cache",
+                mode="research",
+                tickers_json='["AAPL"]',
+                as_of_start=datetime(2024, 2, 5, tzinfo=timezone.utc),
+                as_of_end=replay_as_of,
+            )
+            session.add(batch)
+            session.flush()
+            slice_row = HistoricalReplaySliceRecord(
+                replay_batch_id=batch.id or 0,
+                as_of=replay_as_of,
+                status="completed",
+                input_summary_json=json.dumps({"as_of": replay_as_of.isoformat()}),
+            )
+            session.add(slice_row)
+            session.flush()
+
+            provenance = {
+                "source": "historical_replay",
+                "as_of": replay_as_of.isoformat(),
+                "replay_batch_id": batch.id,
+                "replay_slice_id": slice_row.id,
+                "code_version": "test",
+                "settings_hash": "settings",
+                "input_coverage_hash": "coverage",
+                "plan_generation_config_hash": "config",
+            }
+            plan_ids: list[int] = []
+            for index in range(2):
+                plan = RecommendationPlanRecord(
+                    ticker="AAPL",
+                    action="long",
+                    confidence_percent=75.0,
+                    entry_price_low=100.0,
+                    entry_price_high=100.0,
+                    stop_loss=95.0,
+                    take_profit=105.0,
+                    computed_at=replay_as_of,
+                    signal_breakdown_json=json.dumps({"replay_provenance": provenance}),
+                )
+                session.add(plan)
+                session.flush()
+                plan_ids.append(plan.id or 0)
+                session.add(
+                    ReplayPlanOutcomeRecord(
+                        replay_batch_id=batch.id or 0,
+                        replay_slice_id=slice_row.id or 0,
+                        recommendation_plan_id=plan.id or 0,
+                        candidate_config_hash=f"candidate-{index}",
+                        resolution_source="intraday",
+                        outcome="win",
+                        status="resolved",
+                        outcome_json='{"outcome": "win", "status": "resolved"}',
+                    )
+                )
+            session.commit()
+
+            coverage_report = {
+                "input_coverage_hash": "coverage",
+                "tickers": [{"ticker": "AAPL", "tier": "tier_a", "blockers": [], "warnings": []}],
+            }
+            with patch.object(
+                ReplayEligibilityReclassificationService,
+                "_coverage_report_for_slice",
+                return_value=coverage_report,
+            ) as coverage_for_slice:
+                summary = ReplayEligibilityReclassificationService(session).reclassify_batch(batch.id or 0)
+
+            self.assertEqual(2, summary.outcome_count)
+            self.assertEqual(2, summary.reclassified_count)
+            self.assertEqual(2, summary.after_eligible_count)
+            self.assertEqual(1, coverage_for_slice.call_count)
+            repaired_rows = session.query(ReplayEligibilityRecord).order_by(ReplayEligibilityRecord.id.asc()).all()
+            self.assertEqual(["tier_a", "tier_a"], [row.tier for row in repaired_rows])
+            self.assertEqual(plan_ids, [row.recommendation_plan_id for row in repaired_rows])
         finally:
             session.close()
 

@@ -2,7 +2,7 @@
 
 **Status:** current behavior
 
-Last updated: 2026-06-29
+Last updated: 2026-07-16
 
 ## Purpose
 
@@ -145,6 +145,7 @@ Implemented remediation includes:
 - Prefer replay paths built through canonical API/builders over ad-hoc scripts.
 - Keep actionability-floor rescoring separate from broader parameter tuning evidence unless the artifact labels both mode and population clearly.
 - Refresh/reclassify old replay batches before using them for tuning if coverage or outcome state was repaired after the original run.
+- Replay eligibility reclassification must reuse reconstructed coverage within a batch. A slice with missing stored coverage may rebuild its coverage from cache once, but repeated outcomes for the same slice must not trigger repeated bar-coverage scans.
 
 ## Testing requirements
 
@@ -156,6 +157,7 @@ Tests should cover:
 - missing provenance blocking eligibility
 - resolved intraday replay outcomes becoming tier A when coverage is valid
 - reclassification before/after tier-count reporting
+- reclassification reusing reconstructed coverage for repeated outcomes from the same replay slice
 - scripts/builders refusing to construct replay execution without required input services
 - evidence-quality gates rejecting phantom-dominated promotion evidence
 
