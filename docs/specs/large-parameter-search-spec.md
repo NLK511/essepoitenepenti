@@ -13,6 +13,7 @@ This is a research tuning tool only. It is intentionally not schedulable and mus
 ## Safety rules
 
 - The search runs offline from corrected eligible plan/outcome evidence.
+- When replay evidence is requested, the search must use replay eligibility rows directly with explicit tier filters. It must not silently fall back to the stored-plan eligible cache.
 - It must stream candidate generation/evaluation and keep only a bounded top-K result set in memory.
 - It must reuse the memory-safe eligible-record loader from `PlanGenerationTuningService`.
 - It must write an artifact with the best coarse-search candidates and local fine-tune candidates.
@@ -131,6 +132,8 @@ The cache is research evidence only. It must not mutate active config, broker se
 
 ```bash
 .venv/bin/python scripts/large_plan_generation_parameter_search.py \
+  --evidence-source replay \
+  --replay-tier tier_a \
   --coarse-candidates 200000 \
   --fine-candidates 50000 \
   --stage1-survivors 2000 \

@@ -288,6 +288,39 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(4, run.summary["search_record_count"] + run.summary["validation_record_count"])
         self.assertTrue(any(candidate.is_baseline and candidate.changed_keys == [] for candidate in candidates))
 
+    def test_replay_eligible_records_filter_requested_tiers(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        self._seed_replay_record(
+            created_at=start,
+            mfe=9.0,
+            mae=-2.0,
+            outcome="win",
+            tier="tier_a",
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=1),
+            mfe=8.0,
+            mae=-2.0,
+            outcome="win",
+            tier="tier_b",
+        )
+
+        tier_a = self.service._replay_eligible_records(
+            ticker=None,
+            setup_family=None,
+            limit=None,
+            tiers={"tier_a"},
+        )
+        tier_a_b = self.service._replay_eligible_records(
+            ticker=None,
+            setup_family=None,
+            limit=None,
+            tiers={"tier_a", "tier_b"},
+        )
+
+        self.assertEqual(1, len(tier_a))
+        self.assertEqual(2, len(tier_a_b))
+
     def test_point_in_time_replay_mode_ignores_stale_replay_artifact_versions(self) -> None:
         start = datetime(2026, 4, 1, tzinfo=timezone.utc)
         for index in range(4):

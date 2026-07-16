@@ -972,11 +972,21 @@ def run_large_parameter_search(
     min_actionable_mode: MinActionableMode = "hard_gate",
     objective_profile: ObjectiveProfile = "research_ev_per_trade",
     search_campaign: SearchCampaign = "combined_small_delta",
+    evidence_source: Literal["stored", "replay"] = "stored",
+    replay_tiers: set[str] | None = None,
 ) -> dict[str, object]:
     service = PlanGenerationTuningService(session)
     baseline_version = service._resolve_active_config_version()  # noqa: SLF001
     active_config = normalize_plan_generation_tuning_config(baseline_version.config)
-    records = service._eligible_records(ticker=None, setup_family=None, limit=limit)  # noqa: SLF001
+    if evidence_source == "replay":
+        records = service._replay_eligible_records(  # noqa: SLF001
+            ticker=None,
+            setup_family=None,
+            limit=limit,
+            tiers=replay_tiers or {"tier_a"},
+        )
+    else:
+        records = service._eligible_records(ticker=None, setup_family=None, limit=limit)  # noqa: SLF001
     partitions = build_evidence_partitions(
         records,
         discovery_start=discovery_start,
@@ -1003,6 +1013,8 @@ def run_large_parameter_search(
         "min_actionable_mode": min_actionable_mode,
         "objective_profile": objective_profile,
         "search_campaign": search_campaign,
+        "evidence_source": evidence_source,
+        "replay_tiers": sorted(replay_tiers or {"tier_a"}) if evidence_source == "replay" else [],
     }
     discovery_dates = select_stratified_dates(
         partitions.discovery.evidence_dates, limit=discovery_panel_dates, seed=seed
@@ -1469,6 +1481,17 @@ def main() -> None:
         default="combined_small_delta",
     )
     parser.add_argument(
+        "--evidence-source",
+        choices=("stored", "replay"),
+        default="stored",
+    )
+    parser.add_argument(
+        "--replay-tier",
+        action="append",
+        default=[],
+        help="Replay eligibility tier to include when --evidence-source=replay. May be passed multiple times.",
+    )
+    parser.add_argument(
         "--artifact",
         type=Path,
         default=Path("artifacts/large-plan-generation-parameter-search.json"),
@@ -1505,6 +1528,8 @@ def main() -> None:
             min_actionable_mode=args.min_actionable_mode,
             objective_profile=args.objective_profile,
             search_campaign=args.search_campaign,
+            evidence_source=args.evidence_source,
+            replay_tiers=set(args.replay_tier or ["tier_a"]),
         )
         print(
             json.dumps(

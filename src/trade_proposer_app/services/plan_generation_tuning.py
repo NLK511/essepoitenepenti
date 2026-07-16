@@ -1545,10 +1545,31 @@ class PlanGenerationTuningService:
         row.source_updated_at = source_updated_at
 
     def _replay_eligible_records(
-        self, *, ticker: str | None, setup_family: str | None, limit: int | None
+        self,
+        *,
+        ticker: str | None,
+        setup_family: str | None,
+        limit: int | None,
+        tiers: set[str] | None = None,
     ) -> list[EligibleTuningRecord]:
+        allowed_tiers = {str(item).strip() for item in (tiers or {"tier_a", "tier_b"}) if str(item).strip()}
         query = (
-            select(ReplayEligibilityRecord, RecommendationPlanRecord, ReplayPlanOutcomeRecord)
+            select(
+                ReplayEligibilityRecord.id.label("eligibility_id"),
+                ReplayEligibilityRecord.ticker.label("eligibility_ticker"),
+                ReplayEligibilityRecord.diagnostics_json.label("diagnostics_json"),
+                RecommendationPlanRecord.id.label("plan_id"),
+                RecommendationPlanRecord.computed_at.label("computed_at"),
+                RecommendationPlanRecord.action.label("action"),
+                RecommendationPlanRecord.confidence_percent.label("confidence_percent"),
+                RecommendationPlanRecord.entry_price_low.label("entry_price_low"),
+                RecommendationPlanRecord.entry_price_high.label("entry_price_high"),
+                RecommendationPlanRecord.stop_loss.label("stop_loss"),
+                RecommendationPlanRecord.take_profit.label("take_profit"),
+                RecommendationPlanRecord.signal_breakdown_json.label("signal_breakdown_json"),
+                RecommendationPlanRecord.ticker.label("plan_ticker"),
+                ReplayPlanOutcomeRecord.outcome_json.label("outcome_json"),
+            )
             .join(
                 RecommendationPlanRecord,
                 RecommendationPlanRecord.id == ReplayEligibilityRecord.recommendation_plan_id,
@@ -1558,61 +1579,72 @@ class PlanGenerationTuningService:
                 ReplayPlanOutcomeRecord.id == ReplayEligibilityRecord.replay_plan_outcome_id,
             )
             .where(ReplayEligibilityRecord.eligible_for_tuning.is_(True))
-            .where(ReplayEligibilityRecord.tier.in_(["tier_a", "tier_b"]))
+            .where(ReplayEligibilityRecord.tier.in_(sorted(allowed_tiers)))
         )
         if ticker:
             query = query.where(ReplayEligibilityRecord.ticker == ticker.upper())
-        query = query.order_by(RecommendationPlanRecord.computed_at.desc())
-        if limit is not None:
-            query = query.limit(max(1, int(limit)))
-        rows = self.session.execute(query).all()
+        query = query.order_by(RecommendationPlanRecord.computed_at.asc(), ReplayEligibilityRecord.id.asc())
         records: list[EligibleTuningRecord] = []
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
         current_versions = self._current_replay_artifact_versions()
-        for eligibility_row, plan_row, outcome_row in rows:
-            diagnostics = loads_json_object(eligibility_row.diagnostics_json)
-            if not self._replay_artifact_versions_current(diagnostics, current_versions):
-                continue
-            signal_breakdown = loads_json_object(plan_row.signal_breakdown_json)
-            outcome_payload = loads_json_object(outcome_row.outcome_json)
-            row_setup_family = self._setup_family_from_payloads(signal_breakdown, outcome_payload)
-            if normalized_setup_family and row_setup_family.lower() != normalized_setup_family:
-                continue
-            records.append(
-                EligibleTuningRecord(
-                    plan=TuningPlanSnapshot(
-                        id=int(plan_row.id or 0),
-                        computed_at=self._normalize_datetime(plan_row.computed_at),
-                        action=plan_row.action,
-                        confidence_percent=float(plan_row.confidence_percent),
-                        entry_price_low=plan_row.entry_price_low,
-                        entry_price_high=plan_row.entry_price_high,
-                        stop_loss=plan_row.stop_loss,
-                        take_profit=plan_row.take_profit,
-                        signal_breakdown={
-                            key: signal_breakdown[key]
-                            for key in ("intended_action", "cheap_scan_volatility_score")
-                            if key in signal_breakdown
-                        },
-                        ticker=plan_row.ticker,
-                    ),
-                    outcome=TuningOutcomeSnapshot(
-                        max_favorable_excursion=self._float_or_none(
-                            outcome_payload.get("max_favorable_excursion")
+        offset = 0
+        batch_size = self.ELIGIBLE_RECORD_BATCH_SIZE
+        normalized_limit = None if limit is None else max(1, int(limit))
+        while True:
+            batch_query = query.limit(batch_size).offset(offset)
+            rows = self.session.execute(batch_query).all()
+            if not rows:
+                break
+            for row in rows:
+                diagnostics = loads_json_object(row.diagnostics_json)
+                if not self._replay_artifact_versions_current(diagnostics, current_versions):
+                    continue
+                signal_breakdown = loads_json_object(row.signal_breakdown_json)
+                outcome_payload = loads_json_object(row.outcome_json)
+                row_setup_family = self._setup_family_from_payloads(signal_breakdown, outcome_payload)
+                if normalized_setup_family and row_setup_family.lower() != normalized_setup_family:
+                    continue
+                records.append(
+                    EligibleTuningRecord(
+                        plan=TuningPlanSnapshot(
+                            id=int(row.plan_id or 0),
+                            computed_at=self._normalize_datetime(row.computed_at),
+                            action=row.action,
+                            confidence_percent=float(row.confidence_percent),
+                            entry_price_low=row.entry_price_low,
+                            entry_price_high=row.entry_price_high,
+                            stop_loss=row.stop_loss,
+                            take_profit=row.take_profit,
+                            signal_breakdown={
+                                key: signal_breakdown[key]
+                                for key in ("intended_action", "cheap_scan_volatility_score")
+                                if key in signal_breakdown
+                            },
+                            ticker=row.plan_ticker,
                         ),
-                        max_adverse_excursion=self._float_or_none(
-                            outcome_payload.get("max_adverse_excursion")
+                        outcome=TuningOutcomeSnapshot(
+                            max_favorable_excursion=self._float_or_none(
+                                outcome_payload.get("max_favorable_excursion")
+                            ),
+                            max_adverse_excursion=self._float_or_none(
+                                outcome_payload.get("max_adverse_excursion")
+                            ),
+                            horizon_return_5d=self._float_or_none(
+                                outcome_payload.get("horizon_return_5d")
+                            ),
                         ),
-                        horizon_return_5d=self._float_or_none(
-                            outcome_payload.get("horizon_return_5d")
-                        ),
-                    ),
-                    sample=None,
-                    setup_family=row_setup_family,
-                    context_bias=self._context_bias(signal_breakdown),
+                        sample=None,
+                        setup_family=row_setup_family,
+                        context_bias=self._context_bias(signal_breakdown),
+                    )
                 )
-            )
-        records.sort(key=lambda item: item.plan.computed_at or datetime.min.replace(tzinfo=timezone.utc))
+                if normalized_limit is not None and len(records) >= normalized_limit:
+                    return records[:normalized_limit]
+            offset += len(rows)
+            self.session.expunge_all()
+            gc.collect()
+            if len(rows) < batch_size:
+                break
         return records
 
     @classmethod
