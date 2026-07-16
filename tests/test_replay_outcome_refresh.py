@@ -418,3 +418,82 @@ def test_replay_plan_outcomes_bulk_upsert_updates_existing_rows() -> None:
         assert rows[0].resolution_source == "intraday"
     finally:
         session.close()
+
+
+def test_replay_outcome_refresh_skips_intraday_load_when_daily_prefilter_is_enough() -> None:
+    session = create_session()
+    try:
+        as_of = datetime(2026, 1, 5, 23, 59, 59, tzinfo=timezone.utc)
+        session.add(
+            HistoricalReplayBatchRecord(
+                id=1,
+                name="refresh-daily-prefilter-batch",
+                status="completed",
+                mode="research",
+                tickers_json='["AAPL"]',
+                as_of_start=as_of - timedelta(days=1),
+                as_of_end=as_of,
+            )
+        )
+        plans = RecommendationPlanRepository(session)
+        plan = plans.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70,
+                entry_price_low=100,
+                entry_price_high=101,
+                stop_loss=95,
+                take_profit=105,
+                computed_at=as_of,
+            )
+        )
+        session.add(
+            ReplayPlanOutcomeRecord(
+                id=1,
+                replay_batch_id=1,
+                replay_slice_id=1,
+                recommendation_plan_id=plan.id or 0,
+                candidate_config_hash="baseline",
+                resolution_source="pending",
+                outcome="open",
+                status="open",
+                outcome_json=json.dumps({"outcome": "open", "status": "open"}),
+            )
+        )
+        market = HistoricalMarketDataRepository(session)
+        market.upsert_bar(
+            HistoricalMarketBar(
+                ticker="AAPL",
+                timeframe="1d",
+                bar_time=as_of + timedelta(days=1),
+                available_at=as_of + timedelta(days=1, hours=23),
+                open_price=98,
+                high_price=99,
+                low_price=96,
+                close_price=98,
+                volume=1000,
+                source="fixture",
+            )
+        )
+        session.commit()
+
+        with patch(
+            "trade_proposer_app.services.recommendation_plan_evaluations.RecommendationPlanEvaluationService._download_price_history",
+            side_effect=AssertionError("cache-only refresh must not call remote price history"),
+        ):
+            summary = ReplayOutcomeRefreshService(session).refresh_batch(
+                1,
+                as_of=as_of + timedelta(days=2),
+                reclassify=False,
+                profile=True,
+            )
+
+        refreshed = session.get(ReplayPlanOutcomeRecord, 1)
+        assert refreshed is not None
+        assert refreshed.resolution_source == "daily_prefilter"
+        assert summary.price_history_diagnostics["intraday_required_plan_count"] == 0
+        assert summary.price_history_diagnostics["daily_prefilter_plan_count"] == 1
+    finally:
+        session.close()

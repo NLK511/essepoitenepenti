@@ -166,6 +166,8 @@ Implemented remediation includes:
 - Replay outcome refresh must not use wall-clock `now` for historical repair unless explicitly requested. Repair mode must use a bounded plan horizon or latest complete cached session per ticker.
 - Replay outcome refresh must be batch-oriented for historical repair. It must not hydrate full UI/broker execution context per plan, must support bounded `--limit` profiling runs, and must report timing for row selection, plan loading, price-history loading, outcome resolution, persistence, and reclassification.
 - Replay outcome persistence must support bulk upsert by `(replay_slice_id, recommendation_plan_id, candidate_config_hash)` so historical repair commits by batch/chunk rather than once per outcome row.
+- Replay refresh price-history preparation must avoid eager intraday loading when daily data can prefilter an outcome as no-entry/open/phantom-pending. Intraday bars should be loaded only for trade-like rows that need final intraday resolution or when daily history is unavailable.
+- Replay refresh artifacts must expose price-history preparation diagnostics, including ticker counts, plans that required intraday, plans skipped by daily prefilter, and price-history error counts.
 - 1m bar access for bounded replay windows must not silently truncate at a fixed 2,000 rows. The caller must request enough rows for the window or use an uncapped bounded range query with a safe guard.
 - Bars refresh must audit recent session continuity. A ticker with a fresh latest bar can still have an internal recoverable gap.
 - Old replay rows that need 1m bars older than the local/provider window must be marked with an explicit unrecoverable reason and excluded from repeated repair queues.
@@ -185,6 +187,7 @@ Tests should cover:
 - outcome refresh using a lightweight replay plan loader instead of per-row full plan hydration
 - outcome refresh bulk-upserting replay outcomes without per-row commits
 - outcome refresh `--limit` and profiling artifacts for controlled batch repair runs
+- outcome refresh staged price-history loading where daily prefilter rows do not trigger intraday loads
 - replay bar coverage diagnostics distinguishing current-session, pre-cache, internal-gap, ticker-missing, and loader-limit cases
 - replay outcome refresh using plan-horizon/latest-complete cached-session cutoffs instead of wall-clock `now`
 - bounded 1m replay windows returning complete ranges beyond 2,000 rows

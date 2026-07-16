@@ -4,7 +4,7 @@ import json
 import time
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -31,6 +31,7 @@ class ReplayOutcomeRefreshSummary:
     price_error_count: int
     eligibility_reclassification: dict[str, object] | None
     timing_seconds: dict[str, float]
+    price_history_diagnostics: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -44,6 +45,7 @@ class ReplayOutcomeRefreshSummary:
             "price_error_count": self.price_error_count,
             "eligibility_reclassification": self.eligibility_reclassification,
             "timing_seconds": self.timing_seconds,
+            "price_history_diagnostics": self.price_history_diagnostics,
         }
 
 
@@ -110,7 +112,7 @@ class ReplayOutcomeRefreshService:
         )
         timed("as_of_resolution", stage_started)
         stage_started = time.perf_counter()
-        price_history_cache, price_errors = self.evaluator._prepare_price_histories(  # noqa: SLF001
+        price_inputs = self._prepare_replay_price_inputs(
             plans,
             as_of=resolution_as_of,
             allow_remote_fetch=allow_remote_fetch,
@@ -122,16 +124,21 @@ class ReplayOutcomeRefreshService:
         after_outcomes: Counter[str] = Counter()
         bulk_items: list[dict[str, object]] = []
         for plan, row in plan_row_pairs:
-            ticker = (plan.ticker or "").strip().upper()
-            daily_data = price_history_cache.get((ticker, False))
-            intraday_data = price_history_cache.get((ticker, True))
-            outcome, source_mode = self.evaluator._resolve_plan_outcome(  # noqa: SLF001
-                plan,
-                daily_data,
-                intraday_data,
-                run_id=row.run_id,
-                as_of=resolution_as_of,
-            )
+            precomputed = price_inputs["precomputed_outcomes"].get(plan.id or 0)
+            if precomputed is None:
+                ticker = (plan.ticker or "").strip().upper()
+                daily_data = price_inputs["daily_cache"].get(ticker)
+                intraday_data = price_inputs["intraday_cache"].get(ticker)
+                outcome, source_mode = self.evaluator._resolve_plan_outcome(  # noqa: SLF001
+                    plan,
+                    daily_data,
+                    intraday_data,
+                    run_id=row.run_id,
+                    as_of=resolution_as_of,
+                )
+            else:
+                outcome, source_mode = precomputed
+                outcome = outcome.model_copy(update={"run_id": row.run_id})
             bulk_items.append(
                 {
                     "replay_batch_id": row.replay_batch_id,
@@ -168,10 +175,128 @@ class ReplayOutcomeRefreshService:
             after_status_counts=dict(after_status),
             before_outcome_counts=dict(before_outcomes),
             after_outcome_counts=dict(after_outcomes),
-            price_error_count=len(price_errors),
+            price_error_count=len(price_inputs["errors"]),
             eligibility_reclassification=reclassification,
             timing_seconds=timings,
+            price_history_diagnostics=price_inputs["diagnostics"],
         )
+
+    def _prepare_replay_price_inputs(
+        self,
+        plans: list[RecommendationPlan],
+        *,
+        as_of: datetime,
+        allow_remote_fetch: bool,
+    ) -> dict[str, object]:
+        groups = self.evaluator._group_by_ticker(plans)  # noqa: SLF001
+        daily_cache: dict[str, object] = {}
+        intraday_cache: dict[str, object] = {}
+        precomputed: dict[int, tuple[object, str]] = {}
+        intraday_required: list[RecommendationPlan] = []
+        errors: list[str] = []
+        diagnostics: dict[str, object] = {
+            "ticker_count": len(groups),
+            "plan_count": len(plans),
+            "daily_loaded_ticker_count": 0,
+            "intraday_loaded_ticker_count": 0,
+            "daily_prefilter_plan_count": 0,
+            "intraday_required_plan_count": 0,
+            "non_trade_plan_count": 0,
+        }
+        for ticker, grouped_plans in groups.items():
+            trade_like = [
+                plan
+                for plan in grouped_plans
+                if plan.action in {"long", "short"} or self.evaluator._phantom_intended_action(plan) is not None  # noqa: SLF001
+            ]
+            trade_like_ids = {id(plan) for plan in trade_like}
+            for plan in grouped_plans:
+                if id(plan) not in trade_like_ids:
+                    outcome, source = self.evaluator._resolve_plan_outcome(  # noqa: SLF001
+                        plan,
+                        None,
+                        None,
+                        run_id=None,
+                        as_of=as_of,
+                    )
+                    precomputed[plan.id or 0] = (outcome, source)
+                    diagnostics["non_trade_plan_count"] = int(diagnostics["non_trade_plan_count"]) + 1
+            if not trade_like:
+                continue
+            normalized_times = [
+                normalized
+                for plan in trade_like
+                if (normalized := self.evaluator._normalize_datetime(plan.computed_at)) is not None  # noqa: SLF001
+            ]
+            if not normalized_times:
+                intraday_required.extend(trade_like)
+                continue
+            start_time = min(normalized_times)
+            start_time = start_time - timedelta(days=2)
+            daily_data = self.evaluator._load_price_history(  # noqa: SLF001
+                ticker,
+                start_time,
+                as_of,
+                intraday_only=False,
+                require_full_coverage=True,
+                plan_ids=[plan.id for plan in trade_like if plan.id is not None],
+                allow_remote_fetch=allow_remote_fetch,
+            )
+            daily_cache[ticker] = daily_data.sort_index() if daily_data is not None and not daily_data.empty else None
+            if daily_cache[ticker] is None:
+                errors.append(f"{ticker}: daily price history is unavailable")
+                intraday_required.extend(trade_like)
+                continue
+            diagnostics["daily_loaded_ticker_count"] = int(diagnostics["daily_loaded_ticker_count"]) + 1
+            for plan in trade_like:
+                daily_outcome = self.evaluator._evaluate_plan(  # noqa: SLF001
+                    plan,
+                    daily_cache[ticker],
+                    intended_action=self.evaluator._phantom_intended_action(plan),  # noqa: SLF001
+                    run_id=None,
+                    as_of=as_of,
+                    intraday_only=False,
+                )
+                if daily_outcome.outcome in {"no_entry", "open", "phantom_no_entry", "phantom_pending"}:
+                    precomputed[plan.id or 0] = (
+                        self.evaluator._finalize_outcome(plan, daily_outcome, as_of=as_of),  # noqa: SLF001
+                        "daily_prefilter",
+                    )
+                    diagnostics["daily_prefilter_plan_count"] = int(diagnostics["daily_prefilter_plan_count"]) + 1
+                else:
+                    intraday_required.append(plan)
+        diagnostics["intraday_required_plan_count"] = len(intraday_required)
+        for ticker, grouped_plans in self.evaluator._group_by_ticker(intraday_required).items():  # noqa: SLF001
+            normalized_times = [
+                self.evaluator._normalize_datetime(plan.computed_at)  # noqa: SLF001
+                for plan in grouped_plans
+                if self.evaluator._normalize_datetime(plan.computed_at) is not None  # noqa: SLF001
+            ]
+            if not normalized_times:
+                continue
+            start_time = min(normalized_times) - timedelta(days=2)
+            intraday_data = self.evaluator._load_price_history(  # noqa: SLF001
+                ticker,
+                start_time,
+                as_of,
+                intraday_only=True,
+                require_full_coverage=True,
+                plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
+                allow_remote_fetch=allow_remote_fetch,
+            )
+            intraday_cache[ticker] = intraday_data.sort_index() if intraday_data is not None and not intraday_data.empty else None
+            if intraday_cache[ticker] is None:
+                errors.append(f"{ticker}: intraday price history is unavailable")
+            else:
+                diagnostics["intraday_loaded_ticker_count"] = int(diagnostics["intraday_loaded_ticker_count"]) + 1
+        diagnostics["price_error_count"] = len(errors)
+        return {
+            "daily_cache": daily_cache,
+            "intraday_cache": intraday_cache,
+            "precomputed_outcomes": precomputed,
+            "errors": errors,
+            "diagnostics": diagnostics,
+        }
 
     def _load_refresh_plans(self, rows: list[ReplayPlanOutcomeRecord]) -> dict[int, RecommendationPlan]:
         plan_ids = sorted({row.recommendation_plan_id for row in rows})
