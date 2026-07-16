@@ -220,3 +220,45 @@ def test_replay_outcome_refresh_filters_by_resolution_source() -> None:
         assert untouched_clean.outcome == "loss"
     finally:
         session.close()
+
+
+def test_replay_outcome_refresh_can_use_latest_complete_cached_session_as_of() -> None:
+    session = create_session()
+    try:
+        repository = HistoricalMarketDataRepository(session)
+        latest = datetime(2026, 1, 7, 19, 59, tzinfo=timezone.utc)
+        repository.upsert_bar(
+            HistoricalMarketBar(
+                ticker="AAPL",
+                timeframe="1m",
+                bar_time=latest,
+                available_at=latest + timedelta(minutes=1),
+                open_price=100,
+                high_price=101,
+                low_price=99,
+                close_price=100,
+                volume=1000,
+                source="fixture",
+            )
+        )
+        plan = RecommendationPlan(
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70,
+            entry_price_low=100,
+            entry_price_high=101,
+            stop_loss=95,
+            take_profit=105,
+            computed_at=datetime(2026, 1, 5, 23, 59, 59, tzinfo=timezone.utc),
+        )
+
+        resolved = ReplayOutcomeRefreshService(session)._resolve_as_of(  # noqa: SLF001
+            [plan],
+            explicit_as_of=None,
+            mode="latest_complete_cached_session",
+        )
+
+        assert resolved == datetime(2026, 1, 7, 23, 59, 59, tzinfo=timezone.utc)
+    finally:
+        session.close()

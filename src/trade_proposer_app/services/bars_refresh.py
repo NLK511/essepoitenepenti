@@ -1,7 +1,7 @@
 import gc
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as datetime_time, timedelta, timezone
 
 import pandas as pd
 import yfinance as yf
@@ -137,6 +137,7 @@ class BarsRefreshService:
                 policy="cache_only",
             )
             by_ticker[ticker] = result.coverage
+            by_ticker[ticker]["recent_sessions"] = self._recent_session_coverage(ticker, end_at=end_at)
             if result.coverage.get("covered"):
                 covered += 1
         return {
@@ -148,6 +149,35 @@ class BarsRefreshService:
             "coverage_ratio": round((covered / len(tickers)) if tickers else 0.0, 4),
             "by_ticker": by_ticker,
         }
+
+    def _recent_session_coverage(self, ticker: str, *, end_at: datetime) -> list[dict[str, object]]:
+        sessions: list[dict[str, object]] = []
+        cursor = end_at.date()
+        checked = 0
+        while checked < 7:
+            if cursor.weekday() >= 5:
+                cursor -= timedelta(days=1)
+                continue
+            start = datetime.combine(cursor, datetime_time(0, 0), tzinfo=timezone.utc)
+            end = datetime.combine(cursor, datetime_time(23, 59, 59), tzinfo=timezone.utc)
+            count = self.repository.count_bars(
+                ticker=ticker,
+                timeframe="1m",
+                start_at=start,
+                end_at=end,
+                available_at=end_at,
+            )
+            status = "complete" if count >= 300 else ("partial" if count > 0 else "missing")
+            sessions.append(
+                {
+                    "date": cursor.isoformat(),
+                    "row_count": count,
+                    "status": status,
+                }
+            )
+            checked += 1
+            cursor -= timedelta(days=1)
+        return sessions
 
     def _refresh_single_ticker(
         self,

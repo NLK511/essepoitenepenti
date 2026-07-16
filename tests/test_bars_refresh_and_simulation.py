@@ -58,6 +58,65 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_bars_refresh_coverage_reports_recent_session_gaps(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            service = BarsRefreshService(repository)
+            end_at = datetime(2026, 7, 16, 21, 0, tzinfo=timezone.utc)
+            complete_start = datetime(2026, 7, 16, 13, 30, tzinfo=timezone.utc)
+            partial_start = datetime(2026, 7, 15, 13, 30, tzinfo=timezone.utc)
+            repository.upsert_bars(
+                [
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1m",
+                        bar_time=complete_start + timedelta(minutes=index),
+                        available_at=complete_start + timedelta(minutes=index + 1),
+                        open_price=100,
+                        high_price=101,
+                        low_price=99,
+                        close_price=100,
+                        volume=1000,
+                        source="fixture",
+                    )
+                    for index in range(300)
+                ]
+            )
+            repository.upsert_bars(
+                [
+                    HistoricalMarketBar(
+                        ticker="AAPL",
+                        timeframe="1m",
+                        bar_time=partial_start + timedelta(minutes=index),
+                        available_at=partial_start + timedelta(minutes=index + 1),
+                        open_price=100,
+                        high_price=101,
+                        low_price=99,
+                        close_price=100,
+                        volume=1000,
+                        source="fixture",
+                    )
+                    for index in range(10)
+                ]
+            )
+
+            coverage = service._refresh_coverage(  # noqa: SLF001
+                tickers=["AAPL"],
+                start_at=end_at - timedelta(days=7),
+                end_at=end_at,
+            )
+
+            sessions = {
+                item["date"]: item
+                for item in coverage["by_ticker"]["AAPL"]["recent_sessions"]
+            }
+            self.assertEqual("complete", sessions["2026-07-16"]["status"])
+            self.assertEqual("partial", sessions["2026-07-15"]["status"])
+            self.assertEqual("missing", sessions["2026-07-14"]["status"])
+        finally:
+            session.close()
+
     def test_bars_refresh_service_retries_unresolved_tickers_until_success(self) -> None:
         session = create_session()
         try:

@@ -93,6 +93,20 @@ Shared helpers define whether a policy allows remote fetching. Scripts and servi
 - `tier_c`: some artifacts are usable, but the row is not valid promotion evidence, usually because the outcome is open/unresolved or resolution bars are missing.
 - `ineligible`: mandatory generation coverage, resolution evidence, or provenance is missing.
 
+## Replay intraday coverage states
+
+Replay outcome repair must not leave generic `pending` rows when the bar-cache reason is knowable. Intraday coverage diagnostics and repair tools classify each replay outcome window as:
+
+- `covered`: required 1m bars exist in cache for the bounded resolution window.
+- `current_session_incomplete`: the requested end falls on a market session that has not completed in cache yet.
+- `internal_cache_gap`: the ticker has 1m history around the window, but one or more required sessions or large intraday spans are missing.
+- `outside_local_intraday_cache`: the required start is older than the earliest local 1m bar for the ticker.
+- `ticker_not_in_cache`: the ticker has no local 1m bars.
+- `loader_limit_truncated`: bars exist, but the access layer used too small a row limit for the requested 1m window.
+- `missing_daily_fallback`: daily bars are also unavailable for a row that could otherwise be daily-prefiltered.
+
+Rows outside the local intraday cache are not repair candidates unless another provider/source is explicitly added. Rows in the current incomplete session are retry-later candidates. Recent internal gaps are repair candidates while the provider can still return 1m bars.
+
 ## Mandatory replay provenance
 
 Every replay-generated signal/plan must include non-null replay provenance:
@@ -135,6 +149,7 @@ Implemented remediation includes:
 - outcome population labels in tuning/calibration summaries
 - validation wrappers for critical replay/tuning JSON artifacts
 - replay evidence audit and replay outcome refresh scripts/services
+- replay bar coverage diagnostics for blocked replay outcomes
 - shared replay evidence-quality checks for audit and promotion gates
 - maintainability cleanup around remote-fetch policy helpers, JSON helpers, stable hashing, and bar-access internals
 
@@ -147,6 +162,10 @@ Implemented remediation includes:
 - Refresh/reclassify old replay batches before using them for tuning if coverage or outcome state was repaired after the original run.
 - Replay eligibility reclassification must reuse reconstructed coverage within a batch. A slice with missing stored coverage may rebuild its coverage from cache once, but repeated outcomes for the same slice must not trigger repeated bar-coverage scans.
 - Replay outcome refresh tooling must support source-targeted refreshes so pending-source rows can be repaired without reprocessing already clean intraday rows from the same batch.
+- Replay outcome refresh must not use wall-clock `now` for historical repair unless explicitly requested. Repair mode must use a bounded plan horizon or latest complete cached session per ticker.
+- 1m bar access for bounded replay windows must not silently truncate at a fixed 2,000 rows. The caller must request enough rows for the window or use an uncapped bounded range query with a safe guard.
+- Bars refresh must audit recent session continuity. A ticker with a fresh latest bar can still have an internal recoverable gap.
+- Old replay rows that need 1m bars older than the local/provider window must be marked with an explicit unrecoverable reason and excluded from repeated repair queues.
 
 ## Testing requirements
 
@@ -160,6 +179,10 @@ Tests should cover:
 - reclassification before/after tier-count reporting
 - reclassification reusing reconstructed coverage for repeated outcomes from the same replay slice
 - outcome refresh selecting rows by resolution source for targeted pending-source repair
+- replay bar coverage diagnostics distinguishing current-session, pre-cache, internal-gap, ticker-missing, and loader-limit cases
+- replay outcome refresh using plan-horizon/latest-complete cached-session cutoffs instead of wall-clock `now`
+- bounded 1m replay windows returning complete ranges beyond 2,000 rows
+- bars refresh artifacts reporting recent per-session coverage gaps
 - scripts/builders refusing to construct replay execution without required input services
 - evidence-quality gates rejecting phantom-dominated promotion evidence
 

@@ -1050,7 +1050,7 @@ class RecommendationPlanEvaluationService:
                     start_at=start_date,
                     end_at=end_date,
                     available_at=end_date,
-                    limit=2000,
+                    limit=self._intraday_row_limit(start_date, end_date),
                     policy="cache_only",
                 ).bars
             else:
@@ -1068,6 +1068,15 @@ class RecommendationPlanEvaluationService:
             if frame is not None and not frame.empty:
                 return frame
         return None
+
+    @staticmethod
+    def _intraday_row_limit(start_date: datetime, end_date: datetime) -> int:
+        normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_date)
+        normalized_end = RecommendationPlanEvaluationService._normalize_datetime(end_date)
+        if normalized_start is None or normalized_end is None or normalized_end <= normalized_start:
+            return 2_000
+        calendar_days = max(1, (normalized_end.date() - normalized_start.date()).days + 1)
+        return max(2_000, min(50_000, calendar_days * 1_440))
 
     @staticmethod
     def _persisted_history_covers_window(

@@ -134,7 +134,7 @@ class HistoricalMarketDataRepository:
         start_at: datetime | None = None,
         end_at: datetime | None = None,
         available_at: datetime | None = None,
-        limit: int = 200,
+        limit: int | None = 200,
     ) -> list[HistoricalMarketBar]:
         rows = self.session.execute(
             self._select_bar_rows(ticker, timeframe, start_at, end_at, available_at, limit=limit)
@@ -168,7 +168,7 @@ class HistoricalMarketDataRepository:
         end_at: datetime | None,
         available_at: datetime | None,
         *,
-        limit: int,
+        limit: int | None,
     ):
         table = HistoricalMarketBarRecord.__table__
         columns = [
@@ -198,7 +198,10 @@ class HistoricalMarketDataRepository:
             query = query.where(table.c.bar_time <= self._normalize(end_at))
         if available_at is not None and self._has_available_at_column():
             query = query.where(table.c.available_at <= self._normalize(available_at))
-        return query.order_by(table.c.bar_time.desc()).limit(limit)
+        query = query.order_by(table.c.bar_time.desc())
+        if limit is not None:
+            query = query.limit(limit)
+        return query
 
     @staticmethod
     def _normalize(value: datetime | None) -> datetime | None:

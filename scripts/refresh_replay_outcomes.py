@@ -34,6 +34,12 @@ def main() -> None:
         default=[],
         help="Only refresh outcomes with this resolution_source. May be passed multiple times.",
     )
+    parser.add_argument(
+        "--resolution-as-of-mode",
+        choices=("now", "plan_horizon", "latest_complete_cached_session"),
+        default="plan_horizon",
+        help="How to choose as_of when --as-of is omitted.",
+    )
     parser.add_argument("--artifact-dir", default="artifacts")
     args = parser.parse_args()
     session = SessionLocal()
@@ -45,6 +51,7 @@ def main() -> None:
             reclassify=not args.no_reclassify,
             input_access_policy=args.policy,
             resolution_sources=set(args.resolution_source or []),
+            resolution_as_of_mode=args.resolution_as_of_mode,
         )
         payload = summary.to_dict()
         artifact_dir = Path(args.artifact_dir)

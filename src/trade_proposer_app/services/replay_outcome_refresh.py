@@ -12,6 +12,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutcomeRepository
 from trade_proposer_app.services.input_access import input_policy_allows_remote_fetch, normalize_input_access_policy
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
+from trade_proposer_app.services.replay_bar_coverage import ReplayBarCoverageService
 from trade_proposer_app.services.replay_eligibility_reclassification import ReplayEligibilityReclassificationService
 
 
@@ -57,8 +58,8 @@ class ReplayOutcomeRefreshService:
         reclassify: bool = True,
         input_access_policy: str = "cache_only",
         resolution_sources: set[str] | None = None,
+        resolution_as_of_mode: str = "plan_horizon",
     ) -> ReplayOutcomeRefreshSummary:
-        resolution_as_of = self._normalize(as_of or datetime.now(timezone.utc))
         policy = normalize_input_access_policy(input_access_policy, default="cache_only")
         allow_remote_fetch = input_policy_allows_remote_fetch(policy)
         source_filter = {str(item).strip() for item in resolution_sources or set() if str(item).strip()}
@@ -83,6 +84,11 @@ class ReplayOutcomeRefreshService:
                 continue
             plans.append(plan)
             row_by_plan_id[plan.id or 0] = row
+        resolution_as_of = self._resolve_as_of(
+            plans,
+            explicit_as_of=as_of,
+            mode=resolution_as_of_mode,
+        )
         price_history_cache, price_errors = self.evaluator._prepare_price_histories(  # noqa: SLF001
             plans,
             as_of=resolution_as_of,
@@ -140,3 +146,30 @@ class ReplayOutcomeRefreshService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _resolve_as_of(
+        self,
+        plans: list[object],
+        *,
+        explicit_as_of: datetime | None,
+        mode: str,
+    ) -> datetime:
+        if explicit_as_of is not None:
+            return self._normalize(explicit_as_of)
+        normalized_mode = str(mode or "now").strip()
+        if normalized_mode == "latest_complete_cached_session":
+            tickers = [str(getattr(plan, "ticker", "") or "").strip().upper() for plan in plans]
+            cached = ReplayBarCoverageService(self.session).latest_complete_cached_session_as_of(tickers)
+            if cached is not None:
+                return cached
+        if normalized_mode == "plan_horizon":
+            coverage = ReplayBarCoverageService(self.session)
+            cutoffs = [coverage.plan_horizon_cutoff(plan) for plan in plans]
+            cached = coverage.latest_complete_cached_session_as_of(
+                [str(getattr(plan, "ticker", "") or "").strip().upper() for plan in plans]
+            )
+            if cutoffs and cached is not None:
+                return min(max(cutoffs), cached)
+            if cutoffs:
+                return max(cutoffs)
+        return datetime.now(timezone.utc)
