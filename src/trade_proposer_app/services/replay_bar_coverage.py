@@ -43,6 +43,8 @@ class ReplayBarCoverageService:
 
     def __init__(self, session: Session) -> None:
         self.session = session
+        self._ticker_bounds_cache: dict[str, tuple[datetime | None, datetime | None]] = {}
+        self._window_counts_cache: dict[tuple[str, datetime, datetime], tuple[int, int]] = {}
 
     def diagnose_plan(
         self,
@@ -133,15 +135,22 @@ class ReplayBarCoverageService:
         return max(2_000, min(50_000, calendar_days * 1_440))
 
     def _ticker_bounds(self, ticker: str) -> tuple[datetime | None, datetime | None]:
+        if ticker in self._ticker_bounds_cache:
+            return self._ticker_bounds_cache[ticker]
         table = HistoricalMarketBarRecord.__table__
         row = self.session.execute(
             select(func.min(table.c.bar_time), func.max(table.c.bar_time))
             .where(table.c.ticker == ticker)
             .where(table.c.timeframe == "1m")
         ).one()
-        return self._normalize(row[0]), self._normalize(row[1])
+        bounds = self._normalize(row[0]), self._normalize(row[1])
+        self._ticker_bounds_cache[ticker] = bounds
+        return bounds
 
     def _window_counts(self, ticker: str, start: datetime, end: datetime) -> tuple[int, int]:
+        key = (ticker, start, end)
+        if key in self._window_counts_cache:
+            return self._window_counts_cache[key]
         table = HistoricalMarketBarRecord.__table__
         row = self.session.execute(
             select(func.count(), func.count(func.distinct(func.date(table.c.bar_time))))
@@ -151,7 +160,9 @@ class ReplayBarCoverageService:
             .where(table.c.bar_time <= end)
             .where(table.c.available_at <= end)
         ).one()
-        return int(row[0] or 0), int(row[1] or 0)
+        counts = int(row[0] or 0), int(row[1] or 0)
+        self._window_counts_cache[key] = counts
+        return counts
 
     @staticmethod
     def _is_current_session_incomplete(required_end: datetime, latest: datetime) -> bool:
