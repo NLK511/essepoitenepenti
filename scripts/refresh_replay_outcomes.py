@@ -27,6 +27,9 @@ def main() -> None:
     parser.add_argument("--as-of", default=None, help="Resolution timestamp; defaults to now.")
     parser.add_argument("--include-resolved", action="store_true")
     parser.add_argument("--no-reclassify", action="store_true")
+    parser.add_argument("--limit", type=int, default=None, help="Refresh at most this many selected rows.")
+    parser.add_argument("--profile", action="store_true", help="Include per-stage timing in the artifact.")
+    parser.add_argument("--bulk-chunk-size", type=int, default=500)
     parser.add_argument("--policy", default="cache_only", choices=INPUT_ACCESS_POLICIES)
     parser.add_argument(
         "--resolution-source",
@@ -52,6 +55,9 @@ def main() -> None:
             input_access_policy=args.policy,
             resolution_sources=set(args.resolution_source or []),
             resolution_as_of_mode=args.resolution_as_of_mode,
+            limit=args.limit,
+            profile=bool(args.profile),
+            bulk_chunk_size=args.bulk_chunk_size,
         )
         payload = summary.to_dict()
         artifact_dir = Path(args.artifact_dir)

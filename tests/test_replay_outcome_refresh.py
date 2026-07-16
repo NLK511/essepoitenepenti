@@ -9,10 +9,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import HistoricalMarketBar, RecommendationPlan
+from trade_proposer_app.domain.models import HistoricalMarketBar, RecommendationPlan, RecommendationPlanOutcome
 from trade_proposer_app.persistence.models import Base, HistoricalReplayBatchRecord, ReplayPlanOutcomeRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutcomeRepository
 from trade_proposer_app.services.replay_outcome_refresh import ReplayOutcomeRefreshService
 
 
@@ -260,5 +261,160 @@ def test_replay_outcome_refresh_can_use_latest_complete_cached_session_as_of() -
         )
 
         assert resolved == datetime(2026, 1, 7, 23, 59, 59, tzinfo=timezone.utc)
+    finally:
+        session.close()
+
+
+def test_replay_outcome_refresh_uses_lightweight_loader_and_bulk_persistence() -> None:
+    session = create_session()
+    try:
+        as_of = datetime(2026, 1, 5, 23, 59, 59, tzinfo=timezone.utc)
+        session.add(
+            HistoricalReplayBatchRecord(
+                id=1,
+                name="refresh-lightweight-batch",
+                status="completed",
+                mode="research",
+                tickers_json='["AAPL"]',
+                as_of_start=as_of - timedelta(days=1),
+                as_of_end=as_of,
+            )
+        )
+        plans = RecommendationPlanRepository(session)
+        plan = plans.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70,
+                entry_price_low=100,
+                entry_price_high=101,
+                stop_loss=95,
+                take_profit=105,
+                computed_at=as_of,
+                signal_breakdown={"setup_family": "fixture_family"},
+            )
+        )
+        session.add(
+            ReplayPlanOutcomeRecord(
+                id=1,
+                replay_batch_id=1,
+                replay_slice_id=1,
+                recommendation_plan_id=plan.id or 0,
+                candidate_config_hash="baseline",
+                resolution_source="pending",
+                outcome="open",
+                status="open",
+                outcome_json=json.dumps({"outcome": "open", "status": "open"}),
+            )
+        )
+        market = HistoricalMarketDataRepository(session)
+        for offset, high, low, close in [(timedelta(minutes=1), 102, 99, 101), (timedelta(minutes=2), 106, 101, 105.5)]:
+            bar_time = as_of + offset
+            market.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1m",
+                    bar_time=bar_time,
+                    available_at=bar_time,
+                    open_price=100,
+                    high_price=high,
+                    low_price=low,
+                    close_price=close,
+                    volume=1000,
+                    source="fixture",
+                )
+            )
+        session.commit()
+
+        with patch.object(RecommendationPlanRepository, "get_plan", side_effect=AssertionError("full plan hydration forbidden")), patch.object(
+            ReplayPlanOutcomeRepository,
+            "upsert_outcome",
+            side_effect=AssertionError("per-row outcome upsert forbidden"),
+        ), patch(
+            "trade_proposer_app.services.recommendation_plan_evaluations.RecommendationPlanEvaluationService._download_price_history",
+            side_effect=AssertionError("cache-only refresh must not call remote price history"),
+        ):
+            summary = ReplayOutcomeRefreshService(session).refresh_batch(
+                1,
+                as_of=as_of + timedelta(days=1),
+                reclassify=False,
+                limit=1,
+                profile=True,
+            )
+
+        assert summary.selected_outcome_count == 1
+        assert summary.refreshed_outcome_count == 1
+        assert summary.timing_seconds
+        assert "plan_loading" in summary.timing_seconds
+        assert "outcome_persistence" in summary.timing_seconds
+        refreshed = session.get(ReplayPlanOutcomeRecord, 1)
+        assert refreshed is not None
+        assert refreshed.outcome == "win"
+    finally:
+        session.close()
+
+
+def test_replay_plan_outcomes_bulk_upsert_updates_existing_rows() -> None:
+    session = create_session()
+    try:
+        evaluated_at = datetime(2026, 1, 6, 12, 0, tzinfo=timezone.utc)
+        session.add(
+            ReplayPlanOutcomeRecord(
+                id=1,
+                replay_batch_id=1,
+                replay_slice_id=1,
+                recommendation_plan_id=11,
+                candidate_config_hash="baseline",
+                resolution_source="pending",
+                outcome="open",
+                status="open",
+                outcome_json=json.dumps({"outcome": "open", "status": "open"}),
+            )
+        )
+        session.commit()
+
+        count = ReplayPlanOutcomeRepository(session).bulk_upsert_outcomes(
+            [
+                {
+                    "replay_batch_id": 1,
+                    "replay_slice_id": 1,
+                    "run_id": None,
+                    "recommendation_plan_id": 11,
+                    "candidate_config_hash": "baseline",
+                    "resolution_source": "intraday",
+                    "outcome": RecommendationPlanOutcome(
+                        recommendation_plan_id=11,
+                        ticker="AAPL",
+                        action="long",
+                        outcome="win",
+                        status="resolved",
+                        evaluated_at=evaluated_at,
+                    ),
+                },
+                {
+                    "replay_batch_id": 1,
+                    "replay_slice_id": 1,
+                    "run_id": None,
+                    "recommendation_plan_id": 12,
+                    "candidate_config_hash": "baseline",
+                    "resolution_source": "intraday",
+                    "outcome": RecommendationPlanOutcome(
+                        recommendation_plan_id=12,
+                        ticker="MSFT",
+                        action="long",
+                        outcome="loss",
+                        status="resolved",
+                        evaluated_at=evaluated_at,
+                    ),
+                },
+            ]
+        )
+
+        assert count == 2
+        rows = session.query(ReplayPlanOutcomeRecord).order_by(ReplayPlanOutcomeRecord.recommendation_plan_id).all()
+        assert [row.recommendation_plan_id for row in rows] == [11, 12]
+        assert [row.outcome for row in rows] == ["win", "loss"]
+        assert rows[0].resolution_source == "intraday"
     finally:
         session.close()

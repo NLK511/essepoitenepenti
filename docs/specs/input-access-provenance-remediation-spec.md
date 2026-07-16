@@ -150,6 +150,7 @@ Implemented remediation includes:
 - validation wrappers for critical replay/tuning JSON artifacts
 - replay evidence audit and replay outcome refresh scripts/services
 - replay bar coverage diagnostics for blocked replay outcomes
+- batch-oriented replay outcome refresh profiling, lightweight plan loading, and bulk outcome persistence
 - shared replay evidence-quality checks for audit and promotion gates
 - maintainability cleanup around remote-fetch policy helpers, JSON helpers, stable hashing, and bar-access internals
 
@@ -163,6 +164,8 @@ Implemented remediation includes:
 - Replay eligibility reclassification must reuse reconstructed coverage within a batch. A slice with missing stored coverage may rebuild its coverage from cache once, but repeated outcomes for the same slice must not trigger repeated bar-coverage scans.
 - Replay outcome refresh tooling must support source-targeted refreshes so pending-source rows can be repaired without reprocessing already clean intraday rows from the same batch.
 - Replay outcome refresh must not use wall-clock `now` for historical repair unless explicitly requested. Repair mode must use a bounded plan horizon or latest complete cached session per ticker.
+- Replay outcome refresh must be batch-oriented for historical repair. It must not hydrate full UI/broker execution context per plan, must support bounded `--limit` profiling runs, and must report timing for row selection, plan loading, price-history loading, outcome resolution, persistence, and reclassification.
+- Replay outcome persistence must support bulk upsert by `(replay_slice_id, recommendation_plan_id, candidate_config_hash)` so historical repair commits by batch/chunk rather than once per outcome row.
 - 1m bar access for bounded replay windows must not silently truncate at a fixed 2,000 rows. The caller must request enough rows for the window or use an uncapped bounded range query with a safe guard.
 - Bars refresh must audit recent session continuity. A ticker with a fresh latest bar can still have an internal recoverable gap.
 - Old replay rows that need 1m bars older than the local/provider window must be marked with an explicit unrecoverable reason and excluded from repeated repair queues.
@@ -179,6 +182,9 @@ Tests should cover:
 - reclassification before/after tier-count reporting
 - reclassification reusing reconstructed coverage for repeated outcomes from the same replay slice
 - outcome refresh selecting rows by resolution source for targeted pending-source repair
+- outcome refresh using a lightweight replay plan loader instead of per-row full plan hydration
+- outcome refresh bulk-upserting replay outcomes without per-row commits
+- outcome refresh `--limit` and profiling artifacts for controlled batch repair runs
 - replay bar coverage diagnostics distinguishing current-session, pre-cache, internal-gap, ticker-missing, and loader-limit cases
 - replay outcome refresh using plan-horizon/latest-complete cached-session cutoffs instead of wall-clock `now`
 - bounded 1m replay windows returning complete ranges beyond 2,000 rows

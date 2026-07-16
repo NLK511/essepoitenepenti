@@ -51,6 +51,75 @@ class ReplayPlanOutcomeRepository:
         self.session.refresh(record)
         return self._to_dict(record)
 
+    def bulk_upsert_outcomes(self, items: list[dict[str, Any]], *, commit: bool = True) -> int:
+        if not items:
+            return 0
+        now = datetime.now(timezone.utc)
+        records: list[dict[str, Any]] = []
+        for item in items:
+            outcome = item["outcome"]
+            evaluated_at = self._dt(outcome.evaluated_at) or now
+            records.append(
+                {
+                    "replay_batch_id": int(item["replay_batch_id"]),
+                    "replay_slice_id": int(item["replay_slice_id"]),
+                    "run_id": item.get("run_id"),
+                    "recommendation_plan_id": int(item["recommendation_plan_id"]),
+                    "candidate_config_hash": item.get("candidate_config_hash") or "",
+                    "resolution_source": str(item.get("resolution_source") or ""),
+                    "outcome": outcome.outcome,
+                    "status": outcome.status,
+                    "evaluated_at": evaluated_at,
+                    "outcome_json": json.dumps(outcome.model_dump(mode="json"), sort_keys=True),
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+
+        dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
+        table = ReplayPlanOutcomeRecord.__table__
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            stmt = pg_insert(table).values(records)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["replay_slice_id", "recommendation_plan_id", "candidate_config_hash"],
+                set_={
+                    "replay_batch_id": stmt.excluded.replay_batch_id,
+                    "run_id": stmt.excluded.run_id,
+                    "resolution_source": stmt.excluded.resolution_source,
+                    "outcome": stmt.excluded.outcome,
+                    "status": stmt.excluded.status,
+                    "evaluated_at": stmt.excluded.evaluated_at,
+                    "outcome_json": stmt.excluded.outcome_json,
+                    "updated_at": now,
+                },
+            )
+            result = self.session.execute(stmt)
+            if commit:
+                self.session.commit()
+            return int(result.rowcount or 0)
+
+        count = 0
+        for record in records:
+            existing = self.session.scalar(
+                select(ReplayPlanOutcomeRecord).where(
+                    ReplayPlanOutcomeRecord.replay_slice_id == record["replay_slice_id"],
+                    ReplayPlanOutcomeRecord.recommendation_plan_id == record["recommendation_plan_id"],
+                    ReplayPlanOutcomeRecord.candidate_config_hash == record["candidate_config_hash"],
+                )
+            )
+            if existing is None:
+                self.session.add(ReplayPlanOutcomeRecord(**record))
+            else:
+                for key, value in record.items():
+                    if key != "created_at":
+                        setattr(existing, key, value)
+            count += 1
+        if commit:
+            self.session.commit()
+        return count
+
     def list_for_slice(self, replay_slice_id: int) -> list[dict[str, Any]]:
         rows = self.session.scalars(
             select(ReplayPlanOutcomeRecord)

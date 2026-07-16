@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -7,7 +9,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.persistence.models import ReplayPlanOutcomeRecord
+from trade_proposer_app.domain.models import RecommendationPlan
+from trade_proposer_app.persistence.models import RecommendationPlanRecord, ReplayPlanOutcomeRecord
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.replay_plan_outcomes import ReplayPlanOutcomeRepository
 from trade_proposer_app.services.input_access import input_policy_allows_remote_fetch, normalize_input_access_policy
@@ -27,6 +30,7 @@ class ReplayOutcomeRefreshSummary:
     after_outcome_counts: dict[str, int]
     price_error_count: int
     eligibility_reclassification: dict[str, object] | None
+    timing_seconds: dict[str, float]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -39,6 +43,7 @@ class ReplayOutcomeRefreshSummary:
             "after_outcome_counts": self.after_outcome_counts,
             "price_error_count": self.price_error_count,
             "eligibility_reclassification": self.eligibility_reclassification,
+            "timing_seconds": self.timing_seconds,
         }
 
 
@@ -59,7 +64,17 @@ class ReplayOutcomeRefreshService:
         input_access_policy: str = "cache_only",
         resolution_sources: set[str] | None = None,
         resolution_as_of_mode: str = "plan_horizon",
+        limit: int | None = None,
+        profile: bool = False,
+        bulk_chunk_size: int = 500,
     ) -> ReplayOutcomeRefreshSummary:
+        timings: dict[str, float] = {}
+
+        def timed(stage: str, started_at: float) -> None:
+            if profile:
+                timings[stage] = round(time.perf_counter() - started_at, 6)
+
+        stage_started = time.perf_counter()
         policy = normalize_input_access_policy(input_access_policy, default="cache_only")
         allow_remote_fetch = input_policy_allows_remote_fetch(policy)
         source_filter = {str(item).strip() for item in resolution_sources or set() if str(item).strip()}
@@ -72,35 +87,41 @@ class ReplayOutcomeRefreshService:
             query = query.where(ReplayPlanOutcomeRecord.status != "resolved")
         if source_filter:
             query = query.where(ReplayPlanOutcomeRecord.resolution_source.in_(source_filter))
+        if limit is not None:
+            query = query.limit(max(1, int(limit)))
         rows = self.session.scalars(query).all()
+        timed("row_selection", stage_started)
+        stage_started = time.perf_counter()
         before_status = Counter(str(row.status or "") for row in rows)
         before_outcomes = Counter(str(row.outcome or "") for row in rows)
-        plans = []
-        row_by_plan_id: dict[int, ReplayPlanOutcomeRecord] = {}
-        for row in rows:
-            try:
-                plan = self.plans.get_plan(row.recommendation_plan_id)
-            except ValueError:
-                continue
-            plans.append(plan)
-            row_by_plan_id[plan.id or 0] = row
+        plans_by_id = self._load_refresh_plans(rows)
+        plan_row_pairs = [
+            (plans_by_id[row.recommendation_plan_id], row)
+            for row in rows
+            if row.recommendation_plan_id in plans_by_id
+        ]
+        plans = [plan for plan, _ in plan_row_pairs]
+        timed("plan_loading", stage_started)
+        stage_started = time.perf_counter()
         resolution_as_of = self._resolve_as_of(
             plans,
             explicit_as_of=as_of,
             mode=resolution_as_of_mode,
         )
+        timed("as_of_resolution", stage_started)
+        stage_started = time.perf_counter()
         price_history_cache, price_errors = self.evaluator._prepare_price_histories(  # noqa: SLF001
             plans,
             as_of=resolution_as_of,
             allow_remote_fetch=allow_remote_fetch,
         )
+        timed("price_history_preparation", stage_started)
+        stage_started = time.perf_counter()
         refreshed = 0
         after_status: Counter[str] = Counter()
         after_outcomes: Counter[str] = Counter()
-        for plan in plans:
-            row = row_by_plan_id.get(plan.id or 0)
-            if row is None:
-                continue
+        bulk_items: list[dict[str, object]] = []
+        for plan, row in plan_row_pairs:
             ticker = (plan.ticker or "").strip().upper()
             daily_data = price_history_cache.get((ticker, False))
             intraday_data = price_history_cache.get((ticker, True))
@@ -111,24 +132,34 @@ class ReplayOutcomeRefreshService:
                 run_id=row.run_id,
                 as_of=resolution_as_of,
             )
-            stored = self.replay_outcomes.upsert_outcome(
-                replay_batch_id=row.replay_batch_id,
-                replay_slice_id=row.replay_slice_id,
-                run_id=row.run_id,
-                recommendation_plan_id=row.recommendation_plan_id,
-                candidate_config_hash=row.candidate_config_hash,
-                resolution_source=source_mode,
-                outcome=outcome,
+            bulk_items.append(
+                {
+                    "replay_batch_id": row.replay_batch_id,
+                    "replay_slice_id": row.replay_slice_id,
+                    "run_id": row.run_id,
+                    "recommendation_plan_id": row.recommendation_plan_id,
+                    "candidate_config_hash": row.candidate_config_hash,
+                    "resolution_source": source_mode,
+                    "outcome": outcome,
+                }
             )
             refreshed += 1
-            after_status[str(stored.get("status") or "")] += 1
-            after_outcomes[str(stored.get("outcome") or "")] += 1
+            after_status[str(outcome.status or "")] += 1
+            after_outcomes[str(outcome.outcome or "")] += 1
+        timed("outcome_resolution", stage_started)
+        stage_started = time.perf_counter()
+        chunk_size = max(1, int(bulk_chunk_size))
+        for index in range(0, len(bulk_items), chunk_size):
+            self.replay_outcomes.bulk_upsert_outcomes(bulk_items[index : index + chunk_size])
+        timed("outcome_persistence", stage_started)
         reclassification = None
         if reclassify:
+            stage_started = time.perf_counter()
             reclassification = ReplayEligibilityReclassificationService(self.session).reclassify_batch(
                 replay_batch_id,
                 input_access_policy=policy,
             ).to_dict()
+            timed("eligibility_reclassification", stage_started)
         return ReplayOutcomeRefreshSummary(
             replay_batch_id=replay_batch_id,
             selected_outcome_count=len(rows),
@@ -139,7 +170,57 @@ class ReplayOutcomeRefreshService:
             after_outcome_counts=dict(after_outcomes),
             price_error_count=len(price_errors),
             eligibility_reclassification=reclassification,
+            timing_seconds=timings,
         )
+
+    def _load_refresh_plans(self, rows: list[ReplayPlanOutcomeRecord]) -> dict[int, RecommendationPlan]:
+        plan_ids = sorted({row.recommendation_plan_id for row in rows})
+        if not plan_ids:
+            return {}
+        records = self.session.scalars(
+            select(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids))
+        ).all()
+        return {record.id: self._plan_from_record(record) for record in records if record.id is not None}
+
+    @classmethod
+    def _plan_from_record(cls, record: RecommendationPlanRecord) -> RecommendationPlan:
+        return RecommendationPlan(
+            id=record.id,
+            ticker=record.ticker,
+            horizon=record.horizon,
+            action=record.action,
+            status=record.status,
+            confidence_percent=record.confidence_percent,
+            entry_price_low=record.entry_price_low,
+            entry_price_high=record.entry_price_high,
+            stop_loss=record.stop_loss,
+            take_profit=record.take_profit,
+            holding_period_days=record.holding_period_days,
+            risk_reward_ratio=record.risk_reward_ratio,
+            thesis_summary=record.thesis_summary,
+            rationale_summary=record.rationale_summary,
+            risks=cls._load_json(record.risks_json, []),
+            warnings=cls._load_json(record.warnings_json, []),
+            missing_inputs=cls._load_json(record.missing_inputs_json, []),
+            evidence_summary=cls._load_json(record.evidence_summary_json, {}),
+            signal_breakdown=cls._load_json(record.signal_breakdown_json, {}),
+            trade_policy_id=record.trade_policy_id,
+            trade_policy_snapshot=cls._load_json(record.trade_policy_snapshot_json, {}),
+            computed_at=record.computed_at,
+            run_id=record.run_id,
+            job_id=record.job_id,
+            watchlist_id=record.watchlist_id,
+            ticker_signal_snapshot_id=record.ticker_signal_snapshot_id,
+        )
+
+    @staticmethod
+    def _load_json(value: str | None, default: object) -> object:
+        if not value:
+            return default
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return default
 
     @staticmethod
     def _normalize(value: datetime) -> datetime:

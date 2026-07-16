@@ -207,16 +207,29 @@ class PlanResolutionEngine:
     def resolve_exit(self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
         stop_buffer = self.config.stop_buffer_pct / 100.0
         take_buffer = self.config.take_profit_buffer_pct / 100.0
-        for timestamp, row in data.iterrows():
-            row_high = self.float_or_none(row.get("High"))
-            row_low = self.float_or_none(row.get("Low"))
-            if row_high is None or row_low is None:
-                continue
-            stop_hit = self.check_stop_with_buffer(effective_action, row_high, row_low, plan.stop_loss, stop_buffer)
-            take_hit = self.check_take_with_buffer(effective_action, row_high, row_low, plan.take_profit, take_buffer)
-            if stop_hit or take_hit:
-                return stop_hit, take_hit, self.normalize_datetime(timestamp)
-        return False, False, None
+        highs = pd.to_numeric(data.get("High"), errors="coerce")
+        lows = pd.to_numeric(data.get("Low"), errors="coerce")
+        stop_hits = pd.Series(False, index=data.index)
+        take_hits = pd.Series(False, index=data.index)
+        if plan.stop_loss is not None:
+            stop = float(plan.stop_loss)
+            buffer = stop * stop_buffer
+            if effective_action == "long":
+                stop_hits = lows <= (stop + buffer)
+            elif effective_action == "short":
+                stop_hits = highs >= (stop - buffer)
+        if plan.take_profit is not None:
+            take = float(plan.take_profit)
+            buffer = take * take_buffer
+            if effective_action == "long":
+                take_hits = highs >= (take + buffer)
+            elif effective_action == "short":
+                take_hits = lows <= (take - buffer)
+        decisive = (stop_hits | take_hits).to_numpy().nonzero()[0]
+        if not len(decisive):
+            return False, False, None
+        position = int(decisive[0])
+        return bool(stop_hits.iloc[position]), bool(take_hits.iloc[position]), self.normalize_datetime(data.index[position])
 
     @staticmethod
     def _setup_family(plan: RecommendationPlan) -> str:
@@ -249,13 +262,12 @@ class PlanResolutionEngine:
         high = float(plan.entry_price_high if plan.entry_price_high is not None else plan.entry_price_low or 0.0)
         if high < low:
             low, high = high, low
-        for index, (_, row) in enumerate(data.iterrows()):
-            row_high = cls.float_or_none(row.get("High"))
-            row_low = cls.float_or_none(row.get("Low"))
-            if row_high is None or row_low is None:
-                continue
-            if row_low <= high and row_high >= low:
-                return index
+        highs = pd.to_numeric(data.get("High"), errors="coerce")
+        lows = pd.to_numeric(data.get("Low"), errors="coerce")
+        touched = (lows <= high) & (highs >= low)
+        positions = touched.to_numpy().nonzero()[0]
+        if len(positions):
+            return int(positions[0])
         return None
 
     @staticmethod
@@ -297,24 +309,20 @@ class PlanResolutionEngine:
         if data.empty or entry_reference <= 0:
             return None
         if effective_action == "short":
-            values = [cls.float_or_none(row.get("Low")) for _, row in data.iterrows()]
-            numeric = [value for value in values if value is not None]
-            return None if not numeric else round(((entry_reference - min(numeric)) / entry_reference) * 100.0, 4)
-        values = [cls.float_or_none(row.get("High")) for _, row in data.iterrows()]
-        numeric = [value for value in values if value is not None]
-        return None if not numeric else round(((max(numeric) - entry_reference) / entry_reference) * 100.0, 4)
+            values = pd.to_numeric(data.get("Low"), errors="coerce").dropna()
+            return None if values.empty else round(((entry_reference - float(values.min())) / entry_reference) * 100.0, 4)
+        values = pd.to_numeric(data.get("High"), errors="coerce").dropna()
+        return None if values.empty else round(((float(values.max()) - entry_reference) / entry_reference) * 100.0, 4)
 
     @classmethod
     def max_adverse_excursion(cls, effective_action: str, data: pd.DataFrame, entry_reference: float) -> float | None:
         if data.empty or entry_reference <= 0:
             return None
         if effective_action == "short":
-            values = [cls.float_or_none(row.get("High")) for _, row in data.iterrows()]
-            numeric = [value for value in values if value is not None]
-            return None if not numeric else round(((max(numeric) - entry_reference) / entry_reference) * 100.0, 4)
-        values = [cls.float_or_none(row.get("Low")) for _, row in data.iterrows()]
-        numeric = [value for value in values if value is not None]
-        return None if not numeric else round(((entry_reference - min(numeric)) / entry_reference) * 100.0, 4)
+            values = pd.to_numeric(data.get("High"), errors="coerce").dropna()
+            return None if values.empty else round(((float(values.max()) - entry_reference) / entry_reference) * 100.0, 4)
+        values = pd.to_numeric(data.get("Low"), errors="coerce").dropna()
+        return None if values.empty else round(((entry_reference - float(values.min())) / entry_reference) * 100.0, 4)
 
     @staticmethod
     def entry_zone_bounds(plan: RecommendationPlan) -> tuple[float, float] | None:
@@ -334,19 +342,18 @@ class PlanResolutionEngine:
         if bounds is None:
             return None
         low, high = bounds
-        closest_distance: float | None = None
-        for _, row in data.iterrows():
-            row_high = cls.float_or_none(row.get("High"))
-            row_low = cls.float_or_none(row.get("Low"))
-            if row_high is None or row_low is None:
-                continue
-            if row_low <= high and row_high >= low:
-                return 0.0
-            distance = low - row_high if row_high < low else row_low - high if row_low > high else 0.0
-            if closest_distance is None or distance < closest_distance:
-                closest_distance = distance
-        if closest_distance is None:
+        highs = pd.to_numeric(data.get("High"), errors="coerce")
+        lows = pd.to_numeric(data.get("Low"), errors="coerce")
+        valid = highs.notna() & lows.notna()
+        if not bool(valid.any()):
             return None
+        if bool(((lows <= high) & (highs >= low) & valid).any()):
+            return 0.0
+        distances = (low - highs).where(highs < low, (lows - high).where(lows > high, 0.0))
+        distances = distances[valid].dropna()
+        if distances.empty:
+            return None
+        closest_distance = float(distances.min())
         return round((closest_distance / entry_reference) * 100.0, 4)
 
     @staticmethod
@@ -362,24 +369,21 @@ class PlanResolutionEngine:
         if normalized_start is None:
             return pd.DataFrame(columns=data.columns)
         if "available_at" in data.columns:
-            normalized_available = data["available_at"].apply(cls.normalize_datetime)
-            mask = normalized_available.map(lambda value: value is not None and value >= normalized_start)
+            normalized_available = pd.to_datetime(data["available_at"], utc=True, errors="coerce")
+            mask = normalized_available >= pd.Timestamp(normalized_start)
             rows = data.loc[mask]
             if not rows.empty:
                 return rows
             if not intraday_only:
-                date_mask = data.index.map(
-                    lambda timestamp: (
-                        (normalized_timestamp := cls.normalize_datetime(timestamp)) is not None
-                        and normalized_timestamp.date() >= normalized_start.date()
-                    )
-                )
+                normalized_index = pd.to_datetime(data.index, utc=True, errors="coerce")
+                date_mask = normalized_index.date >= normalized_start.date()
                 fallback_rows = data.loc[date_mask]
                 if not fallback_rows.empty:
                     return fallback_rows
             return pd.DataFrame(columns=data.columns)
-        indexes = [timestamp for timestamp, _ in data.iterrows() if (normalized := cls.normalize_datetime(timestamp)) is not None and normalized >= normalized_start]
-        return data.loc[indexes] if indexes else pd.DataFrame(columns=data.columns)
+        normalized_index = pd.to_datetime(data.index, utc=True, errors="coerce")
+        rows = data.loc[normalized_index >= pd.Timestamp(normalized_start)]
+        return rows if not rows.empty else pd.DataFrame(columns=data.columns)
 
     @classmethod
     def last_timestamp(cls, data: pd.DataFrame) -> datetime | None:
