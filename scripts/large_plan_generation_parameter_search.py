@@ -88,6 +88,10 @@ class SearchResult:
     validation_win_count: int
     validation_expected_value: float
     validation_ambiguous_count: int
+    search_research_plan_count: int = 0
+    search_shadow_observation_count: int = 0
+    validation_research_plan_count: int = 0
+    validation_shadow_observation_count: int = 0
     stage: str = "legacy_discovery"
     stability_eligible: bool = True
     stability: dict[str, object] | None = None
@@ -132,11 +136,15 @@ class SearchResult:
             "search_win_rate_percent": round(self.search_win_rate * 100.0, 2),
             "search_expected_value": round(self.search_expected_value, 4),
             "search_ambiguous_count": self.search_ambiguous_count,
+            "search_research_plan_count": self.search_research_plan_count,
+            "search_shadow_observation_count": self.search_shadow_observation_count,
             "validation_actionable_count": self.validation_actionable_count,
             "validation_win_count": self.validation_win_count,
             "validation_win_rate_percent": round(self.validation_win_rate * 100.0, 2),
             "validation_expected_value": round(self.validation_expected_value, 4),
             "validation_ambiguous_count": self.validation_ambiguous_count,
+            "validation_research_plan_count": self.validation_research_plan_count,
+            "validation_shadow_observation_count": self.validation_shadow_observation_count,
             "stability_eligible": self.stability_eligible,
             "stability": self.stability,
             "holdout": self.holdout,
@@ -154,7 +162,7 @@ class LoadedResumeCache:
 
 
 class ResumeCache:
-    schema_version = 2
+    schema_version = 3
 
     def __init__(self, path: Path, metadata: dict[str, object]) -> None:
         self.path = path
@@ -548,14 +556,24 @@ def evaluate_stream(
         search_actionable, search_win, search_ev, search_ambiguous = service._score_records(  # noqa: SLF001
             search_records, config
         )
+        search_research, search_shadow = _research_shadow_counts(
+            service,
+            search_records, config
+        )
         if search_records is validation_records:
             validation_actionable = search_actionable
             validation_win = search_win
             validation_ev = search_ev
             validation_ambiguous = search_ambiguous
+            validation_research = search_research
+            validation_shadow = search_shadow
         else:
             validation_actionable, validation_win, validation_ev, validation_ambiguous = (
                 service._score_records(validation_records, config)  # noqa: SLF001
+            )
+            validation_research, validation_shadow = _research_shadow_counts(
+                service,
+                validation_records, config
             )
         result = SearchResult(
             phase=phase,
@@ -570,6 +588,10 @@ def evaluate_stream(
             validation_win_count=validation_win,
             validation_expected_value=validation_ev,
             validation_ambiguous_count=validation_ambiguous,
+            search_research_plan_count=search_research,
+            search_shadow_observation_count=search_shadow,
+            validation_research_plan_count=validation_research,
+            validation_shadow_observation_count=validation_shadow,
             campaign=campaign,
         )
         if config == active_config:
@@ -590,6 +612,17 @@ def evaluate_stream(
             gc.collect()
             service._memory_guard(stage=f"large-search-{stage}-{evaluated}")  # noqa: SLF001
     return _ensure_baseline(top, baseline_result, top_k=top_k), evaluated
+
+
+def _research_shadow_counts(
+    service: PlanGenerationTuningService,
+    records: Sequence,
+    config: dict[str, float],
+) -> tuple[int, int]:
+    counter = getattr(service, "_research_shadow_counts", None)
+    if counter is None:
+        return 0, 0
+    return counter(records, config)
 
 
 def _evaluate_stability_stage(
@@ -628,6 +661,7 @@ def _evaluate_stability_stage(
             min_fold_actionable=min_fold_actionable,
         )
         aggregate = stability.candidate
+        research_count, shadow_count = _research_shadow_counts(service, records, config)
         result = SearchResult(
             phase=stage,
             stage=stage,
@@ -641,6 +675,10 @@ def _evaluate_stability_stage(
             validation_win_count=aggregate.win_count,
             validation_expected_value=aggregate.expected_value_total,
             validation_ambiguous_count=aggregate.ambiguous_count,
+            search_research_plan_count=research_count,
+            search_shadow_observation_count=shadow_count,
+            validation_research_plan_count=research_count,
+            validation_shadow_observation_count=shadow_count,
             stability_eligible=stability.stable or config == active_config,
             stability=stability.payload(include_dates=False),
             campaign=campaign,
@@ -711,6 +749,7 @@ def _evaluate_walk_forward_stage(
         )
         stability = summary.model_dump(mode="json")
         stability["stable"] = eligible
+        research_count, shadow_count = _research_shadow_counts(service, records, config)
         result = SearchResult(
             phase="selection_walk_forward",
             stage="selection_walk_forward",
@@ -724,6 +763,10 @@ def _evaluate_walk_forward_stage(
             validation_win_count=wins,
             validation_expected_value=expected_value,
             validation_ambiguous_count=ambiguous,
+            search_research_plan_count=research_count,
+            search_shadow_observation_count=shadow_count,
+            validation_research_plan_count=research_count,
+            validation_shadow_observation_count=shadow_count,
             stability_eligible=eligible,
             stability=stability,
             campaign=campaign,
@@ -1011,7 +1054,7 @@ def run_large_parameter_search(
         "campaign_max_changed_keys": CAMPAIGN_MAX_CHANGED_KEYS[search_campaign],
     }
     cache_metadata = {
-        "schema_version": 2,
+        "schema_version": 3,
         "baseline_config_version_id": baseline_version.id,
         "baseline_config_hash": _fingerprint(active_config),
         "partitions": partitions.payload(),
@@ -1219,7 +1262,7 @@ def run_large_parameter_search(
         },
     }
     artifact: dict[str, object] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": datetime.now(UTC).isoformat(),
         "run_role": "research_only",
         "promotion_capable": False,

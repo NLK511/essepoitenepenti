@@ -391,7 +391,7 @@ def test_staged_search_bounds_expensive_survivors_and_keeps_partitions_disjoint(
             stability_panel_dates=24,
         )
 
-    assert artifact["schema_version"] == 2
+    assert artifact["schema_version"] == 3
     assert artifact["promotion_capable"] is False
     assert artifact["objective_profile"] == "research_ev_per_trade"
     assert artifact["min_actionable_mode"] == "hard_gate"
@@ -400,6 +400,8 @@ def test_staged_search_bounds_expensive_survivors_and_keeps_partitions_disjoint(
     assert artifact["stages"]["broad_discovery"]["survivor_count"] <= 4
     assert artifact["stages"]["stability_screen"]["survivor_count"] <= 3
     assert len(artifact["top_candidates"]) <= 2
+    assert "validation_research_plan_count" in artifact["top_candidates"][0]
+    assert "validation_shadow_observation_count" in artifact["top_candidates"][0]
     partitions = artifact["partitions"]
     date_sets = [
         set(partitions[name]["evidence_dates"])
