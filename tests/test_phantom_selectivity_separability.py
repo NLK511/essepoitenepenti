@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from trade_proposer_app.services.phantom_selectivity_separability import (
+    PhantomSelectivityCandidateReplayGates,
     PhantomSelectivityObservation,
     PhantomSelectivitySeparabilityGates,
+    build_phantom_selectivity_candidate_replay_report,
     build_phantom_selectivity_separability_report,
 )
 
@@ -109,3 +111,53 @@ def test_phantom_separability_reports_thin_evidence_before_making_a_stop_call() 
     assert report["verdict"] == "thin_evidence"
     assert "phantom_sample_below_minimum" in report["blockers"]
 
+
+def test_candidate_replay_reports_promotion_ready_when_group_has_enough_selection_dates() -> None:
+    start = date(2026, 1, 1)
+    rows: list[PhantomSelectivityObservation] = []
+    for index in range(50):
+        day = start + timedelta(days=index)
+        for _ in range(5):
+            rows.append(_obs(day=day, outcome="phantom_win", ticker="PANW"))
+        rows.append(_obs(day=day, outcome="phantom_loss", ticker="PANW"))
+        for _ in range(3):
+            rows.append(_obs(day=day, outcome="phantom_loss", ticker="LOWQ"))
+            rows.append(_obs(day=day, outcome="phantom_win", ticker="LOWQ"))
+
+    report = build_phantom_selectivity_candidate_replay_report(
+        rows,
+        [{"feature": "ticker", "value": "panw"}],
+        min_selection_dates=20,
+        gates=PhantomSelectivityCandidateReplayGates(
+            min_selection_rows=50,
+            min_selection_dates=20,
+        ),
+    )
+
+    assert report["verdict"] == "promotion_candidate_ready"
+    assert report["promotion_candidate_ready"] is True
+    assert report["combined_union"]["promotion_ready"] is True
+
+
+def test_candidate_replay_stays_research_only_when_selection_dates_are_too_thin() -> None:
+    start = date(2026, 1, 1)
+    rows: list[PhantomSelectivityObservation] = []
+    for index in range(20):
+        day = start + timedelta(days=index)
+        for _ in range(5):
+            rows.append(_obs(day=day, outcome="phantom_win", ticker="PANW"))
+        rows.append(_obs(day=day, outcome="phantom_loss", ticker="PANW"))
+
+    report = build_phantom_selectivity_candidate_replay_report(
+        rows,
+        [{"feature": "ticker", "value": "panw"}],
+        min_selection_dates=5,
+        gates=PhantomSelectivityCandidateReplayGates(
+            min_selection_rows=20,
+            min_selection_dates=20,
+        ),
+    )
+
+    assert report["verdict"] == "research_candidate_only"
+    assert report["promotion_candidate_ready"] is False
+    assert "selection_dates_below_promotion_minimum" in report["combined_union"]["promotion_blockers"]

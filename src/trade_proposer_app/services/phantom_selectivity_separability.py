@@ -51,6 +51,22 @@ class PhantomSelectivitySeparabilityGates:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class PhantomSelectivityCandidateReplayGates:
+    min_selection_rows: int = 100
+    min_selection_dates: int = 20
+    min_selection_ev_per_observation: float = 0.0
+    min_selection_win_rate_lift_pct: float = 0.0
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "min_selection_rows": self.min_selection_rows,
+            "min_selection_dates": self.min_selection_dates,
+            "min_selection_ev_per_observation": self.min_selection_ev_per_observation,
+            "min_selection_win_rate_lift_pct": self.min_selection_win_rate_lift_pct,
+        }
+
+
 FEATURE_NAMES: tuple[str, ...] = (
     "setup_family",
     "ticker",
@@ -190,6 +206,142 @@ def build_phantom_selectivity_separability_report(
         "feature_summaries": feature_summaries,
         "recommendation": _recommendation(verdict),
     }
+
+
+def build_phantom_selectivity_candidate_replay_report(
+    observations: list[PhantomSelectivityObservation],
+    candidate_groups: list[dict[str, object]],
+    *,
+    min_selection_dates: int = 10,
+    selection_date_fraction: float = 0.25,
+    gates: PhantomSelectivityCandidateReplayGates | None = None,
+    generated_at: datetime | None = None,
+) -> dict[str, object]:
+    gates = gates or PhantomSelectivityCandidateReplayGates()
+    rows = [
+        item
+        for item in observations
+        if item.outcome in {"phantom_win", "phantom_loss"}
+        and item.reward_pct > 0
+        and item.risk_pct > 0
+    ]
+    rows.sort(key=lambda item: (item.evidence_date, item.ticker, item.setup_family))
+    all_dates = sorted({item.evidence_date for item in rows})
+    discovery_dates, selection_dates = _chronological_split_dates(
+        all_dates,
+        min_selection_dates=min_selection_dates,
+        selection_date_fraction=selection_date_fraction,
+    )
+    discovery_rows = [item for item in rows if item.evidence_date in discovery_dates]
+    selection_rows = [item for item in rows if item.evidence_date in selection_dates]
+    discovery_baseline = _metric_payload(discovery_rows)
+    selection_baseline = _metric_payload(selection_rows)
+    group_results: list[dict[str, object]] = []
+    selected_union_keys: set[tuple[date, str, str, float, float, str]] = set()
+    for index, group in enumerate(candidate_groups, start=1):
+        feature = str(group.get("feature") or "")
+        value = str(group.get("value") or "")
+        if feature not in FEATURE_NAMES or not value:
+            continue
+        selected = [item for item in rows if _feature_value(item, feature) == value]
+        for item in selected:
+            selected_union_keys.add(_observation_key(item))
+        result = _candidate_replay_payload(
+            selected,
+            discovery_dates=discovery_dates,
+            selection_dates=selection_dates,
+            selection_baseline=selection_baseline,
+            gates=gates,
+        )
+        result.update({"rank": index, "feature": feature, "value": value})
+        group_results.append(result)
+
+    union_rows = [item for item in rows if _observation_key(item) in selected_union_keys]
+    union_result = _candidate_replay_payload(
+        union_rows,
+        discovery_dates=discovery_dates,
+        selection_dates=selection_dates,
+        selection_baseline=selection_baseline,
+        gates=gates,
+    )
+    promotion_ready = bool(union_result["promotion_ready"]) or any(
+        bool(item["promotion_ready"]) for item in group_results
+    )
+    verdict = "promotion_candidate_ready" if promotion_ready else "research_candidate_only"
+    return {
+        "schema_version": "phantom-selectivity-candidate-replay-v1",
+        "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
+        "verdict": verdict,
+        "promotion_candidate_ready": promotion_ready,
+        "should_continue_threshold_search": False,
+        "gates": gates.payload(),
+        "record_counts": {
+            "total": len(rows),
+            "discovery": len(discovery_rows),
+            "selection": len(selection_rows),
+        },
+        "date_counts": {
+            "total": len(all_dates),
+            "discovery": len(discovery_dates),
+            "selection": len(selection_dates),
+        },
+        "baselines": {
+            "discovery": discovery_baseline,
+            "selection": selection_baseline,
+        },
+        "candidate_group_count": len(group_results),
+        "candidate_groups": group_results,
+        "combined_union": union_result,
+        "recommendation": _candidate_replay_recommendation(verdict),
+    }
+
+
+def _candidate_replay_payload(
+    rows: list[PhantomSelectivityObservation],
+    *,
+    discovery_dates: set[date],
+    selection_dates: set[date],
+    selection_baseline: dict[str, object],
+    gates: PhantomSelectivityCandidateReplayGates,
+) -> dict[str, object]:
+    discovery_rows = [item for item in rows if item.evidence_date in discovery_dates]
+    selection_rows = [item for item in rows if item.evidence_date in selection_dates]
+    discovery = _metric_payload(discovery_rows)
+    selection = _metric_payload(selection_rows)
+    selection_lift = (
+        float(selection["win_rate_percent"])
+        - float(selection_baseline["win_rate_percent"])
+    )
+    blockers: list[str] = []
+    if int(selection["count"]) < gates.min_selection_rows:
+        blockers.append("selection_rows_below_promotion_minimum")
+    if int(selection["distinct_date_count"]) < gates.min_selection_dates:
+        blockers.append("selection_dates_below_promotion_minimum")
+    if (
+        float(selection["expected_value_per_observation"])
+        <= gates.min_selection_ev_per_observation
+    ):
+        blockers.append("selection_ev_per_observation_not_positive")
+    if selection_lift < gates.min_selection_win_rate_lift_pct:
+        blockers.append("selection_win_rate_lift_below_minimum")
+    return {
+        "discovery": discovery,
+        "selection": selection,
+        "selection_win_rate_lift_pct": round(selection_lift, 4),
+        "promotion_ready": not blockers,
+        "promotion_blockers": sorted(set(blockers)),
+    }
+
+
+def _observation_key(item: PhantomSelectivityObservation) -> tuple[date, str, str, float, float, str]:
+    return (
+        item.evidence_date,
+        item.ticker,
+        item.setup_family,
+        round(item.confidence_percent, 6),
+        round(item.reward_pct, 6),
+        item.outcome,
+    )
 
 
 def _chronological_split_dates(
@@ -337,3 +489,16 @@ def _recommendation(verdict: str) -> str:
             "Improve upstream signal features before tuning this layer again."
         )
     return "Collect or repair more phantom replay evidence before making a tuning call."
+
+
+def _candidate_replay_recommendation(verdict: str) -> str:
+    if verdict == "promotion_candidate_ready":
+        return (
+            "Create a DB-backed candidate-hash replay for the passing policy and run "
+            "promotion-grade preflight before any setting change."
+        )
+    return (
+        "Do not run more broad threshold searches. Treat the passing groups as "
+        "research-only until more candidate replay dates are available or upstream "
+        "signal generation changes."
+    )

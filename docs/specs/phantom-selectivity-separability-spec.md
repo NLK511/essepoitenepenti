@@ -52,3 +52,27 @@ Default gates:
 - discovery win-rate lift over global discovery baseline: at least 0 percentage points
 - selection win-rate lift over global selection baseline: at least 5 percentage points
 - selection expected value per observation: greater than 0
+
+## Candidate policy replay
+
+When separability recommends candidate replay, the replay must evaluate concrete group rules from the separability artifact. This is still read-only until a later operator-approved persistence step.
+
+For selectivity candidates, replay means: take only intraday `phantom_win` and `phantom_loss` rows selected by a candidate group, treat them as rows the candidate policy would have emitted, and score them as closed candidate outcomes using the stored intraday-resolved trade geometry. This does not rerun cheap scan, deep analysis, or broker execution.
+
+The replay artifact must include:
+
+- one result per candidate group;
+- one combined union result across candidate groups;
+- discovery and selection metrics;
+- selected-row counts and distinct-date counts;
+- expected value from stored reward/risk geometry;
+- a promotion-readiness verdict.
+
+Promotion readiness requires:
+
+- selection rows: at least 100
+- selection distinct dates: at least 20
+- selection expected value per observation: greater than 0
+- selection win rate above the selection baseline from the separability artifact
+
+If these gates fail, the result is a research candidate only. The next step is either more candidate replay dates/evidence or upstream signal improvement, not another broad threshold search.
