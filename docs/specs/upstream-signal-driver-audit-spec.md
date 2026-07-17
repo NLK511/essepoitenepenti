@@ -80,3 +80,33 @@ If the verdict is `upstream_feature_lead`, the next work is to inspect or improv
 If the verdict is `ticker_artifact_only`, the next work is not another tuning search. It is ticker-specific upstream diagnosis for the passing tickers.
 
 If the verdict is `insufficient_feature_coverage`, the next work is instrumentation: persist the missing signal features consistently before trying more optimization.
+
+## Driver drilldown
+
+When the audit returns `upstream_feature_lead`, the next artifact must drill into concrete feature/value drivers instead of creating new search knobs.
+
+The drilldown must:
+
+- use the upstream audit artifact as input;
+- use the same candidate groups from the separability artifact;
+- inspect concrete feature/value drivers from `top_reusable_candidate_win_loss_drivers` by default;
+- report driver metrics, ticker concentration, setup/context/action mix, transmission tag mix, and date spread;
+- include compact example rows for phantom wins and phantom losses;
+- include enough raw signal fields to explain why the row belongs to the driver without dumping the entire plan payload;
+- classify each driver as reusable, ticker-concentrated, or thin.
+
+Driver drilldown verdicts:
+
+- `reusable_driver_leads` — at least one driver has enough rows, enough dates, positive expected value, and is not dominated by one ticker.
+- `ticker_concentrated_driver_leads` — drivers are positive but mostly explained by one ticker.
+- `thin_driver_evidence` — drivers do not have enough rows or dates for a useful upstream-quality read.
+
+Default driver gates:
+
+- driver rows: at least 30
+- driver distinct dates: at least 5
+- driver tickers: at least 5 to be considered reusable
+- driver expected value per observation: greater than 0
+- maximum single ticker share for reusable status: 50 percent
+
+The drilldown is still read-only. A passing drilldown does not promote a tuning policy. It only identifies the upstream signal-generation code paths worth inspecting or changing.

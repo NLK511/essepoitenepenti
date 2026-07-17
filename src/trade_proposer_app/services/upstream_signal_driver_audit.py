@@ -15,6 +15,7 @@ from trade_proposer_app.services.phantom_selectivity_separability import (
 class UpstreamSignalDriverObservation:
     base: PhantomSelectivityObservation
     signal_breakdown: dict[str, object] = field(default_factory=dict)
+    plan_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,24 @@ class UpstreamSignalDriverAuditGates:
             "min_reusable_feature_coverage_percent": self.min_reusable_feature_coverage_percent,
             "min_feature_win_rate_lift_pct": self.min_feature_win_rate_lift_pct,
             "min_feature_ev_per_observation": self.min_feature_ev_per_observation,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class UpstreamSignalDriverDrilldownGates:
+    min_driver_rows: int = 30
+    min_driver_dates: int = 5
+    min_driver_tickers: int = 5
+    min_driver_ev_per_observation: float = 0.0
+    max_single_ticker_share_percent: float = 50.0
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "min_driver_rows": self.min_driver_rows,
+            "min_driver_dates": self.min_driver_dates,
+            "min_driver_tickers": self.min_driver_tickers,
+            "min_driver_ev_per_observation": self.min_driver_ev_per_observation,
+            "max_single_ticker_share_percent": self.max_single_ticker_share_percent,
         }
 
 
@@ -143,6 +162,75 @@ def build_upstream_signal_driver_audit_report(
     }
 
 
+def build_upstream_signal_driver_drilldown_report(
+    observations: list[UpstreamSignalDriverObservation],
+    candidate_groups: list[dict[str, object]],
+    driver_specs: list[dict[str, object]],
+    *,
+    gates: UpstreamSignalDriverDrilldownGates | None = None,
+    examples_per_outcome: int = 3,
+    generated_at: datetime | None = None,
+) -> dict[str, object]:
+    gates = gates or UpstreamSignalDriverDrilldownGates()
+    rows = [
+        item
+        for item in observations
+        if item.base.outcome in {"phantom_win", "phantom_loss"}
+        and item.base.reward_pct > 0
+        and item.base.risk_pct > 0
+    ]
+    candidate_rows = _candidate_rows(rows, candidate_groups)
+    driver_payloads: list[dict[str, object]] = []
+    reusable_count = 0
+    concentrated_count = 0
+    for spec in driver_specs:
+        feature = str(spec.get("feature") or "").strip()
+        value = str(spec.get("value") or "").strip().lower()
+        if feature not in REUSABLE_FEATURES or not value:
+            continue
+        driver_rows = [
+            item for item in candidate_rows if value in _feature_values(item, feature)
+        ]
+        payload = _driver_payload(
+            feature=feature,
+            value=value,
+            rows=driver_rows,
+            gates=gates,
+            examples_per_outcome=examples_per_outcome,
+        )
+        if payload["driver_verdict"] == "reusable_driver":
+            reusable_count += 1
+        elif payload["driver_verdict"] == "ticker_concentrated_driver":
+            concentrated_count += 1
+        driver_payloads.append(payload)
+
+    blockers: list[str] = []
+    if reusable_count:
+        verdict = "reusable_driver_leads"
+    elif concentrated_count:
+        verdict = "ticker_concentrated_driver_leads"
+        blockers.append("all_positive_drivers_are_ticker_concentrated")
+    else:
+        verdict = "thin_driver_evidence"
+        blockers.append("no_driver_passed_reusable_or_concentrated_gates")
+
+    return {
+        "schema_version": "upstream-signal-driver-drilldown-v1",
+        "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
+        "verdict": verdict,
+        "blockers": sorted(set(blockers)),
+        "gates": gates.payload(),
+        "candidate_group_count": len(candidate_groups),
+        "driver_count": len(driver_payloads),
+        "record_counts": {
+            "population": len(rows),
+            "candidate": len(candidate_rows),
+        },
+        "drivers": driver_payloads,
+        "recommendation": _drilldown_recommendation(verdict),
+    }
+
+
 def _candidate_rows(
     rows: list[UpstreamSignalDriverObservation],
     candidate_groups: list[dict[str, object]],
@@ -157,6 +245,177 @@ def _candidate_rows(
             if value in _feature_values(row, feature):
                 selected_indexes.add(index)
     return [row for index, row in enumerate(rows) if index in selected_indexes]
+
+
+def _driver_payload(
+    *,
+    feature: str,
+    value: str,
+    rows: list[UpstreamSignalDriverObservation],
+    gates: UpstreamSignalDriverDrilldownGates,
+    examples_per_outcome: int,
+) -> dict[str, object]:
+    metrics = _metric_payload(rows)
+    ticker_mix = _top_values(rows, "ticker", limit=10)
+    top_ticker_share = float(ticker_mix[0]["share_percent"]) if ticker_mix else 0.0
+    blockers: list[str] = []
+    if int(metrics["count"]) < gates.min_driver_rows:
+        blockers.append("driver_rows_below_minimum")
+    if int(metrics["distinct_date_count"]) < gates.min_driver_dates:
+        blockers.append("driver_dates_below_minimum")
+    if float(metrics["expected_value_per_observation"]) <= gates.min_driver_ev_per_observation:
+        blockers.append("driver_ev_per_observation_not_positive")
+    ticker_concentrated = top_ticker_share > gates.max_single_ticker_share_percent
+    if int(metrics["ticker_count"]) < gates.min_driver_tickers:
+        blockers.append("driver_ticker_count_below_reusable_minimum")
+    if ticker_concentrated:
+        blockers.append("driver_top_ticker_share_above_reusable_maximum")
+
+    if not blockers:
+        driver_verdict = "reusable_driver"
+    elif (
+        int(metrics["count"]) >= gates.min_driver_rows
+        and int(metrics["distinct_date_count"]) >= gates.min_driver_dates
+        and float(metrics["expected_value_per_observation"])
+        > gates.min_driver_ev_per_observation
+        and ticker_concentrated
+    ):
+        driver_verdict = "ticker_concentrated_driver"
+    else:
+        driver_verdict = "thin_driver"
+
+    return {
+        "feature": feature,
+        "value": value,
+        "driver_verdict": driver_verdict,
+        "blockers": sorted(set(blockers)),
+        "metrics": metrics,
+        "mix": {
+            "tickers": ticker_mix,
+            "setup_family": _top_values(rows, "setup_family", limit=8),
+            "context_bias": _top_values(rows, "context_bias", limit=8),
+            "effective_action": _top_values(rows, "effective_action", limit=8),
+            "transmission_tag": _top_values(rows, "transmission_tag", limit=12),
+            "confidence_bucket": _top_values(rows, "confidence_bucket", limit=8),
+            "volatility_bucket": _top_values(rows, "volatility_bucket", limit=8),
+        },
+        "date_range": _date_range_payload(rows),
+        "examples": {
+            "phantom_win": _examples(rows, "phantom_win", limit=examples_per_outcome),
+            "phantom_loss": _examples(rows, "phantom_loss", limit=examples_per_outcome),
+        },
+    }
+
+
+def _top_values(
+    rows: list[UpstreamSignalDriverObservation],
+    feature_name: str,
+    *,
+    limit: int,
+) -> list[dict[str, object]]:
+    counter: Counter[str] = Counter()
+    for row in rows:
+        for value in _feature_values(row, feature_name):
+            counter[value] += 1
+    total = max(1, len(rows))
+    payloads = [
+        {
+            "value": value,
+            "count": count,
+            "share_percent": round((count / total) * 100.0, 4),
+        }
+        for value, count in counter.items()
+    ]
+    payloads.sort(key=lambda item: (int(item["count"]), str(item["value"])), reverse=True)
+    return payloads[:limit]
+
+
+def _examples(
+    rows: list[UpstreamSignalDriverObservation],
+    outcome: str,
+    *,
+    limit: int,
+) -> list[dict[str, object]]:
+    selected = [item for item in rows if item.base.outcome == outcome]
+    selected.sort(
+        key=lambda item: (
+            item.base.evidence_date,
+            item.base.ticker,
+            -item.base.reward_pct if outcome == "phantom_win" else item.base.risk_pct,
+        )
+    )
+    return [_example_payload(item) for item in selected[:limit]]
+
+
+def _example_payload(row: UpstreamSignalDriverObservation) -> dict[str, object]:
+    base = row.base
+    signal = row.signal_breakdown
+    return {
+        "plan_id": row.plan_id,
+        "date": base.evidence_date.isoformat(),
+        "ticker": base.ticker,
+        "outcome": base.outcome,
+        "setup_family": base.setup_family,
+        "context_bias": base.context_bias,
+        "action": base.action,
+        "effective_action": base.effective_action,
+        "confidence_percent": round(base.confidence_percent, 4),
+        "reward_pct": round(base.reward_pct, 6),
+        "risk_pct": round(base.risk_pct, 6),
+        "signal_excerpt": {
+            "decision_tier": signal.get("decision_tier"),
+            "shortlisted": signal.get("shortlisted"),
+            "shortlist_rank": signal.get("shortlist_rank"),
+            "cheap_scan_volatility_score": signal.get("cheap_scan_volatility_score"),
+            "transmission_tags": sorted(_transmission_tags(signal)),
+            "expected_transmission_window": next(
+                iter(_feature_values(row, "expected_transmission_window"))
+            ),
+            "catalyst_intensity_bucket": next(
+                iter(_feature_values(row, "catalyst_intensity_bucket"))
+            ),
+            "confidence_components": _compact_confidence_components(
+                signal.get("confidence_components")
+            ),
+            "calibration_review": _compact_calibration_review(signal.get("calibration_review")),
+            "fundamental_coverage_status": next(
+                iter(_feature_values(row, "fundamental_coverage_status"))
+            ),
+        },
+    }
+
+
+def _compact_confidence_components(value: object) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    payload: dict[str, float] = {}
+    for key, raw in value.items():
+        number = _first_number(raw)
+        if number is not None:
+            payload[_clean(key)] = round(number, 4)
+    return payload or None
+
+
+def _compact_calibration_review(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    reasons = value.get("reasons")
+    if not isinstance(reasons, list):
+        reasons = []
+    payload: dict[str, object] = {}
+    for key in (
+        "enabled",
+        "review_status",
+        "raw_confidence_percent",
+        "calibrated_confidence_percent",
+        "base_confidence_threshold",
+        "effective_confidence_threshold",
+        "threshold_adjustment",
+    ):
+        if key in value:
+            payload[key] = value[key]
+    payload["reasons"] = [str(item) for item in reasons[:8]]
+    return payload
 
 
 def _feature_enrichment(
@@ -386,6 +645,13 @@ def _metric_payload(rows: list[UpstreamSignalDriverObservation]) -> dict[str, ob
     }
 
 
+def _date_range_payload(rows: list[UpstreamSignalDriverObservation]) -> dict[str, str | None]:
+    dates = sorted({item.base.evidence_date for item in rows})
+    if not dates:
+        return {"start": None, "end": None}
+    return {"start": dates[0].isoformat(), "end": dates[-1].isoformat()}
+
+
 def _nested_get(payload: dict[str, object], *keys: str) -> object | None:
     current: object = payload
     for key in keys:
@@ -440,4 +706,21 @@ def _recommendation(verdict: str) -> str:
     return (
         "Improve signal feature persistence and coverage before making more tuning or "
         "upstream quality claims."
+    )
+
+
+def _drilldown_recommendation(verdict: str) -> str:
+    if verdict == "reusable_driver_leads":
+        return (
+            "Inspect the generation code for reusable drivers that are positive, "
+            "date-spread, and not ticker-dominated before making one upstream policy change."
+        )
+    if verdict == "ticker_concentrated_driver_leads":
+        return (
+            "Do not generalize these drivers yet. Inspect ticker-specific generation and "
+            "cluster risk before changing broad signal policy."
+        )
+    return (
+        "Do not change upstream policy from these drivers. Improve evidence volume or "
+        "feature persistence first."
     )

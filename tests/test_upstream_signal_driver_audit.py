@@ -7,8 +7,10 @@ from trade_proposer_app.services.phantom_selectivity_separability import (
 )
 from trade_proposer_app.services.upstream_signal_driver_audit import (
     UpstreamSignalDriverAuditGates,
+    UpstreamSignalDriverDrilldownGates,
     UpstreamSignalDriverObservation,
     build_upstream_signal_driver_audit_report,
+    build_upstream_signal_driver_drilldown_report,
 )
 
 
@@ -143,3 +145,94 @@ def test_upstream_signal_audit_reports_sparse_feature_coverage() -> None:
 
     assert report["verdict"] == "insufficient_feature_coverage"
     assert "reusable_signal_feature_coverage_below_minimum" in report["blockers"]
+
+
+def test_upstream_signal_drilldown_reports_reusable_driver_with_examples() -> None:
+    start = date(2026, 1, 1)
+    rows: list[UpstreamSignalDriverObservation] = []
+    tickers = ["PANW", "HUM", "AMAT", "ORCL", "LRCX"]
+    for index in range(10):
+        day = start + timedelta(days=index)
+        for ticker in tickers:
+            rows.append(
+                _obs(
+                    day=day,
+                    ticker=ticker,
+                    outcome="phantom_win",
+                    tag="clean_breakout",
+                )
+            )
+        rows.append(_obs(day=day, ticker="PANW", outcome="phantom_loss", tag="clean_breakout"))
+        rows.append(_obs(day=day, ticker="BASE", outcome="phantom_loss", tag="crowded"))
+
+    report = build_upstream_signal_driver_drilldown_report(
+        rows,
+        [{"feature": "transmission_tag", "value": "clean_breakout"}],
+        [{"feature": "transmission_tag", "value": "clean_breakout"}],
+        gates=UpstreamSignalDriverDrilldownGates(
+            min_driver_rows=30,
+            min_driver_dates=5,
+            min_driver_tickers=5,
+        ),
+        examples_per_outcome=2,
+    )
+
+    assert report["verdict"] == "reusable_driver_leads"
+    driver = report["drivers"][0]
+    assert driver["driver_verdict"] == "reusable_driver"
+    assert driver["examples"]["phantom_win"]
+    assert driver["examples"]["phantom_loss"]
+    assert driver["examples"]["phantom_win"][0]["signal_excerpt"]["transmission_tags"] == [
+        "clean_breakout"
+    ]
+
+
+def test_upstream_signal_drilldown_reports_ticker_concentration() -> None:
+    start = date(2026, 1, 1)
+    rows: list[UpstreamSignalDriverObservation] = []
+    for index in range(10):
+        day = start + timedelta(days=index)
+        for _ in range(5):
+            rows.append(_obs(day=day, ticker="PANW", outcome="phantom_win", tag="same"))
+        rows.append(_obs(day=day, ticker="PANW", outcome="phantom_loss", tag="same"))
+
+    report = build_upstream_signal_driver_drilldown_report(
+        rows,
+        [{"feature": "ticker", "value": "panw"}],
+        [{"feature": "transmission_tag", "value": "same"}],
+        gates=UpstreamSignalDriverDrilldownGates(
+            min_driver_rows=30,
+            min_driver_dates=5,
+            min_driver_tickers=5,
+        ),
+    )
+
+    assert report["verdict"] == "ticker_concentrated_driver_leads"
+    assert report["drivers"][0]["driver_verdict"] == "ticker_concentrated_driver"
+    assert "driver_top_ticker_share_above_reusable_maximum" in report["drivers"][0]["blockers"]
+
+
+def test_upstream_signal_drilldown_reports_thin_driver_evidence() -> None:
+    rows = [
+        _obs(
+            day=date(2026, 1, 1) + timedelta(days=index),
+            ticker="PANW",
+            outcome="phantom_win",
+            tag="rare",
+        )
+        for index in range(3)
+    ]
+
+    report = build_upstream_signal_driver_drilldown_report(
+        rows,
+        [{"feature": "transmission_tag", "value": "rare"}],
+        [{"feature": "transmission_tag", "value": "rare"}],
+        gates=UpstreamSignalDriverDrilldownGates(
+            min_driver_rows=30,
+            min_driver_dates=5,
+            min_driver_tickers=5,
+        ),
+    )
+
+    assert report["verdict"] == "thin_driver_evidence"
+    assert "driver_rows_below_minimum" in report["drivers"][0]["blockers"]
