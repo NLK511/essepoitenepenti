@@ -50,6 +50,7 @@ def _signal(
     warnings: list[str] | None = None,
     shortlisted: bool = True,
     shortlist_rank: int | None = 2,
+    cheap_scan_component_scores: dict[str, object] | None = None,
 ) -> TickerSignalSnapshot:
     return TickerSignalSnapshot(
         id=11,
@@ -59,7 +60,12 @@ def _signal(
         confidence_percent=confidence,
         attention_score=88.0,
         warnings=warnings if warnings is not None else ["signal warning"],
-        diagnostics={"shortlisted": shortlisted, "shortlist_rank": shortlist_rank, "mode": "deep_analysis"},
+        diagnostics={
+            "shortlisted": shortlisted,
+            "shortlist_rank": shortlist_rank,
+            "mode": "deep_analysis",
+            "cheap_scan_component_scores": cheap_scan_component_scores or {},
+        },
         source_breakdown={"cheap_scan_summary": "cheap summary"},
         computed_at=COMPUTED_AT,
     )
@@ -247,6 +253,11 @@ def test_actionable_plan_framing_payload_contract_is_stable() -> None:
                 "upstream_effective_confidence_threshold_percent": 60.0,
                 "policy_action_confidence_threshold_percent": 60.0,
                 "actionable_confidence_floor_percent": 60.0,
+                "execution_confidence_floor_percent": 60.0,
+                "execution_floor_percent": 60.0,
+                "research_plan_floor_percent": 45.0,
+                "research_floor_percent": 45.0,
+                "shadow_tracking_floor_percent": 35.0,
                 "effective_action_threshold_percent": 60.0,
             },
             "effective_action_threshold_percent": 60.0,
@@ -414,6 +425,11 @@ def test_confidence_floor_blocks_actionable_plan_but_preserves_framing() -> None
         "upstream_effective_confidence_threshold_percent": 60.0,
         "policy_action_confidence_threshold_percent": 60.0,
         "actionable_confidence_floor_percent": 80.0,
+        "execution_confidence_floor_percent": 80.0,
+        "execution_floor_percent": 80.0,
+        "research_plan_floor_percent": 45.0,
+        "research_floor_percent": 45.0,
+        "shadow_tracking_floor_percent": 35.0,
         "effective_action_threshold_percent": 80.0,
     }
 
@@ -509,3 +525,35 @@ def test_non_shortlisted_no_action_plan_framing_payload_contract_is_stable() -> 
     assert contract["signal"]["cheap_scan_confidence_percent"] == 55.0
     assert contract["signal"]["deep_analysis_confidence_percent"] is None
 
+
+def test_plan_framing_persists_upstream_signal_quality_driver_tags() -> None:
+    service = _service()
+    signal = _signal(
+        warnings=[],
+        shortlist_rank=38,
+        cheap_scan_component_scores={"volatility_score": 35.0},
+    )
+    plan = service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(confidence=38.0),
+        signal,
+        deep_output=_deep_output(
+            confidence=38.0,
+            setup_family="catalyst_follow_through",
+        ),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    drivers = plan.signal_breakdown.get("upstream_signal_quality_drivers")
+    assert isinstance(drivers, list)
+    driver_keys = {item["key"] for item in drivers}
+    assert "shortlist_rank_35_40" in driver_keys
+    assert "volatility_30_40" in driver_keys
+    assert "data_quality_cap_90_100" in driver_keys
+    assert plan.action == "no_action"
+    assert plan.signal_breakdown.get("intended_action") == "long"
+    assert plan.signal_breakdown["cheap_scan_confidence_percent"] == 55.0
+    assert plan.signal_breakdown["deep_analysis_confidence_percent"] == 38.0

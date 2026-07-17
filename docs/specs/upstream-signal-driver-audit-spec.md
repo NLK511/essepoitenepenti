@@ -110,3 +110,27 @@ Default driver gates:
 - maximum single ticker share for reusable status: 50 percent
 
 The drilldown is still read-only. A passing drilldown does not promote a tuning policy. It only identifies the upstream signal-generation code paths worth inspecting or changing.
+
+## Prospective driver tags
+
+When the drilldown finds reusable driver leads, new plans must persist non-behavioral tags for the exact upstream signal-quality drivers that matched at generation time.
+
+These tags are instrumentation only:
+
+- they must not change `action`, confidence, thresholds, entry, stop, take-profit, jobs, or broker behavior;
+- they must live in `signal_breakdown.upstream_signal_quality_drivers`;
+- each tag must include a stable key, feature, value, and short reason;
+- the tag rules must be deterministic and based only on fields already present in the plan signal breakdown.
+
+Initial prospective tags are limited to driver buckets proven by the July 2026 drilldown:
+
+- `shortlist_rank_bucket=35-40`
+- `shortlist_rank_bucket=45-50`
+- `volatility_bucket=30-40`
+- `confidence_component_bucket=catalyst_confidence:60-70`
+- `confidence_component_bucket=data_quality_cap:90-100`
+- `confidence_bucket=35-40`
+- `confidence_component_bucket=execution_clarity:0-10`
+- `confidence_component_bucket=data_quality_cap:60-70`
+
+These tags create a clean prospective cohort for future replay and promotion preflight. They are not a deployment signal by themselves.

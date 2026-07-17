@@ -136,9 +136,122 @@ class WatchlistTransmissionService:
             "cheap_scan_price_history": signal.diagnostics.get("cheap_scan_price_history"),
             "deep_analysis_price_history": signal.diagnostics.get("deep_analysis_price_history"),
         }
+        quality_drivers = self.upstream_signal_quality_drivers(
+            setup_family=setup_family,
+            confidence_components=confidence_components,
+            calibrated_confidence=float(calibrated_confidence),
+            cheap_scan_volatility_score=float(
+                cheap_scan_component_scores.get("volatility_score", 50.0) or 50.0
+            ),
+            shortlist_rank=shortlist_rank,
+        )
+        if quality_drivers:
+            payload["upstream_signal_quality_drivers"] = quality_drivers
         if intended_action in {"long", "short"}:
             payload["intended_action"] = intended_action
         return payload
+
+    @classmethod
+    def upstream_signal_quality_drivers(
+        cls,
+        *,
+        setup_family: str,
+        confidence_components: dict[str, float],
+        calibrated_confidence: float,
+        cheap_scan_volatility_score: float,
+        shortlist_rank: int | None,
+    ) -> list[dict[str, str]]:
+        drivers: list[dict[str, str]] = []
+        rank_bucket = cls._bucket_value(shortlist_rank, step=5.0, lower=0.0, upper=50.0)
+        if rank_bucket in {"35-40", "45-50"}:
+            drivers.append(
+                cls._quality_driver(
+                    key=f"shortlist_rank_{rank_bucket}".replace("-", "_"),
+                    feature="shortlist_rank_bucket",
+                    value=rank_bucket,
+                    reason="July 2026 drilldown found mid-shortlist rows had reusable phantom edge.",
+                )
+            )
+        volatility_bucket = cls._bucket_value(
+            cheap_scan_volatility_score,
+            step=10.0,
+            lower=0.0,
+            upper=100.0,
+        )
+        if volatility_bucket == "30-40":
+            drivers.append(
+                cls._quality_driver(
+                    key="volatility_30_40",
+                    feature="volatility_bucket",
+                    value="30-40",
+                    reason="July 2026 drilldown found moderate volatility had reusable phantom edge.",
+                )
+            )
+        confidence_bucket = cls._bucket_value(
+            calibrated_confidence,
+            step=5.0,
+            lower=0.0,
+            upper=100.0,
+        )
+        if confidence_bucket == "35-40":
+            drivers.append(
+                cls._quality_driver(
+                    key="confidence_35_40",
+                    feature="confidence_bucket",
+                    value="35-40",
+                    reason="July 2026 drilldown found some low-confidence rows were under-promoted.",
+                )
+            )
+        component_specs = {
+            "catalyst_confidence": {"60-70"},
+            "data_quality_cap": {"60-70", "90-100"},
+            "execution_clarity": {"0-10"},
+        }
+        for component, accepted_buckets in component_specs.items():
+            value = confidence_components.get(component)
+            bucket = cls._bucket_value(value, step=10.0, lower=0.0, upper=100.0)
+            if bucket not in accepted_buckets:
+                continue
+            drivers.append(
+                cls._quality_driver(
+                    key=f"{component}_{bucket}".replace("-", "_"),
+                    feature="confidence_component_bucket",
+                    value=f"{component}:{bucket}",
+                    reason=(
+                        "July 2026 drilldown found this confidence component bucket "
+                        "had reusable phantom edge."
+                    ),
+                )
+            )
+        if drivers:
+            normalized_setup = str(setup_family or "").strip().lower()
+            for item in drivers:
+                item["setup_family"] = normalized_setup or "unknown"
+        return drivers
+
+    @staticmethod
+    def _quality_driver(*, key: str, feature: str, value: str, reason: str) -> dict[str, str]:
+        return {
+            "key": key,
+            "feature": feature,
+            "value": value,
+            "reason": reason,
+        }
+
+    @staticmethod
+    def _bucket_value(
+        value: float | int | None,
+        *,
+        step: float,
+        lower: float,
+        upper: float,
+    ) -> str:
+        if not isinstance(value, (int, float)):
+            return "unknown"
+        bounded = max(lower, min(upper, float(value)))
+        bucket_lower = lower + (int((bounded - lower) // step) * step)
+        bucket_upper = min(upper, bucket_lower + step)
+        return f"{bucket_lower:g}-{bucket_upper:g}"
 
     @staticmethod
     def should_block_for_transmission_contradiction(
