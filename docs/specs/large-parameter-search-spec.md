@@ -16,6 +16,10 @@ This is a research tuning tool only. It is intentionally not schedulable and mus
 - When replay evidence is requested, the search must use replay eligibility rows directly with explicit tier filters. It must not silently fall back to the stored-plan eligible cache.
 - It must stream candidate generation/evaluation and keep only a bounded top-K result set in memory.
 - It must reuse the memory-safe eligible-record loader from `PlanGenerationTuningService`.
+- Replay-backed large search defaults to promotion-grade evidence: closed intraday replay labels from accepted replay tiers only. Daily-prefilter, pending, open, no-entry, and other ambiguous labels are research evidence, not promotion-grade optimizer input.
+- Operators may request the broader replay research profile for diagnostics, but artifacts must label that profile explicitly.
+- Every artifact must include evidence preflight diagnostics before candidate results: selected evidence profile, partition counts, distinct dates, scoreability, and blocker/downgrade reasons.
+- If selection or locked-holdout evidence is too thin to score, the run must stay research-only with an explicit thin-evidence role/status rather than implying a promotion-oriented large search was possible.
 - It must write an artifact with the best coarse-search candidates and local fine-tune candidates.
 - It must not mutate active plan-generation config, actionability thresholds, broker settings, or order execution.
 - Any promising result still needs normal holdout, walk-forward stability, paper evidence, and operator approval before promotion.

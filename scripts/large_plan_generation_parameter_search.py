@@ -38,6 +38,7 @@ from trade_proposer_app.services.tuning_stability import TuningStabilityEvaluato
 Fingerprint = str
 MinActionableMode = Literal["rank_only", "hard_gate"]
 ObjectiveProfile = Literal["research_precision", "research_ev_per_trade", "promotion_candidate"]
+ReplayEvidenceProfile = Literal["research", "promotion"]
 SearchCampaign = Literal[
     "selectivity_only",
     "entry_risk_only",
@@ -908,6 +909,62 @@ def _calibration_health_for_records(
     return calibration_health_report(observations)
 
 
+def _evidence_preflight(
+    *,
+    records: Sequence[object],
+    partitions,
+    evidence_source: str,
+    replay_evidence_profile: str,
+) -> dict[str, object]:
+    min_selection_dates = 20
+    min_holdout_dates = 20
+    blockers: list[str] = []
+    selection_dates = len(partitions.selection.evidence_dates)
+    holdout_dates = len(partitions.locked_holdout.evidence_dates)
+    if not records:
+        blockers.append("no_eligible_records")
+    if not partitions.selection.records:
+        blockers.append("no_selection_records")
+    elif selection_dates < min_selection_dates:
+        blockers.append("selection_distinct_dates_below_minimum")
+    if partitions.holdout_status != "locked":
+        blockers.append(partitions.holdout_status)
+    elif not partitions.locked_holdout.records:
+        blockers.append("no_locked_holdout_records")
+    elif holdout_dates < min_holdout_dates:
+        blockers.append("holdout_distinct_dates_below_minimum")
+
+    return {
+        "schema_version": "large-search-evidence-preflight-v1",
+        "status": "scoreable" if not blockers else "thin_evidence",
+        "run_role": "research_only" if not blockers else "research_thin_evidence",
+        "evidence_source": evidence_source,
+        "replay_evidence_profile": replay_evidence_profile
+        if evidence_source == "replay"
+        else None,
+        "eligible_record_count": len(records),
+        "partition_record_counts": {
+            "discovery": len(partitions.discovery.records),
+            "selection": len(partitions.selection.records),
+            "locked_holdout": len(partitions.locked_holdout.records),
+        },
+        "partition_distinct_date_counts": {
+            "discovery": len(partitions.discovery.evidence_dates),
+            "selection": selection_dates,
+            "locked_holdout": holdout_dates,
+        },
+        "minimum_distinct_dates": {
+            "selection": min_selection_dates,
+            "locked_holdout": min_holdout_dates,
+        },
+        "holdout_status": partitions.holdout_status,
+        "scoreable_locked_holdout": partitions.holdout_status == "locked"
+        and bool(partitions.locked_holdout.records),
+        "blockers": blockers,
+        "warnings": list(partitions.warnings),
+    }
+
+
 def _apply_calibration_promotion_blockers(
     results: Sequence[SearchResult],
     *,
@@ -974,6 +1031,7 @@ def run_large_parameter_search(
     search_campaign: SearchCampaign = "combined_small_delta",
     evidence_source: Literal["stored", "replay"] = "stored",
     replay_tiers: set[str] | None = None,
+    replay_evidence_profile: ReplayEvidenceProfile = "promotion",
 ) -> dict[str, object]:
     service = PlanGenerationTuningService(session)
     baseline_version = service._resolve_active_config_version()  # noqa: SLF001
@@ -984,6 +1042,7 @@ def run_large_parameter_search(
             setup_family=None,
             limit=limit,
             tiers=replay_tiers or {"tier_a"},
+            evidence_profile=replay_evidence_profile,
         )
     else:
         records = service._eligible_records(ticker=None, setup_family=None, limit=limit)  # noqa: SLF001
@@ -1015,6 +1074,7 @@ def run_large_parameter_search(
         "search_campaign": search_campaign,
         "evidence_source": evidence_source,
         "replay_tiers": sorted(replay_tiers or {"tier_a"}) if evidence_source == "replay" else [],
+        "replay_evidence_profile": replay_evidence_profile if evidence_source == "replay" else None,
     }
     discovery_dates = select_stratified_dates(
         partitions.discovery.evidence_dates, limit=discovery_panel_dates, seed=seed
@@ -1065,6 +1125,12 @@ def run_large_parameter_search(
         "campaign_parameter_keys": list(CAMPAIGN_PARAMETER_KEYS[search_campaign]),
         "campaign_max_changed_keys": CAMPAIGN_MAX_CHANGED_KEYS[search_campaign],
     }
+    evidence_preflight = _evidence_preflight(
+        records=records,
+        partitions=partitions,
+        evidence_source=evidence_source,
+        replay_evidence_profile=replay_evidence_profile,
+    )
     cache_metadata = {
         "schema_version": 3,
         "baseline_config_version_id": baseline_version.id,
@@ -1235,9 +1301,10 @@ def run_large_parameter_search(
 
     stages = {
         "preflight": {
-            "status": "completed",
+            "status": evidence_preflight["status"],
             "input_candidate_count": coarse_candidates_count + fine_candidates_count,
             "note": "normalization and config-hash deduplication are applied while streaming",
+            "evidence": evidence_preflight,
         },
         "broad_discovery": {
             "status": "completed",
@@ -1276,7 +1343,7 @@ def run_large_parameter_search(
     artifact: dict[str, object] = {
         "schema_version": 3,
         "generated_at": datetime.now(UTC).isoformat(),
-        "run_role": "research_only",
+        "run_role": evidence_preflight["run_role"],
         "promotion_capable": False,
         "objective_profile": objective_profile,
         "min_actionable_mode": min_actionable_mode,
@@ -1292,6 +1359,7 @@ def run_large_parameter_search(
         "stage_policy": stage_policy,
         "stages": stages,
         "requested": requested,
+        "evidence_preflight": evidence_preflight,
         "evaluated": {
             **stage_counts,
             "loaded_from_cache": len(loaded_cache.results),
@@ -1489,7 +1557,16 @@ def main() -> None:
         "--replay-tier",
         action="append",
         default=[],
-        help="Replay eligibility tier to include when --evidence-source=replay. May be passed multiple times.",
+        help=(
+            "Replay eligibility tier to include when --evidence-source=replay. "
+            "May be passed multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--replay-evidence-profile",
+        choices=("promotion", "research"),
+        default="promotion",
+        help="Replay profile for large search. Promotion keeps only closed intraday labels.",
     )
     parser.add_argument(
         "--artifact",
@@ -1530,6 +1607,7 @@ def main() -> None:
             search_campaign=args.search_campaign,
             evidence_source=args.evidence_source,
             replay_tiers=set(args.replay_tier or ["tier_a"]),
+            replay_evidence_profile=args.replay_evidence_profile,
         )
         print(
             json.dumps(

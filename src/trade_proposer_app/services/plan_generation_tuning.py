@@ -103,6 +103,10 @@ class EligibleTuningRecord:
     sample: RecommendationDecisionSample | None
     setup_family: str
     context_bias: str | None
+    replay_tier: str | None = None
+    replay_resolution_source: str | None = None
+    replay_outcome: str | None = None
+    replay_eligibility_id: int | None = None
 
 
 @dataclass(slots=True)
@@ -1551,12 +1555,25 @@ class PlanGenerationTuningService:
         setup_family: str | None,
         limit: int | None,
         tiers: set[str] | None = None,
+        evidence_profile: str = "research",
     ) -> list[EligibleTuningRecord]:
-        allowed_tiers = {str(item).strip() for item in (tiers or {"tier_a", "tier_b"}) if str(item).strip()}
+        allowed_tiers = {
+            str(item).strip()
+            for item in (tiers or {"tier_a", "tier_b"})
+            if str(item).strip()
+        }
+        normalized_profile = str(evidence_profile or "research").strip().lower()
+        if normalized_profile not in {"research", "promotion"}:
+            raise PlanGenerationTuningError(
+                f"unsupported replay evidence profile: {evidence_profile}"
+            )
         query = (
             select(
                 ReplayEligibilityRecord.id.label("eligibility_id"),
                 ReplayEligibilityRecord.ticker.label("eligibility_ticker"),
+                ReplayEligibilityRecord.tier.label("eligibility_tier"),
+                ReplayEligibilityRecord.resolution_source.label("resolution_source"),
+                ReplayEligibilityRecord.outcome.label("eligibility_outcome"),
                 ReplayEligibilityRecord.diagnostics_json.label("diagnostics_json"),
                 RecommendationPlanRecord.id.label("plan_id"),
                 RecommendationPlanRecord.computed_at.label("computed_at"),
@@ -1581,6 +1598,9 @@ class PlanGenerationTuningService:
             .where(ReplayEligibilityRecord.eligible_for_tuning.is_(True))
             .where(ReplayEligibilityRecord.tier.in_(sorted(allowed_tiers)))
         )
+        if normalized_profile == "promotion":
+            query = query.where(ReplayEligibilityRecord.resolution_source == "intraday")
+            query = query.where(ReplayEligibilityRecord.outcome.in_(["win", "loss", "flat"]))
         if ticker:
             query = query.where(ReplayEligibilityRecord.ticker == ticker.upper())
         query = query.order_by(RecommendationPlanRecord.computed_at.asc(), ReplayEligibilityRecord.id.asc())
@@ -1636,6 +1656,10 @@ class PlanGenerationTuningService:
                         sample=None,
                         setup_family=row_setup_family,
                         context_bias=self._context_bias(signal_breakdown),
+                        replay_tier=str(row.eligibility_tier or ""),
+                        replay_resolution_source=str(row.resolution_source or ""),
+                        replay_outcome=str(row.eligibility_outcome or ""),
+                        replay_eligibility_id=int(row.eligibility_id or 0),
                     )
                 )
                 if normalized_limit is not None and len(records) >= normalized_limit:

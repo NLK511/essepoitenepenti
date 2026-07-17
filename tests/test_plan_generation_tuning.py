@@ -321,6 +321,50 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(1, len(tier_a))
         self.assertEqual(2, len(tier_a_b))
 
+    def test_replay_promotion_evidence_only_keeps_closed_intraday_labels(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        self._seed_replay_record(
+            created_at=start,
+            mfe=9.0,
+            mae=-2.0,
+            outcome="win",
+            resolution_source="intraday",
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=1),
+            mfe=0.0,
+            mae=0.0,
+            outcome="expired",
+            resolution_source="daily_prefilter",
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=2),
+            mfe=0.0,
+            mae=0.0,
+            outcome="open",
+            resolution_source="intraday",
+        )
+
+        research = self.service._replay_eligible_records(
+            ticker=None,
+            setup_family=None,
+            limit=None,
+            tiers={"tier_a"},
+            evidence_profile="research",
+        )
+        promotion = self.service._replay_eligible_records(
+            ticker=None,
+            setup_family=None,
+            limit=None,
+            tiers={"tier_a"},
+            evidence_profile="promotion",
+        )
+
+        self.assertEqual(3, len(research))
+        self.assertEqual(1, len(promotion))
+        self.assertEqual("intraday", promotion[0].replay_resolution_source)
+        self.assertEqual("win", promotion[0].replay_outcome)
+
     def test_point_in_time_replay_mode_ignores_stale_replay_artifact_versions(self) -> None:
         start = datetime(2026, 4, 1, tzinfo=timezone.utc)
         for index in range(4):

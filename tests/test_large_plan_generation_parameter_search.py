@@ -412,6 +412,64 @@ def test_staged_search_bounds_expensive_survivors_and_keeps_partitions_disjoint(
     assert date_sets[1].isdisjoint(date_sets[2])
 
 
+def test_replay_large_search_uses_promotion_profile_and_reports_thin_preflight() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    records = [
+        SimpleNamespace(
+            plan=SimpleNamespace(
+                id=index + 1, ticker="TEST", computed_at=start + timedelta(days=index)
+            )
+        )
+        for index in range(30)
+    ]
+
+    class FakeService:
+        replay_kwargs = {}
+
+        def __init__(self, session) -> None:  # noqa: ANN001, ARG002
+            pass
+
+        def _resolve_active_config_version(self):  # noqa: ANN202
+            return SimpleNamespace(id=7, config=active)
+
+        def _replay_eligible_records(self, **kwargs):  # noqa: ANN003, ANN202
+            FakeService.replay_kwargs = kwargs
+            return records
+
+        def _score_records(self, rows, config):  # noqa: ANN001, ANN202, ARG002
+            count = len(rows)
+            return count, count, round(count * 0.1, 4), 0
+
+        def _memory_guard(self, stage):  # noqa: ANN001, ANN202, ARG002
+            return None
+
+    with patch(
+        "scripts.large_plan_generation_parameter_search.PlanGenerationTuningService",
+        FakeService,
+    ):
+        artifact = run_large_parameter_search(
+            object(),
+            evidence_source="replay",
+            replay_tiers={"tier_a"},
+            coarse_candidates_count=2,
+            fine_candidates_count=0,
+            top_k=2,
+            fine_seeds=1,
+            min_validation_actionable=1,
+            stage1_survivors=2,
+            stage2_survivors=2,
+            finalists=1,
+            discovery_panel_dates=8,
+            stability_panel_dates=8,
+        )
+
+    assert FakeService.replay_kwargs["evidence_profile"] == "promotion"
+    assert artifact["run_role"] == "research_thin_evidence"
+    assert artifact["evidence_preflight"]["status"] == "thin_evidence"
+    assert "insufficient_dates_for_locked_holdout" in artifact["evidence_preflight"]["blockers"]
+
+
 def test_large_search_fine_candidates_jitter_around_seed() -> None:
     active = normalize_plan_generation_tuning_config(None)
     seed_result = SearchResult(
