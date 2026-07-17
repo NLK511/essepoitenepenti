@@ -84,6 +84,7 @@ class PlanGenerationWalkForwardService:
         validation_days: int = 90,
         step_days: int = 30,
         min_validation_resolved: int = 8,
+        evidence_profile: str | None = None,
     ) -> PlanGenerationWalkForwardSummary:
         records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
         return self.summarize_records(
@@ -96,6 +97,7 @@ class PlanGenerationWalkForwardService:
             validation_days=validation_days,
             step_days=step_days,
             min_validation_resolved=min_validation_resolved,
+            evidence_profile=evidence_profile,
         )
 
     def summarize_records(
@@ -110,6 +112,7 @@ class PlanGenerationWalkForwardService:
         validation_days: int = 90,
         step_days: int = 30,
         min_validation_resolved: int = 8,
+        evidence_profile: str | None = None,
     ) -> PlanGenerationWalkForwardSummary:
         if not records:
             raise ValueError(
@@ -141,6 +144,7 @@ class PlanGenerationWalkForwardService:
             validation_days=validation_days,
             step_days=step_days,
             min_validation_resolved=min_validation_resolved,
+            evidence_profile=evidence_profile,
         )
         average_win_rate_delta = self._average_delta(stats.win_rate_deltas, precision=2)
         average_expected_value_delta = self._average_delta(stats.expected_value_deltas, precision=4)
@@ -270,6 +274,7 @@ class PlanGenerationWalkForwardService:
         validation_days: int,
         step_days: int,
         min_validation_resolved: int,
+        evidence_profile: str | None,
     ) -> _WalkForwardStats:
         stats = _WalkForwardStats([], 0, 0, 0, 0, [], [], [])
         current = start_time
@@ -299,11 +304,15 @@ class PlanGenerationWalkForwardService:
                     break
                 window_end_index += 1
             slice_records = _RecordWindow(records, window_start_index, window_end_index)
-            baseline_eval = self._score_baseline_slice(slice_records, baseline_config)
+            baseline_eval = self._score_baseline_slice(
+                slice_records, baseline_config, evidence_profile=evidence_profile
+            )
             candidate_eval = (
                 baseline_eval
                 if candidate_config == baseline_config
-                else self._score_slice(slice_records, candidate_config)
+                else self._score_slice(
+                    slice_records, candidate_config, evidence_profile=evidence_profile
+                )
             )
             delta_win, delta_ev, is_qualified = self._record_slice_comparison(
                 stats,
@@ -415,7 +424,11 @@ class PlanGenerationWalkForwardService:
         return value.astimezone(timezone.utc)
 
     def _score_baseline_slice(
-        self, records: _RecordWindow, config: dict[str, float]
+        self,
+        records: _RecordWindow,
+        config: dict[str, float],
+        *,
+        evidence_profile: str | None,
     ) -> _SliceEvaluation:
         config_key = tuple(sorted((key, str(value)) for key, value in config.items()))
         key: tuple[object, ...] = (
@@ -423,16 +436,21 @@ class PlanGenerationWalkForwardService:
             records.start_index,
             records.end_index,
             config_key,
+            evidence_profile,
         )
         cached = self._baseline_slice_cache.get(key)
         if cached is None:
-            cached = self._score_slice(records, config)
+            cached = self._score_slice(records, config, evidence_profile=evidence_profile)
             self._baseline_slice_cache[key] = cached
         return cached
 
-    def _score_slice(self, records, config: dict[str, float]) -> _SliceEvaluation:
+    def _score_slice(
+        self, records, config: dict[str, float], *, evidence_profile: str | None
+    ) -> _SliceEvaluation:
         actionable_count, win_count, expected_value, ambiguous_count = (
-            self.tuning_service._score_records(records, config)
+            self.tuning_service._score_records(
+                records, config, evidence_profile=evidence_profile
+            )
         )
         return _SliceEvaluation(
             actionable_count=actionable_count,

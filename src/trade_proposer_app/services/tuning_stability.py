@@ -164,6 +164,7 @@ class TuningStabilityEvaluator:
     def __init__(self, tuning_service: object) -> None:
         self.tuning_service = tuning_service
         self._baseline_cache: dict[tuple[object, ...], ScoreAggregate] = {}
+        self.evidence_profile: str | None = None
 
     def evaluate(
         self,
@@ -299,7 +300,7 @@ class TuningStabilityEvaluator:
 
     def _score(self, records: Sequence[object], config: dict[str, float]) -> ScoreAggregate:
         actionable, wins, expected_value, ambiguous = self.tuning_service._score_records(  # noqa: SLF001
-            records, config
+            records, config, evidence_profile=self.evidence_profile
         )
         return ScoreAggregate(
             record_count=len(records),
@@ -316,7 +317,7 @@ class TuningStabilityEvaluator:
         record_key = tuple(
             int(getattr(getattr(record, "plan", None), "id", 0) or id(record)) for record in records
         )
-        key: tuple[object, ...] = (config_key, record_key)
+        key: tuple[object, ...] = (config_key, record_key, self.evidence_profile)
         cached = self._baseline_cache.get(key)
         if cached is None:
             cached = self._score(records, config)

@@ -65,7 +65,7 @@ Replay evidence profiles:
 - `phantom_selectivity` — intraday `phantom_win` and `phantom_loss` rows only; research diagnostic for actionability/selectivity.
 - `research` — broad replay eligibility rows for audits and ad hoc diagnostics.
 
-Only `promotion` can be treated as promotion-oriented large-search evidence. `phantom_selectivity` can produce research leads, but the next step is candidate-specific replay over the same period and then a fresh promotion-grade preflight.
+Only `promotion` can be treated as promotion-oriented large-search evidence. `phantom_selectivity` scores candidates with the actionability floor against phantom win/loss labels, not the execution floor against closed trade outcomes. It can produce research leads, but the next step is candidate-specific replay over the same period and then a fresh promotion-grade preflight.
 
 Supported minimum-actionable modes:
 

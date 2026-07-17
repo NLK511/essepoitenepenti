@@ -295,7 +295,7 @@ def test_large_search_resume_cache_skips_already_evaluated_candidate(tmp_path: P
     class FakeService:
         calls = 0
 
-        def _score_records(self, records, config):  # noqa: ANN001, ANN202, SLF001
+        def _score_records(self, records, config, **kwargs):  # noqa: ANN001, ANN202, ARG002, SLF001
             self.calls += 1
             return 1, 1, 1.0, 0
 
@@ -365,7 +365,7 @@ def test_staged_search_bounds_expensive_survivors_and_keeps_partitions_disjoint(
         def _eligible_records(self, **kwargs):  # noqa: ANN003, ANN202
             return records
 
-        def _score_records(self, rows, config):  # noqa: ANN001, ANN202
+        def _score_records(self, rows, config, **kwargs):  # noqa: ANN001, ANN202, ARG002
             count = len(rows)
             wins = count
             return count, wins, round(count * 0.1, 4), 0
@@ -437,7 +437,7 @@ def test_replay_large_search_uses_promotion_profile_and_reports_thin_preflight()
             FakeService.replay_kwargs = kwargs
             return records
 
-        def _score_records(self, rows, config):  # noqa: ANN001, ANN202, ARG002
+        def _score_records(self, rows, config, **kwargs):  # noqa: ANN001, ANN202, ARG002
             count = len(rows)
             return count, count, round(count * 0.1, 4), 0
 
@@ -495,7 +495,7 @@ def test_phantom_selectivity_search_is_research_only_and_requires_candidate_repl
             FakeService.replay_kwargs = kwargs
             return records
 
-        def _score_records(self, rows, config):  # noqa: ANN001, ANN202, ARG002
+        def _score_records(self, rows, config, **kwargs):  # noqa: ANN001, ANN202, ARG002
             count = len(rows)
             return count, count, round(count * 0.1, 4), 0
 

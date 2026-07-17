@@ -542,6 +542,7 @@ def evaluate_stream(
     min_actionable_mode: MinActionableMode = "rank_only",
     objective_profile: ObjectiveProfile = "research_precision",
     campaign: SearchCampaign | None = None,
+    replay_evidence_profile: ReplayEvidenceProfile | None = None,
 ) -> tuple[list[SearchResult], int]:
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
@@ -555,7 +556,7 @@ def evaluate_stream(
             continue
         seen.add(identity)
         search_actionable, search_win, search_ev, search_ambiguous = service._score_records(  # noqa: SLF001
-            search_records, config
+            search_records, config, evidence_profile=replay_evidence_profile
         )
         search_research, search_shadow = _research_shadow_counts(
             service,
@@ -570,7 +571,9 @@ def evaluate_stream(
             validation_shadow = search_shadow
         else:
             validation_actionable, validation_win, validation_ev, validation_ambiguous = (
-                service._score_records(validation_records, config)  # noqa: SLF001
+                service._score_records(  # noqa: SLF001
+                    validation_records, config, evidence_profile=replay_evidence_profile
+                )
             )
             validation_research, validation_shadow = _research_shadow_counts(
                 service,
@@ -643,8 +646,10 @@ def _evaluate_stability_stage(
     min_actionable_mode: MinActionableMode,
     objective_profile: ObjectiveProfile,
     campaign: SearchCampaign,
+    replay_evidence_profile: ReplayEvidenceProfile | None,
 ) -> tuple[list[SearchResult], int]:
     evaluator = TuningStabilityEvaluator(service)
+    evaluator.evidence_profile = replay_evidence_profile
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
     evaluated = 0
@@ -717,6 +722,7 @@ def _evaluate_walk_forward_stage(
     min_actionable_mode: MinActionableMode,
     objective_profile: ObjectiveProfile,
     campaign: SearchCampaign,
+    replay_evidence_profile: ReplayEvidenceProfile | None,
 ) -> tuple[list[SearchResult], int]:
     top: list[SearchResult] = []
     baseline_result: SearchResult | None = None
@@ -731,7 +737,9 @@ def _evaluate_walk_forward_stage(
         if identity in seen:
             continue
         seen.add(identity)
-        actionable, wins, expected_value, ambiguous = service._score_records(records, config)  # noqa: SLF001
+        actionable, wins, expected_value, ambiguous = service._score_records(  # noqa: SLF001
+            records, config, evidence_profile=replay_evidence_profile
+        )
         summary = walk_forward.summarize_records(
             records=records,
             candidate_config=config,
@@ -742,6 +750,7 @@ def _evaluate_walk_forward_stage(
             validation_days=validation_days,
             step_days=step_days,
             min_validation_resolved=min_slice,
+            evidence_profile=replay_evidence_profile,
         )
         eligible = config == active_config or (
             summary.qualified_slices >= 3
@@ -1201,6 +1210,7 @@ def run_large_parameter_search(
             min_actionable_mode="rank_only",
             objective_profile=objective_profile,
             campaign=search_campaign,
+            replay_evidence_profile=replay_evidence_profile,
         )
         coarse_top = _merged_top(
             loaded_by_stage.get("coarse_discovery", []),
@@ -1232,6 +1242,7 @@ def run_large_parameter_search(
             min_actionable_mode="rank_only",
             objective_profile=objective_profile,
             campaign=search_campaign,
+            replay_evidence_profile=replay_evidence_profile,
         )
         fine_top = _merged_top(
             loaded_by_stage.get("fine_discovery", []),
@@ -1265,6 +1276,7 @@ def run_large_parameter_search(
             min_actionable_mode=min_actionable_mode,
             objective_profile=objective_profile,
             campaign=search_campaign,
+            replay_evidence_profile=replay_evidence_profile,
         )
         stage2 = _merged_top(
             loaded_by_stage.get("stability_screen", []),
@@ -1288,6 +1300,7 @@ def run_large_parameter_search(
                 min_actionable_mode=min_actionable_mode,
                 objective_profile=objective_profile,
                 campaign=search_campaign,
+                replay_evidence_profile=replay_evidence_profile,
             )
             stage3 = _merged_top(
                 loaded_by_stage.get("selection_walk_forward", []),

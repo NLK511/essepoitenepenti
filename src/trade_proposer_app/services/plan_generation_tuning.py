@@ -2165,14 +2165,21 @@ class PlanGenerationTuningService:
         )
 
     def _score_records(
-        self, records: list[EligibleTuningRecord], config: dict[str, float]
+        self,
+        records: list[EligibleTuningRecord],
+        config: dict[str, float],
+        *,
+        evidence_profile: str | None = None,
     ) -> tuple[int, int, float, int]:
         actionable_count = 0
         win_count = 0
         expected_value = 0.0
         ambiguous_count = 0
         for record in records:
-            candidate = self._candidate_resolution(record, config)
+            if evidence_profile == "phantom_selectivity":
+                candidate = self._phantom_selectivity_resolution(record, config)
+            else:
+                candidate = self._candidate_resolution(record, config)
             if candidate is None:
                 ambiguous_count += 1
                 continue
@@ -2233,6 +2240,16 @@ class PlanGenerationTuningService:
         )
         legacy_floor = float(config.get("global.actionable_confidence_floor_percent", execution_floor) or execution_floor)
         return max(execution_floor, legacy_floor)
+
+    @staticmethod
+    def _actionability_floor(config: dict[str, float]) -> float:
+        return float(
+            config.get(
+                "global.actionable_confidence_floor_percent",
+                PlanGenerationTuningService._execution_floor(config),
+            )
+            or 0.0
+        )
 
     @staticmethod
     def _research_floor(config: dict[str, float]) -> float:
@@ -2307,6 +2324,64 @@ class PlanGenerationTuningService:
                 return None
             return ("win" if float(horizon_return) > 0 else "loss"), reward_pct, risk_pct
         return ("win" if take_reached else "loss"), reward_pct, risk_pct
+
+    def _phantom_selectivity_resolution(
+        self, record: EligibleTuningRecord, config: dict[str, float]
+    ) -> tuple[str, float, float] | None:
+        label = str(record.replay_outcome or "").strip().lower()
+        if label not in {"phantom_win", "phantom_loss"}:
+            return None
+        if float(record.plan.confidence_percent) < self._actionability_floor(config):
+            return None
+        risk_reward = self._candidate_risk_reward(record, config)
+        if risk_reward is None:
+            return None
+        reward_pct, risk_pct = risk_reward
+        outcome = TradeOutcome.WIN.value if label == "phantom_win" else TradeOutcome.LOSS.value
+        return outcome, reward_pct, risk_pct
+
+    def _candidate_risk_reward(
+        self, record: EligibleTuningRecord, config: dict[str, float]
+    ) -> tuple[float, float] | None:
+        entry = self._entry_reference(record.plan)
+        if (
+            entry is None
+            or entry <= 0
+            or record.plan.stop_loss is None
+            or record.plan.take_profit is None
+        ):
+            return None
+        signal_breakdown = self._plan_signal_breakdown(record.plan)
+        intended_action = str(signal_breakdown.get("intended_action") or "").strip().lower() or None
+        effective_action = (
+            intended_action
+            if record.plan.action in {"no_action", "watchlist"}
+            and intended_action in {"long", "short"}
+            else record.plan.action
+        )
+        if effective_action not in {"long", "short"}:
+            return None
+        volatility_score = signal_breakdown.get("cheap_scan_volatility_score")
+        entry_low, entry_high, stop_loss, take_profit = family_adjusted_trade_levels(
+            entry_price=entry,
+            stop_loss=float(record.plan.stop_loss),
+            take_profit=float(record.plan.take_profit),
+            setup_family=record.setup_family,
+            action=effective_action,
+            transmission_context_bias=record.context_bias,
+            volatility_score=float(volatility_score)
+            if isinstance(volatility_score, (int, float))
+            else None,
+            tuning_config=config,
+        )
+        candidate_entry = (entry_low + entry_high) / 2.0
+        if candidate_entry <= 0:
+            return None
+        risk_pct = abs((candidate_entry - stop_loss) / candidate_entry) * 100.0
+        reward_pct = abs((take_profit - candidate_entry) / candidate_entry) * 100.0
+        if risk_pct <= 0 or reward_pct <= 0:
+            return None
+        return reward_pct, risk_pct
 
     @staticmethod
     def _plan_signal_breakdown(plan: RecommendationPlan) -> dict[str, object]:
