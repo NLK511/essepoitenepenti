@@ -6,9 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts.large_plan_generation_parameter_search import (
+    CAMPAIGN_PARAMETER_KEYS,
     ResumeCache,
     SearchResult,
     _apply_calibration_promotion_blockers,
+    _changed_keys,
     _fingerprint,
     _keep_top,
     coarse_candidates,
@@ -32,6 +34,34 @@ def test_large_search_candidate_stream_is_deterministic_and_bounded() -> None:
     assert len(first) == 5
     for config in first:
         assert 40.0 <= config["global.actionable_confidence_floor_percent"] <= 70.0
+
+
+def test_phantom_selectivity_research_campaign_samples_broader_rescore_safe_keys() -> None:
+    active = normalize_plan_generation_tuning_config(None)
+    candidates = list(
+        coarse_candidates(
+            active,
+            count=30,
+            seed=123,
+            campaign="phantom_selectivity_research",
+        )
+    )
+
+    assert {
+        "global.actionable_confidence_floor_percent",
+        "setup_family.research_floor_delta_percent",
+        "phantom_selectivity.tailwind_floor_delta_percent",
+        "phantom_selectivity.headwind_floor_delta_percent",
+        "phantom_selectivity.volatility_floor_slope_percent",
+    } == set(CAMPAIGN_PARAMETER_KEYS["phantom_selectivity_research"])
+    assert candidates[0] == active
+    assert any(
+        config["phantom_selectivity.tailwind_floor_delta_percent"]
+        != active["phantom_selectivity.tailwind_floor_delta_percent"]
+        for config in candidates
+    )
+    for config in candidates:
+        assert len(_changed_keys(config, active)) <= 3
 
 
 def test_large_search_ranks_precision_before_expected_value() -> None:

@@ -67,6 +67,16 @@ Replay evidence profiles:
 
 Only `promotion` can be treated as promotion-oriented large-search evidence. `phantom_selectivity` scores candidates with the actionability floor against phantom win/loss labels, not the execution floor against closed trade outcomes. It can produce research leads, but the next step is candidate-specific replay over the same period and then a fresh promotion-grade preflight.
 
+For `phantom_selectivity`, the scorer may vary only rescore-safe selectivity gates over already stored plan evidence. It must not mutate trade geometry, regenerate plans, or claim that phantom rows are closed trade outcomes. The expanded phantom scorer may adjust the actionability floor by stored setup/context features:
+
+- a global actionability floor;
+- the existing setup-family research floor delta, reused as a coarse setup-family selectivity delta until per-family selectivity keys exist;
+- a tailwind context floor delta;
+- a headwind context floor delta;
+- a volatility floor slope derived from stored `cheap_scan_volatility_score`.
+
+These adjustments only decide which phantom rows would become candidate actionables for research scoring. Any promising result still requires candidate-specific replay to prove that those rows become real closed trade outcomes.
+
 Supported minimum-actionable modes:
 
 - `rank_only` — legacy exploratory behavior; low-sample candidates may be ranked below adequate-sample candidates but are not rejected solely by the sample floor.
@@ -86,6 +96,7 @@ A candidate selected from fewer actionables than the configured minimum must not
 Large search must persist `search_campaign` and the allowed key set in schema-v2 artifacts. Supported campaigns are:
 
 - `selectivity_only` — only `global.actionable_confidence_floor_percent`;
+- `phantom_selectivity_research` — research-only phantom selectivity campaign over actionability, setup-family, context-bias, and volatility floor modifiers;
 - `entry_risk_only` — entry band risk fraction and setup-family entry band multiplier;
 - `stop_risk_only` — headwind/volatility stop controls and stop-distance family multipliers;
 - `take_profit_family_only` — one reward/take-profit multiplier at a time;

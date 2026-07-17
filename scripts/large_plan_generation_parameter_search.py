@@ -41,6 +41,7 @@ ObjectiveProfile = Literal["research_precision", "research_ev_per_trade", "promo
 ReplayEvidenceProfile = Literal["research", "promotion", "phantom_selectivity"]
 SearchCampaign = Literal[
     "selectivity_only",
+    "phantom_selectivity_research",
     "entry_risk_only",
     "stop_risk_only",
     "take_profit_family_only",
@@ -50,6 +51,13 @@ SearchCampaign = Literal[
 
 CAMPAIGN_PARAMETER_KEYS: dict[SearchCampaign, tuple[str, ...]] = {
     "selectivity_only": ("global.actionable_confidence_floor_percent",),
+    "phantom_selectivity_research": (
+        "global.actionable_confidence_floor_percent",
+        "setup_family.research_floor_delta_percent",
+        "phantom_selectivity.tailwind_floor_delta_percent",
+        "phantom_selectivity.headwind_floor_delta_percent",
+        "phantom_selectivity.volatility_floor_slope_percent",
+    ),
     "entry_risk_only": (
         "global.entry_band_risk_fraction",
         "setup_family.entry_band_multiplier",
@@ -68,6 +76,7 @@ CAMPAIGN_PARAMETER_KEYS: dict[SearchCampaign, tuple[str, ...]] = {
 }
 CAMPAIGN_MAX_CHANGED_KEYS: dict[SearchCampaign, int | None] = {
     "selectivity_only": 1,
+    "phantom_selectivity_research": 3,
     "entry_risk_only": 2,
     "stop_risk_only": 2,
     "take_profit_family_only": 1,

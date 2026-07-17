@@ -142,6 +142,9 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         outcome: str = "win",
         tier: str = "tier_a",
         resolution_source: str = "intraday",
+        confidence_percent: float = 72.0,
+        context_bias: str = "tailwind",
+        volatility_score: float | None = None,
     ) -> None:
         batch = HistoricalReplayBatchRecord(
             name=f"batch-{created_at.isoformat()}",
@@ -163,14 +166,19 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                 ticker="EOG",
                 horizon=StrategyHorizon.ONE_WEEK,
                 action="long",
-                confidence_percent=72.0,
+                confidence_percent=confidence_percent,
                 entry_price_low=100.0,
                 entry_price_high=100.0,
                 stop_loss=95.0,
                 take_profit=110.0,
                 signal_breakdown={
                     "setup_family": "breakout",
-                    "transmission_summary": {"context_bias": "tailwind"},
+                    "transmission_summary": {"context_bias": context_bias},
+                    **(
+                        {"cheap_scan_volatility_score": volatility_score}
+                        if volatility_score is not None
+                        else {}
+                    ),
                 },
                 computed_at=created_at,
             )
@@ -450,6 +458,68 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             (0, 0, 0.0, 2),
             self.service._score_records(
                 records, restrictive, evidence_profile="phantom_selectivity"
+            ),
+        )
+
+    def test_phantom_selectivity_scoring_applies_context_and_volatility_floor_deltas(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        self._seed_replay_record(
+            created_at=start,
+            mfe=9.0,
+            mae=-2.0,
+            outcome="phantom_win",
+            resolution_source="intraday",
+            confidence_percent=68.0,
+            context_bias="tailwind",
+            volatility_score=80.0,
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=1),
+            mfe=1.0,
+            mae=-8.0,
+            outcome="phantom_loss",
+            resolution_source="intraday",
+            confidence_percent=68.0,
+            context_bias="headwind",
+            volatility_score=20.0,
+        )
+        records = self.service._replay_eligible_records(
+            ticker=None,
+            setup_family=None,
+            limit=None,
+            tiers={"tier_a"},
+            evidence_profile="phantom_selectivity",
+        )
+        baseline = {
+            **normalize_plan_generation_tuning_config(None),
+            "global.actionable_confidence_floor_percent": 70.0,
+        }
+        context_weighted = {
+            **baseline,
+            "phantom_selectivity.tailwind_floor_delta_percent": -5.0,
+            "phantom_selectivity.headwind_floor_delta_percent": 5.0,
+        }
+        volatility_weighted = {
+            **baseline,
+            "phantom_selectivity.volatility_floor_slope_percent": -10.0,
+        }
+
+        self.assertEqual(
+            (0, 0, 0.0, 2),
+            self.service._score_records(
+                records, baseline, evidence_profile="phantom_selectivity"
+            ),
+        )
+        self.assertEqual(
+            (1, 1, 11.2, 1),
+            self.service._score_records(
+                records, context_weighted, evidence_profile="phantom_selectivity"
+            ),
+        )
+        self.assertEqual(
+            (1, 1, 11.2, 1),
+            self.service._score_records(
+                records, volatility_weighted, evidence_profile="phantom_selectivity"
             ),
         )
 

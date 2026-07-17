@@ -2331,7 +2331,7 @@ class PlanGenerationTuningService:
         label = str(record.replay_outcome or "").strip().lower()
         if label not in {"phantom_win", "phantom_loss"}:
             return None
-        if float(record.plan.confidence_percent) < self._actionability_floor(config):
+        if float(record.plan.confidence_percent) < self._phantom_selectivity_floor(record, config):
             return None
         risk_reward = self._candidate_risk_reward(record, config)
         if risk_reward is None:
@@ -2339,6 +2339,44 @@ class PlanGenerationTuningService:
         reward_pct, risk_pct = risk_reward
         outcome = TradeOutcome.WIN.value if label == "phantom_win" else TradeOutcome.LOSS.value
         return outcome, reward_pct, risk_pct
+
+    def _phantom_selectivity_floor(
+        self, record: EligibleTuningRecord, config: dict[str, float]
+    ) -> float:
+        floor = self._actionability_floor(config)
+        floor += float(config.get("setup_family.research_floor_delta_percent", 0.0) or 0.0)
+        context_bias = str(record.context_bias or "").strip().lower()
+        if context_bias == "tailwind":
+            floor += float(
+                config.get("phantom_selectivity.tailwind_floor_delta_percent", 0.0)
+                or 0.0
+            )
+        elif context_bias == "headwind":
+            floor += float(
+                config.get("phantom_selectivity.headwind_floor_delta_percent", 0.0)
+                or 0.0
+            )
+
+        slope = float(
+            config.get("phantom_selectivity.volatility_floor_slope_percent", 0.0) or 0.0
+        )
+        if slope:
+            signal_breakdown = self._plan_signal_breakdown(record.plan)
+            volatility_score = self._normalized_volatility_score(
+                signal_breakdown.get("cheap_scan_volatility_score")
+            )
+            if volatility_score is not None:
+                floor += slope * (volatility_score - 0.5)
+        return max(0.0, min(100.0, floor))
+
+    @staticmethod
+    def _normalized_volatility_score(raw_value: object) -> float | None:
+        if not isinstance(raw_value, (int, float)):
+            return None
+        value = float(raw_value)
+        if value > 1.0:
+            value /= 100.0
+        return max(0.0, min(1.0, value))
 
     def _candidate_risk_reward(
         self, record: EligibleTuningRecord, config: dict[str, float]
