@@ -161,3 +161,28 @@ def test_candidate_replay_stays_research_only_when_selection_dates_are_too_thin(
     assert report["verdict"] == "research_candidate_only"
     assert report["promotion_candidate_ready"] is False
     assert "selection_dates_below_promotion_minimum" in report["combined_union"]["promotion_blockers"]
+
+
+def test_candidate_replay_union_keeps_distinct_duplicate_shaped_rows() -> None:
+    day = date(2026, 1, 1)
+    rows = [
+        _obs(day=day, outcome="phantom_win", ticker="PANW"),
+        _obs(day=day, outcome="phantom_win", ticker="PANW"),
+        _obs(day=day, outcome="phantom_loss", ticker="PANW"),
+    ]
+
+    report = build_phantom_selectivity_candidate_replay_report(
+        rows,
+        [
+            {"feature": "ticker", "value": "panw"},
+            {"feature": "effective_action", "value": "long"},
+        ],
+        min_selection_dates=1,
+        gates=PhantomSelectivityCandidateReplayGates(
+            min_selection_rows=1,
+            min_selection_dates=1,
+        ),
+    )
+
+    assert report["combined_union"]["selection"]["count"] == 3
+    assert report["candidate_groups"][0]["selection"]["count"] == 3

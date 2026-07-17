@@ -1,0 +1,82 @@
+# Upstream signal driver audit spec
+
+**Status:** target behavior
+
+The phantom selectivity tuning layer is on hold. Broad threshold searches did not find a stable policy, but the strict separability audit found six narrow candidate groups and candidate replay showed positive research-only performance with too few selection dates for promotion.
+
+The next useful work is to inspect upstream signal quality. The app must explain whether the candidate groups are supported by reusable signal features, or whether they are only ticker-specific artifacts that should not drive more tuning.
+
+## Goal
+
+Produce a read-only audit artifact that compares the candidate phantom-selectivity groups against the broader tier-A phantom evidence pool using raw stored plan signal fields.
+
+The audit must answer:
+
+- Are candidate rows enriched for reusable upstream features such as setup family, context bias, transmission tags, catalyst intensity, volatility, intended action, decision tier, confidence components, or shortlist metadata?
+- Inside the candidate rows, do any reusable features distinguish phantom wins from phantom losses?
+- If no reusable feature explains the lift, is the apparent edge mostly ticker identity?
+
+## Rules
+
+- The audit must be read-only. It must not mutate tuning config, replay rows, plans, broker settings, jobs, orders, or scheduler state.
+- The audit must use replay evidence profile `phantom_selectivity` by default: intraday `phantom_win` and `phantom_loss` rows from accepted replay tiers.
+- Candidate rows must be selected from the separability artifact candidate groups, not rediscovered by a fresh threshold search.
+- The audit must hydrate raw `signal_breakdown_json` from stored recommendation plans. It must not rely only on the narrowed tuning snapshot.
+- Expected value must use stored candidate trade geometry, as in phantom selectivity replay.
+- Ticker identity may be reported, but it must not be treated as reusable upstream signal quality by itself.
+- Missing or sparse signal fields must be reported explicitly.
+
+## Feature families
+
+The first implementation must inspect these reusable feature families when present:
+
+- setup family
+- context bias
+- plan action and effective intended action
+- confidence bucket
+- cheap-scan volatility bucket
+- transmission tags
+- expected transmission window
+- catalyst intensity bucket
+- decision tier
+- shortlist flag and shortlist rank bucket
+- confidence component buckets
+- calibration review direction or action when available
+- fundamental coverage/status buckets when available
+
+The audit may also report ticker enrichment as a diagnostic, but ticker-only enrichment must produce a weaker verdict.
+
+## Verdicts
+
+- `upstream_feature_lead` — candidate rows and candidate wins are explained by at least one reusable non-ticker signal feature with enough support and positive expected value.
+- `ticker_artifact_only` — candidate performance is present, but no reusable non-ticker signal feature has enough support. Further work should avoid tuning and inspect ticker-specific upstream generation.
+- `insufficient_feature_coverage` — raw signal fields are too sparse to support a conclusion.
+
+Default gates:
+
+- total candidate rows: at least 100
+- candidate distinct dates: at least 10
+- minimum feature support in candidate rows: at least 30
+- minimum feature support in candidate selection dates: at least 5
+- minimum reusable feature coverage: 60 percent of candidate rows must have at least one reusable feature
+- reusable feature candidate win-rate lift over candidate baseline: at least 5 percentage points
+- reusable feature expected value per observation: greater than 0
+
+## Output
+
+The artifact must include:
+
+- input separability artifact path and replay evidence profile;
+- candidate group count;
+- population and candidate metrics;
+- reusable feature coverage;
+- top reusable feature enrichments in candidate rows versus all phantom rows;
+- top reusable feature win/loss drivers inside candidate rows;
+- ticker diagnostics;
+- verdict, blockers, and recommendation.
+
+If the verdict is `upstream_feature_lead`, the next work is to inspect or improve upstream generation around the listed reusable features, then rerun candidate replay after enough new evidence accumulates.
+
+If the verdict is `ticker_artifact_only`, the next work is not another tuning search. It is ticker-specific upstream diagnosis for the passing tickers.
+
+If the verdict is `insufficient_feature_coverage`, the next work is instrumentation: persist the missing signal features consistently before trying more optimization.

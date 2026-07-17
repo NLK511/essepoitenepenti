@@ -237,15 +237,17 @@ def build_phantom_selectivity_candidate_replay_report(
     discovery_baseline = _metric_payload(discovery_rows)
     selection_baseline = _metric_payload(selection_rows)
     group_results: list[dict[str, object]] = []
-    selected_union_keys: set[tuple[date, str, str, float, float, str]] = set()
+    selected_union_indexes: set[int] = set()
     for index, group in enumerate(candidate_groups, start=1):
         feature = str(group.get("feature") or "")
         value = str(group.get("value") or "")
         if feature not in FEATURE_NAMES or not value:
             continue
-        selected = [item for item in rows if _feature_value(item, feature) == value]
-        for item in selected:
-            selected_union_keys.add(_observation_key(item))
+        selected: list[PhantomSelectivityObservation] = []
+        for row_index, item in enumerate(rows):
+            if _feature_value(item, feature) == value:
+                selected.append(item)
+                selected_union_indexes.add(row_index)
         result = _candidate_replay_payload(
             selected,
             discovery_dates=discovery_dates,
@@ -256,7 +258,7 @@ def build_phantom_selectivity_candidate_replay_report(
         result.update({"rank": index, "feature": feature, "value": value})
         group_results.append(result)
 
-    union_rows = [item for item in rows if _observation_key(item) in selected_union_keys]
+    union_rows = [item for row_index, item in enumerate(rows) if row_index in selected_union_indexes]
     union_result = _candidate_replay_payload(
         union_rows,
         discovery_dates=discovery_dates,
@@ -331,18 +333,6 @@ def _candidate_replay_payload(
         "promotion_ready": not blockers,
         "promotion_blockers": sorted(set(blockers)),
     }
-
-
-def _observation_key(item: PhantomSelectivityObservation) -> tuple[date, str, str, float, float, str]:
-    return (
-        item.evidence_date,
-        item.ticker,
-        item.setup_family,
-        round(item.confidence_percent, 6),
-        round(item.reward_pct, 6),
-        item.outcome,
-    )
-
 
 def _chronological_split_dates(
     all_dates: list[date],

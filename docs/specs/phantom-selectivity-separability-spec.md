@@ -68,6 +68,8 @@ The replay artifact must include:
 - expected value from stored reward/risk geometry;
 - a promotion-readiness verdict.
 
+The combined union must de-duplicate only the same observation selected by multiple candidate groups. It must not collapse distinct same-day rows that share ticker, setup family, confidence, reward/risk, and outcome.
+
 Promotion readiness requires:
 
 - selection rows: at least 100
