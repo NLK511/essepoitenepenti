@@ -14,6 +14,45 @@ The app does not yet have a deployable money-winning tuning. Broad threshold sea
 
 Do not run another broad large tuning search just because evidence exists. Follow the workflow below.
 
+## Weekly performance report
+
+The standing weekly report is called the **weekly performance report**.
+
+Schedule:
+
+- every Saturday at 04:00 UTC;
+- run from the main deployed Docker Compose environment;
+- post the summary back to the operator chat;
+- archive every generated artifact under a dated folder.
+
+Artifact archive folder:
+
+```text
+.prod-run/workers/artifacts/weekly-performance-report/YYYY-MM-DD/
+```
+
+The weekly report must include:
+
+- tag monitor verdict and top blockers;
+- whether prospective tags are absent, accumulating, or ready for review;
+- phantom separability verdict if run;
+- candidate replay verdict if run;
+- upstream audit/drilldown verdicts if run;
+- performance read: what improved, what weakened, what is still unproven;
+- concrete improvement proposals;
+- explicit stop/go decision for tuning;
+- exact artifact folder path.
+
+Report style:
+
+- concise;
+- ordered by decision importance;
+- no raw JSON dump;
+- mention only the artifact paths needed to resume;
+- call out when evidence is too thin instead of dressing it up.
+
+If the tag monitor reports `no_prospective_tagged_evidence` or `prospective_tags_accumulating`, the weekly report may stop after the monitor and should not run the full audit chain unless there is a clear reason.
+
 ## Golden rule
 
 Every tuning action must answer one question:
@@ -240,6 +279,8 @@ Use stable `*-latest.json` names for current reruns:
 Use dated artifact names only for immutable milestones that must be referenced later.
 
 When a new artifact matters, record it in this runbook or the hold document. Otherwise it is disposable evidence.
+
+For the weekly performance report, write all generated artifacts into the weekly archive folder first. If a latest artifact is also useful, copy or regenerate it with the stable `*-latest.json` name after the dated archive artifact exists.
 
 ## Quick decision table
 
