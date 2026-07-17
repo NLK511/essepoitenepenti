@@ -365,6 +365,49 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual("intraday", promotion[0].replay_resolution_source)
         self.assertEqual("win", promotion[0].replay_outcome)
 
+    def test_replay_phantom_selectivity_evidence_only_keeps_intraday_phantom_labels(self) -> None:
+        start = datetime(2026, 4, 1, tzinfo=timezone.utc)
+        self._seed_replay_record(
+            created_at=start,
+            mfe=9.0,
+            mae=-2.0,
+            outcome="phantom_win",
+            resolution_source="intraday",
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=1),
+            mfe=1.0,
+            mae=-8.0,
+            outcome="phantom_loss",
+            resolution_source="intraday",
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=2),
+            mfe=9.0,
+            mae=-2.0,
+            outcome="win",
+            resolution_source="intraday",
+        )
+        self._seed_replay_record(
+            created_at=start + timedelta(days=3),
+            mfe=9.0,
+            mae=-2.0,
+            outcome="phantom_win",
+            resolution_source="daily_prefilter",
+        )
+
+        phantom = self.service._replay_eligible_records(
+            ticker=None,
+            setup_family=None,
+            limit=None,
+            tiers={"tier_a"},
+            evidence_profile="phantom_selectivity",
+        )
+
+        self.assertEqual(2, len(phantom))
+        self.assertEqual(["phantom_win", "phantom_loss"], [row.replay_outcome for row in phantom])
+        self.assertEqual({"intraday"}, {row.replay_resolution_source for row in phantom})
+
     def test_point_in_time_replay_mode_ignores_stale_replay_artifact_versions(self) -> None:
         start = datetime(2026, 4, 1, tzinfo=timezone.utc)
         for index in range(4):

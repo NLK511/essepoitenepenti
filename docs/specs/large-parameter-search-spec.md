@@ -16,9 +16,11 @@ This is a research tuning tool only. It is intentionally not schedulable and mus
 - When replay evidence is requested, the search must use replay eligibility rows directly with explicit tier filters. It must not silently fall back to the stored-plan eligible cache.
 - It must stream candidate generation/evaluation and keep only a bounded top-K result set in memory.
 - It must reuse the memory-safe eligible-record loader from `PlanGenerationTuningService`.
-- Replay-backed large search defaults to promotion-grade evidence: closed intraday replay labels from accepted replay tiers only. Daily-prefilter, pending, open, no-entry, and other ambiguous labels are research evidence, not promotion-grade optimizer input.
-- Operators may request the broader replay research profile for diagnostics, but artifacts must label that profile explicitly.
+- Replay-backed large search defaults to promotion-grade evidence: closed intraday replay labels from accepted replay tiers only. Daily-prefilter, pending, open, no-entry, phantom, and other ambiguous labels are research evidence, not promotion-grade optimizer input.
+- Operators may request broader replay research profiles for diagnostics, but artifacts must label that profile explicitly.
+- `phantom_selectivity` is a research-only replay evidence profile. It admits intraday `phantom_win` and `phantom_loss` rows so selectivity/actionability candidates can be discovered from missed-opportunity evidence. It must never claim promotion capability; any promising candidate requires canonical candidate-specific replay to prove that the candidate actually creates closed trade outcomes.
 - Every artifact must include evidence preflight diagnostics before candidate results: selected evidence profile, partition counts, distinct dates, scoreability, and blocker/downgrade reasons.
+- Research-only replay diagnostics may use a lower selection-date floor than promotion evidence, but the artifact must mark `promotion_search_capable=false` and `candidate_replay_required=true` where applicable.
 - If selection or locked-holdout evidence is too thin to score, the run must stay research-only with an explicit thin-evidence role/status rather than implying a promotion-oriented large search was possible.
 - It must write an artifact with the best coarse-search candidates and local fine-tune candidates.
 - It must not mutate active plan-generation config, actionability thresholds, broker settings, or order execution.
@@ -56,6 +58,14 @@ Supported objective profiles:
 - `research_precision` — maximize actionable win rate after sample floors; EV remains visible but can be secondary.
 - `research_ev_per_trade` — maximize expected value per actionable trade after sample and WR floors.
 - `promotion_candidate` — require positive EV per actionable, non-negative total EV delta versus baseline, sufficient actionables, fold stability, and normal replay/promotion gates.
+
+Replay evidence profiles:
+
+- `promotion` — closed intraday trade labels only: `win`, `loss`, and `flat`.
+- `phantom_selectivity` — intraday `phantom_win` and `phantom_loss` rows only; research diagnostic for actionability/selectivity.
+- `research` — broad replay eligibility rows for audits and ad hoc diagnostics.
+
+Only `promotion` can be treated as promotion-oriented large-search evidence. `phantom_selectivity` can produce research leads, but the next step is candidate-specific replay over the same period and then a fresh promotion-grade preflight.
 
 Supported minimum-actionable modes:
 

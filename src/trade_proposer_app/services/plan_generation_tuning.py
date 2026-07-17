@@ -1563,7 +1563,7 @@ class PlanGenerationTuningService:
             if str(item).strip()
         }
         normalized_profile = str(evidence_profile or "research").strip().lower()
-        if normalized_profile not in {"research", "promotion"}:
+        if normalized_profile not in {"research", "promotion", "phantom_selectivity"}:
             raise PlanGenerationTuningError(
                 f"unsupported replay evidence profile: {evidence_profile}"
             )
@@ -1601,6 +1601,11 @@ class PlanGenerationTuningService:
         if normalized_profile == "promotion":
             query = query.where(ReplayEligibilityRecord.resolution_source == "intraday")
             query = query.where(ReplayEligibilityRecord.outcome.in_(["win", "loss", "flat"]))
+        elif normalized_profile == "phantom_selectivity":
+            query = query.where(ReplayEligibilityRecord.resolution_source == "intraday")
+            query = query.where(
+                ReplayEligibilityRecord.outcome.in_(["phantom_win", "phantom_loss"])
+            )
         if ticker:
             query = query.where(ReplayEligibilityRecord.ticker == ticker.upper())
         query = query.order_by(RecommendationPlanRecord.computed_at.asc(), ReplayEligibilityRecord.id.asc())

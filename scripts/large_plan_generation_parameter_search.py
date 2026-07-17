@@ -38,7 +38,7 @@ from trade_proposer_app.services.tuning_stability import TuningStabilityEvaluato
 Fingerprint = str
 MinActionableMode = Literal["rank_only", "hard_gate"]
 ObjectiveProfile = Literal["research_precision", "research_ev_per_trade", "promotion_candidate"]
-ReplayEvidenceProfile = Literal["research", "promotion"]
+ReplayEvidenceProfile = Literal["research", "promotion", "phantom_selectivity"]
 SearchCampaign = Literal[
     "selectivity_only",
     "entry_risk_only",
@@ -916,32 +916,51 @@ def _evidence_preflight(
     evidence_source: str,
     replay_evidence_profile: str,
 ) -> dict[str, object]:
-    min_selection_dates = 20
-    min_holdout_dates = 20
     blockers: list[str] = []
+    warnings = list(partitions.warnings)
     selection_dates = len(partitions.selection.evidence_dates)
     holdout_dates = len(partitions.locked_holdout.evidence_dates)
+    promotion_profile = evidence_source != "replay" or replay_evidence_profile == "promotion"
+    candidate_replay_required = (
+        evidence_source == "replay" and replay_evidence_profile == "phantom_selectivity"
+    )
+    min_selection_dates = 20 if promotion_profile else 10
+    min_holdout_dates = 20
     if not records:
         blockers.append("no_eligible_records")
     if not partitions.selection.records:
         blockers.append("no_selection_records")
     elif selection_dates < min_selection_dates:
         blockers.append("selection_distinct_dates_below_minimum")
-    if partitions.holdout_status != "locked":
-        blockers.append(partitions.holdout_status)
-    elif not partitions.locked_holdout.records:
-        blockers.append("no_locked_holdout_records")
-    elif holdout_dates < min_holdout_dates:
-        blockers.append("holdout_distinct_dates_below_minimum")
+    if promotion_profile:
+        if partitions.holdout_status != "locked":
+            blockers.append(partitions.holdout_status)
+        elif not partitions.locked_holdout.records:
+            blockers.append("no_locked_holdout_records")
+        elif holdout_dates < min_holdout_dates:
+            blockers.append("holdout_distinct_dates_below_minimum")
+    elif partitions.holdout_status != "locked":
+        warnings.append(partitions.holdout_status)
+
+    if candidate_replay_required:
+        warnings.append("phantom_selectivity_requires_candidate_specific_replay")
 
     return {
         "schema_version": "large-search-evidence-preflight-v1",
         "status": "scoreable" if not blockers else "thin_evidence",
-        "run_role": "research_only" if not blockers else "research_thin_evidence",
+        "run_role": (
+            "research_phantom_selectivity"
+            if candidate_replay_required and not blockers
+            else "research_only"
+            if not blockers
+            else "research_thin_evidence"
+        ),
         "evidence_source": evidence_source,
         "replay_evidence_profile": replay_evidence_profile
         if evidence_source == "replay"
         else None,
+        "promotion_search_capable": promotion_profile and not blockers,
+        "candidate_replay_required": candidate_replay_required,
         "eligible_record_count": len(records),
         "partition_record_counts": {
             "discovery": len(partitions.discovery.records),
@@ -961,7 +980,7 @@ def _evidence_preflight(
         "scoreable_locked_holdout": partitions.holdout_status == "locked"
         and bool(partitions.locked_holdout.records),
         "blockers": blockers,
-        "warnings": list(partitions.warnings),
+        "warnings": sorted(set(warnings)),
     }
 
 
@@ -1564,9 +1583,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--replay-evidence-profile",
-        choices=("promotion", "research"),
+        choices=("promotion", "phantom_selectivity", "research"),
         default="promotion",
-        help="Replay profile for large search. Promotion keeps only closed intraday labels.",
+        help=(
+            "Replay profile for large search. Promotion keeps only closed intraday "
+            "trade labels; phantom_selectivity is research-only."
+        ),
     )
     parser.add_argument(
         "--artifact",
