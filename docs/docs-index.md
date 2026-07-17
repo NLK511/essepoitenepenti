@@ -13,6 +13,7 @@ For the shortest useful path, read:
 3. `getting-started.md` — setup, startup, auth, and troubleshooting
 4. `operator-page-field-guide.md` — UI map and daily operator workflow
 5. `recommendation-methodology.md` — recommendation and plan-generation path
+6. `evidence-and-tuning-operations-runbook.md` — evidence, tuning, auditing, monitoring, and stop/go workflow
 
 Use `glossary.md` as a reference when terms are unclear.
 
@@ -25,12 +26,14 @@ These are the primary narrative source of truth for the product today:
 - `roadmap.md` — short active priorities only
 - `architecture.md` — runtime model and module boundaries
 - `recommendation-methodology.md` — scoring, shortlist, deep analysis, calibration, and plan framing
+- `evidence-and-tuning-operations-runbook.md` — current evidence/tuning operations workflow and script sequence
 - `operator-page-field-guide.md` — current UI/operator flow
 - `user-journeys.md` — intended operator journeys
 - `glossary.md` — shared terms
 - `er-model.md` — schema overview
 - `raw-details-reference.md` — persisted payload and diagnostics reference
 - `operational-scripts-reference.md` — maintenance, hydration, validation, and report scripts
+- `phantom-selectivity-tuning-hold-2026-07-17.md` — dated hold/resume record for the current tuning layer
 
 ## Active plans and operating trackers
 

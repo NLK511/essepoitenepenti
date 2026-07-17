@@ -4,6 +4,81 @@
 
 This document lists the standalone scripts available in the `scripts/` directory for maintenance, hydration, and regression testing.
 
+For evidence repair, tuning, phantom selectivity, upstream signal-quality audits, and prospective monitoring, use `evidence-and-tuning-operations-runbook.md` as the workflow. This reference lists the script entry points; the runbook defines ordering, verdicts, gates, and stop/go decisions.
+
+## Evidence, tuning, and upstream quality scripts
+
+These scripts are read-only unless explicitly documented otherwise. Run database-backed evidence scripts inside the API container unless a local database URL is configured:
+
+```bash
+docker compose exec -T api sh -lc 'python scripts/<script>.py ...'
+```
+
+### `scripts/monitor_upstream_signal_driver_tags.py`
+Monitors prospectively emitted `signal_breakdown.upstream_signal_quality_drivers` tags on stored plans.
+
+- **Use case:** Standing checkpoint while the tuning layer is on hold. Reports whether tagged evidence is absent, accumulating, or ready for review.
+- **Default artifact:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/monitor_upstream_signal_driver_tags.py \
+    --artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-tag-monitor-latest.json'
+  ```
+- **Read first:** `docs/evidence-and-tuning-operations-runbook.md`.
+
+### `scripts/audit_phantom_selectivity_separability.py`
+Audits whether `phantom_win` rows are separable from `phantom_loss` rows before candidate replay.
+
+- **Use case:** Decide whether phantom selectivity has candidate groups worth replaying, or whether this layer should stop.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/audit_phantom_selectivity_separability.py \
+    --replay-tier tier_a \
+    --artifact /app/.prod-run/workers/artifacts/phantom-selectivity-separability-latest.json'
+  ```
+
+### `scripts/replay_phantom_selectivity_candidates.py`
+Replays separability candidate groups as if the candidate policy had emitted them as trades.
+
+- **Use case:** Decide whether a phantom-selectivity lead remains research-only or has enough time-spread evidence for promotion preflight.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/replay_phantom_selectivity_candidates.py \
+    --separability-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-separability-latest.json \
+    --replay-tier tier_a \
+    --artifact /app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json'
+  ```
+
+### `scripts/audit_upstream_signal_drivers.py`
+Audits reusable upstream signal features behind phantom-selectivity candidate groups.
+
+- **Use case:** Decide whether candidate lift is explained by reusable signal features or mostly ticker identity.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/audit_upstream_signal_drivers.py \
+    --separability-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-separability-latest.json \
+    --replay-tier tier_a \
+    --artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-audit-latest.json'
+  ```
+
+### `scripts/drilldown_upstream_signal_drivers.py`
+Drills into concrete upstream feature/value drivers with examples and concentration checks.
+
+- **Use case:** Inspect whether upstream signal leads are reusable enough to instrument or change generation code.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/drilldown_upstream_signal_drivers.py \
+    --separability-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-separability-latest.json \
+    --upstream-audit-artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-audit-latest.json \
+    --replay-tier tier_a \
+    --artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-drilldown-latest.json'
+  ```
+
+### `scripts/large_plan_generation_parameter_search.py`
+Runs bounded plan-generation tuning searches.
+
+- **Use case:** Use only after evidence preflight says promotion or research conditions are valid. Do not use as the first step when evidence is thin.
+- **Read first:** `docs/evidence-and-tuning-operations-runbook.md` and `docs/specs/large-parameter-search-spec.md`.
+
 ## Docker single-host deployment helpers
 
 These scripts are optional helpers around the single `docker-compose.yml` deployment path. They require `.env.docker` to exist.
