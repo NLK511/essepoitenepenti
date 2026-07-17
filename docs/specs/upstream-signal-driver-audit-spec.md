@@ -134,3 +134,34 @@ Initial prospective tags are limited to driver buckets proven by the July 2026 d
 - `confidence_component_bucket=data_quality_cap:60-70`
 
 These tags create a clean prospective cohort for future replay and promotion preflight. They are not a deployment signal by themselves.
+
+## Prospective tag monitor
+
+After prospective driver tags are emitted, the app must provide a read-only monitor artifact for tagged plans.
+
+The monitor must:
+
+- inspect stored recommendation plans that contain `signal_breakdown.upstream_signal_quality_drivers`;
+- count all tagged plans, even when replay outcomes are not available yet;
+- report tag cohorts by stable tag key, feature, value, setup family, ticker mix, action mix, date spread, and replay outcome mix;
+- report phantom win/loss expected value only for tagged rows that already have intraday replay labels and usable trade geometry;
+- report closed trade outcome mix when win/loss/flat labels are available;
+- mark whether each tag is promotion-watchable, still accumulating evidence, or empty;
+- never change plan generation, replay state, tuning config, jobs, orders, scheduler state, or broker behavior.
+
+Default prospective monitor gates:
+
+- minimum tagged rows for a useful cohort: 30
+- minimum tagged distinct dates for a useful cohort: 5
+- minimum tagged replay-labeled rows for outcome quality: 30
+- minimum tagged replay-labeled dates for outcome quality: 5
+- promotion watch date floor: 20 distinct dates
+- maximum single ticker share for a reusable cohort: 50 percent
+
+Monitor verdicts:
+
+- `prospective_tags_ready_for_review` — at least one tag has enough date-spread tagged evidence and replay-labeled outcome evidence to inspect before any policy change.
+- `prospective_tags_accumulating` — tags are present but still below review gates.
+- `no_prospective_tagged_evidence` — no stored plans contain prospective driver tags yet.
+
+The monitor is the standing checkpoint while this tuning layer is on hold. It tells us when the newly tagged evidence is worth reviewing again without running another broad threshold search.

@@ -6,9 +6,12 @@ from trade_proposer_app.services.phantom_selectivity_separability import (
     PhantomSelectivityObservation,
 )
 from trade_proposer_app.services.upstream_signal_driver_audit import (
+    ProspectiveSignalDriverTagMonitorGates,
+    ProspectiveSignalDriverTagObservation,
     UpstreamSignalDriverAuditGates,
     UpstreamSignalDriverDrilldownGates,
     UpstreamSignalDriverObservation,
+    build_prospective_signal_driver_tag_monitor_report,
     build_upstream_signal_driver_audit_report,
     build_upstream_signal_driver_drilldown_report,
 )
@@ -50,6 +53,106 @@ def _obs(
         ),
         signal_breakdown=signal,
     )
+
+
+def _tagged_obs(
+    *,
+    day: date,
+    ticker: str,
+    outcome: str | None = None,
+    tag_key: str = "volatility_30_40",
+    reward_pct: float = 8.0,
+    risk_pct: float = 4.0,
+) -> ProspectiveSignalDriverTagObservation:
+    return ProspectiveSignalDriverTagObservation(
+        plan_id=None,
+        evidence_date=day,
+        ticker=ticker,
+        action="no_action",
+        setup_family="catalyst_follow_through",
+        replay_outcome=outcome,
+        replay_resolution_source="intraday" if outcome else None,
+        reward_pct=reward_pct,
+        risk_pct=risk_pct,
+        signal_breakdown={
+            "upstream_signal_quality_drivers": [
+                {
+                    "key": tag_key,
+                    "feature": "volatility_bucket",
+                    "value": "30-40",
+                    "reason": "test tag",
+                }
+            ]
+        },
+    )
+
+
+def test_prospective_signal_driver_tag_monitor_reports_empty_state() -> None:
+    report = build_prospective_signal_driver_tag_monitor_report([])
+
+    assert report["verdict"] == "no_prospective_tagged_evidence"
+    assert "no_tagged_plans_found" in report["blockers"]
+    assert report["record_counts"]["tagged_plans"] == 0
+
+
+def test_prospective_signal_driver_tag_monitor_reports_accumulating_tags() -> None:
+    rows = [
+        _tagged_obs(
+            day=date(2026, 1, 1) + timedelta(days=index),
+            ticker="PANW",
+            outcome="phantom_win",
+        )
+        for index in range(3)
+    ]
+
+    report = build_prospective_signal_driver_tag_monitor_report(
+        rows,
+        gates=ProspectiveSignalDriverTagMonitorGates(
+            min_tagged_rows=10,
+            min_tagged_dates=5,
+            min_replay_labeled_rows=10,
+            min_replay_labeled_dates=5,
+            promotion_watch_date_floor=20,
+        ),
+    )
+
+    assert report["verdict"] == "prospective_tags_accumulating"
+    assert "no_tag_met_review_gates" in report["blockers"]
+    tag = report["tags"][0]
+    assert tag["tag_verdict"] == "accumulating"
+    assert "tagged_rows_below_minimum" in tag["blockers"]
+
+
+def test_prospective_signal_driver_tag_monitor_marks_review_ready_tag() -> None:
+    start = date(2026, 1, 1)
+    rows: list[ProspectiveSignalDriverTagObservation] = []
+    tickers = ["PANW", "HUM", "AMAT", "ORCL", "LRCX"]
+    for index in range(20):
+        for ticker in tickers:
+            rows.append(
+                _tagged_obs(
+                    day=start + timedelta(days=index),
+                    ticker=ticker,
+                    outcome="phantom_win" if ticker != "LRCX" else "phantom_loss",
+                )
+            )
+
+    report = build_prospective_signal_driver_tag_monitor_report(
+        rows,
+        gates=ProspectiveSignalDriverTagMonitorGates(
+            min_tagged_rows=30,
+            min_tagged_dates=5,
+            min_replay_labeled_rows=30,
+            min_replay_labeled_dates=5,
+            promotion_watch_date_floor=20,
+        ),
+    )
+
+    assert report["verdict"] == "prospective_tags_ready_for_review"
+    tag = report["tags"][0]
+    assert tag["tag_verdict"] == "promotion_watchable"
+    assert tag["phantom_outcome_metrics"]["win_rate_percent"] == 80.0
+    assert tag["phantom_outcome_metrics"]["expected_value_per_observation"] == 5.6
 
 
 def test_upstream_signal_audit_finds_reusable_feature_lead() -> None:

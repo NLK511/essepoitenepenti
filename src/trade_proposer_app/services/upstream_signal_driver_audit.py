@@ -58,6 +58,40 @@ class UpstreamSignalDriverDrilldownGates:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class ProspectiveSignalDriverTagObservation:
+    plan_id: int | None
+    evidence_date: date
+    ticker: str
+    action: str
+    setup_family: str
+    signal_breakdown: dict[str, object] = field(default_factory=dict)
+    replay_outcome: str | None = None
+    replay_resolution_source: str | None = None
+    reward_pct: float | None = None
+    risk_pct: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProspectiveSignalDriverTagMonitorGates:
+    min_tagged_rows: int = 30
+    min_tagged_dates: int = 5
+    min_replay_labeled_rows: int = 30
+    min_replay_labeled_dates: int = 5
+    promotion_watch_date_floor: int = 20
+    max_single_ticker_share_percent: float = 50.0
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "min_tagged_rows": self.min_tagged_rows,
+            "min_tagged_dates": self.min_tagged_dates,
+            "min_replay_labeled_rows": self.min_replay_labeled_rows,
+            "min_replay_labeled_dates": self.min_replay_labeled_dates,
+            "promotion_watch_date_floor": self.promotion_watch_date_floor,
+            "max_single_ticker_share_percent": self.max_single_ticker_share_percent,
+        }
+
+
 REUSABLE_FEATURES: tuple[str, ...] = (
     "setup_family",
     "context_bias",
@@ -75,6 +109,84 @@ REUSABLE_FEATURES: tuple[str, ...] = (
     "calibration_review",
     "fundamental_coverage_status",
 )
+
+
+def build_prospective_signal_driver_tag_monitor_report(
+    observations: list[ProspectiveSignalDriverTagObservation],
+    *,
+    gates: ProspectiveSignalDriverTagMonitorGates | None = None,
+    generated_at: datetime | None = None,
+) -> dict[str, object]:
+    gates = gates or ProspectiveSignalDriverTagMonitorGates()
+    tagged_rows = [item for item in observations if _prospective_driver_tags(item.signal_breakdown)]
+    grouped: dict[str, list[ProspectiveSignalDriverTagObservation]] = defaultdict(list)
+    tag_metadata: dict[str, dict[str, object]] = {}
+    for row in tagged_rows:
+        seen_keys: set[str] = set()
+        for tag in _prospective_driver_tags(row.signal_breakdown):
+            key = _clean(tag.get("key"))
+            if key == "unknown" or key in seen_keys:
+                continue
+            seen_keys.add(key)
+            grouped[key].append(row)
+            tag_metadata.setdefault(
+                key,
+                {
+                    "key": key,
+                    "feature": _clean(tag.get("feature")),
+                    "value": _clean(tag.get("value")),
+                    "reason": str(tag.get("reason") or ""),
+                },
+            )
+
+    tag_payloads = [
+        _prospective_tag_payload(
+            key=key,
+            rows=rows,
+            metadata=tag_metadata.get(key, {"key": key}),
+            gates=gates,
+        )
+        for key, rows in grouped.items()
+    ]
+    tag_payloads.sort(
+        key=lambda item: (
+            item["tag_verdict"] == "promotion_watchable",
+            int(item["metrics"]["distinct_date_count"]),
+            int(item["metrics"]["count"]),
+            str(item["key"]),
+        ),
+        reverse=True,
+    )
+
+    blockers: list[str] = []
+    if not tagged_rows:
+        verdict = "no_prospective_tagged_evidence"
+        blockers.append("no_tagged_plans_found")
+    elif any(item["tag_verdict"] == "promotion_watchable" for item in tag_payloads):
+        verdict = "prospective_tags_ready_for_review"
+    else:
+        verdict = "prospective_tags_accumulating"
+        blockers.append("no_tag_met_review_gates")
+
+    replay_labeled_rows = [item for item in tagged_rows if _clean(item.replay_outcome) != "unknown"]
+    return {
+        "schema_version": "prospective-signal-driver-tag-monitor-v1",
+        "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
+        "verdict": verdict,
+        "blockers": sorted(set(blockers)),
+        "gates": gates.payload(),
+        "record_counts": {
+            "tagged_plans": len(tagged_rows),
+            "unique_tag_keys": len(grouped),
+            "replay_labeled_tagged_plans": len(replay_labeled_rows),
+        },
+        "metrics": {
+            "tagged_population": _prospective_population_metrics(tagged_rows),
+            "replay_labeled_population": _prospective_population_metrics(replay_labeled_rows),
+        },
+        "tags": tag_payloads,
+        "recommendation": _prospective_tag_monitor_recommendation(verdict),
+    }
 
 
 def build_upstream_signal_driver_audit_report(
@@ -305,6 +417,141 @@ def _driver_payload(
             "phantom_loss": _examples(rows, "phantom_loss", limit=examples_per_outcome),
         },
     }
+
+
+def _prospective_tag_payload(
+    *,
+    key: str,
+    rows: list[ProspectiveSignalDriverTagObservation],
+    metadata: dict[str, object],
+    gates: ProspectiveSignalDriverTagMonitorGates,
+) -> dict[str, object]:
+    metrics = _prospective_population_metrics(rows)
+    replay_labeled_rows = [item for item in rows if _clean(item.replay_outcome) != "unknown"]
+    replay_labeled_metrics = _prospective_population_metrics(replay_labeled_rows)
+    phantom_rows = [
+        item
+        for item in replay_labeled_rows
+        if _clean(item.replay_outcome) in {"phantom_win", "phantom_loss"}
+        and isinstance(item.reward_pct, (int, float))
+        and isinstance(item.risk_pct, (int, float))
+        and float(item.reward_pct) > 0
+        and float(item.risk_pct) > 0
+    ]
+    ticker_mix = _prospective_top_values([item.ticker for item in rows], total=len(rows))
+    top_ticker_share = float(ticker_mix[0]["share_percent"]) if ticker_mix else 0.0
+    blockers: list[str] = []
+    if int(metrics["count"]) < gates.min_tagged_rows:
+        blockers.append("tagged_rows_below_minimum")
+    if int(metrics["distinct_date_count"]) < gates.min_tagged_dates:
+        blockers.append("tagged_dates_below_minimum")
+    if int(replay_labeled_metrics["count"]) < gates.min_replay_labeled_rows:
+        blockers.append("replay_labeled_rows_below_minimum")
+    if int(replay_labeled_metrics["distinct_date_count"]) < gates.min_replay_labeled_dates:
+        blockers.append("replay_labeled_dates_below_minimum")
+    if int(metrics["distinct_date_count"]) < gates.promotion_watch_date_floor:
+        blockers.append("tagged_dates_below_promotion_watch_floor")
+    if top_ticker_share > gates.max_single_ticker_share_percent:
+        blockers.append("top_ticker_share_above_reusable_maximum")
+    tag_verdict = "promotion_watchable" if not blockers else "accumulating"
+
+    return {
+        "key": key,
+        "feature": metadata.get("feature", "unknown"),
+        "value": metadata.get("value", "unknown"),
+        "reason": metadata.get("reason", ""),
+        "tag_verdict": tag_verdict,
+        "blockers": sorted(set(blockers)),
+        "metrics": metrics,
+        "replay_labeled_metrics": replay_labeled_metrics,
+        "phantom_outcome_metrics": _prospective_phantom_metrics(phantom_rows),
+        "outcome_mix": _prospective_outcome_mix(rows),
+        "mix": {
+            "tickers": ticker_mix,
+            "setup_family": _prospective_top_values(
+                [item.setup_family for item in rows],
+                total=len(rows),
+            ),
+            "action": _prospective_top_values([item.action for item in rows], total=len(rows)),
+        },
+        "date_range": _prospective_date_range_payload(rows),
+    }
+
+
+def _prospective_population_metrics(
+    rows: list[ProspectiveSignalDriverTagObservation],
+) -> dict[str, object]:
+    return {
+        "count": len(rows),
+        "distinct_date_count": len({item.evidence_date for item in rows}),
+        "ticker_count": len({_clean(item.ticker) for item in rows if _clean(item.ticker) != "unknown"}),
+    }
+
+
+def _prospective_phantom_metrics(
+    rows: list[ProspectiveSignalDriverTagObservation],
+) -> dict[str, object]:
+    count = len(rows)
+    wins = sum(1 for item in rows if _clean(item.replay_outcome) == "phantom_win")
+    losses = sum(1 for item in rows if _clean(item.replay_outcome) == "phantom_loss")
+    ev_total = sum(
+        float(item.reward_pct or 0.0)
+        if _clean(item.replay_outcome) == "phantom_win"
+        else -float(item.risk_pct or 0.0)
+        for item in rows
+    )
+    return {
+        "count": count,
+        "wins": wins,
+        "losses": losses,
+        "win_rate_percent": round((wins / count) * 100.0, 4) if count else 0.0,
+        "expected_value": round(ev_total, 4),
+        "expected_value_per_observation": round(ev_total / count, 6) if count else 0.0,
+        "distinct_date_count": len({item.evidence_date for item in rows}),
+    }
+
+
+def _prospective_outcome_mix(
+    rows: list[ProspectiveSignalDriverTagObservation],
+) -> dict[str, int]:
+    counter: Counter[str] = Counter(_clean(item.replay_outcome) for item in rows)
+    return dict(sorted(counter.items()))
+
+
+def _prospective_top_values(
+    values: list[object],
+    *,
+    total: int,
+    limit: int = 10,
+) -> list[dict[str, object]]:
+    counter = Counter(_clean(item) for item in values)
+    denominator = max(1, total)
+    payloads = [
+        {
+            "value": value,
+            "count": count,
+            "share_percent": round((count / denominator) * 100.0, 4),
+        }
+        for value, count in counter.items()
+    ]
+    payloads.sort(key=lambda item: (int(item["count"]), str(item["value"])), reverse=True)
+    return payloads[:limit]
+
+
+def _prospective_date_range_payload(
+    rows: list[ProspectiveSignalDriverTagObservation],
+) -> dict[str, str | None]:
+    dates = sorted({item.evidence_date for item in rows})
+    if not dates:
+        return {"start": None, "end": None}
+    return {"start": dates[0].isoformat(), "end": dates[-1].isoformat()}
+
+
+def _prospective_driver_tags(signal: dict[str, object]) -> list[dict[str, object]]:
+    raw = signal.get("upstream_signal_quality_drivers")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
 
 
 def _top_values(
@@ -723,4 +970,21 @@ def _drilldown_recommendation(verdict: str) -> str:
     return (
         "Do not change upstream policy from these drivers. Improve evidence volume or "
         "feature persistence first."
+    )
+
+
+def _prospective_tag_monitor_recommendation(verdict: str) -> str:
+    if verdict == "prospective_tags_ready_for_review":
+        return (
+            "Review prospective tagged cohorts before any policy change. Do not run broad "
+            "threshold search; inspect tag stability, date spread, concentration, and replay EV."
+        )
+    if verdict == "prospective_tags_accumulating":
+        return (
+            "Keep collecting tagged evidence. Re-run this monitor after more dates or replay "
+            "labels arrive."
+        )
+    return (
+        "No prospective tagged evidence exists yet. Generate new plans with current code, "
+        "then rerun the monitor after replay labels are available."
     )
