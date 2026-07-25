@@ -80,6 +80,19 @@ class EtoroClient:
             params={"instrumentIds": ",".join(str(item) for item in instrument_ids)},
         )
 
+    def get_instrument_candles(
+        self,
+        *,
+        instrument_id: int | str,
+        direction: str,
+        interval: str,
+        candles_count: int,
+    ) -> dict[str, object]:
+        return self._request(
+            "GET",
+            f"/api/v1/market-data/instruments/{instrument_id}/history/candles/{direction}/{interval}/{candles_count}",
+        )
+
     def get_portfolio(self) -> dict[str, object]:
         return self._request("GET", "/api/v1/trading/info/portfolio")
 

@@ -26,6 +26,11 @@ The integration was originally based on the official eToro Developer Portal obse
 - Relevant current demo endpoints:
   - `GET /api/v1/market-data/search` — resolve symbol to eToro instrument id
   - `GET /api/v1/market-data/instruments/rates` — fetch current rates
+  - `GET /api/v1/market-data/instruments/{instrumentId}/history/candles/{direction}/{interval}/{candlesCount}` —
+    fetch OHLCV candles for explicit market-data validation and future bar
+    provider support. This endpoint must not be used by replay/tuning paths
+    directly; it may hydrate the canonical bars cache only through explicit
+    refresh/backfill/validation jobs.
   - `POST /api/v2/trading/execution/demo/orders` — create demo order
   - `GET /api/v2/trading/info/demo/orders:lookup` — lookup demo order by order id or reference id
   - `DELETE /api/v2/trading/execution/demo/orders/{orderId}` — cancel pending demo order

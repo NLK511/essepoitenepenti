@@ -57,6 +57,13 @@ Use signal gating when selection is too strict/loose, replay-based plan-generati
 
 Hybrid market data balances freshness, resilience, and replay consistency.
 
+Remote bar providers are normalized behind a common provider interface before
+they enter the canonical `historical_market_bars` cache. Yahoo/yfinance remains
+the default canonical provider. eToro candle history is available as a broker
+market-data candidate, but it must run in shadow validation before becoming
+primary; replay and tuning read the persisted cache and do not fetch remote bars
+implicitly.
+
 Cheap scan:
 - prefers local `historical_market_bars`
 - prefers `1m` bars resampled to daily OHLCV

@@ -120,6 +120,11 @@ Implemented today:
 - historical replay execution is cache-only: replay must never fetch remote bars during slice execution or cheap-scan replay; operators must run explicit bars-refresh/backfill jobs before replay when coverage is missing
 - replay coverage gaps are watchlist-quality evidence: tickers with repeated or material bar gaps should be flagged for operator review and removed from default watchlists when gaps make replay evidence too thin
 - historical replay coverage reports include point-in-time bars, news, context snapshots, and fundamental snapshots
+- historical replay and replay tuning consume bars through the persisted
+  `historical_market_bars` cache. Remote bar providers, including Yahoo and
+  eToro, may hydrate that cache only through explicit refresh/backfill jobs
+  before replay starts; replay slice execution must not call remote bar
+  providers.
 - historical replay slice execution invokes watchlist orchestration for plan generation when that service is configured, passing the slice `as_of`; replay-generated signal and plan `computed_at` values must equal the slice `as_of` rather than wall-clock execution time so outcome resolution remains point-in-time correct
 - replay-generated signal diagnostics and plan evidence/signal payloads receive replay provenance with batch id, slice id, `as_of`, code/settings/input hashes, coverage summary, and input warnings
 - replay execution can apply a scoped plan-generation tuning config override from batch config without mutating the live active config, and unknown keys are rejected through the parameter schema

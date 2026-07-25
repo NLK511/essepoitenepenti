@@ -1,17 +1,13 @@
-import gc
 import logging
 import time
 from datetime import datetime, time as datetime_time, timedelta, timezone
 
-import pandas as pd
-import yfinance as yf
 from sqlalchemy import func
 
-from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.persistence.models import HistoricalMarketBarRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
-from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
+from trade_proposer_app.services.historical_market_data import HistoricalBarProvider, HistoricalMarketDataService
 from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 
 logger = logging.getLogger(__name__)
@@ -21,9 +17,10 @@ class BarsRefreshService:
     MAX_REFRESH_ATTEMPTS = 3
     REFRESH_RETRY_BACKOFF_SECONDS = (0.0, 1.0, 2.0)
 
-    def __init__(self, repository: HistoricalMarketDataRepository):
+    def __init__(self, repository: HistoricalMarketDataRepository, provider: HistoricalBarProvider | None = None):
         self.repository = repository
-        self.bars_access = HistoricalBarsAccessService(HistoricalMarketDataService(repository))
+        self.market_data = HistoricalMarketDataService(repository, provider=provider)
+        self.bars_access = HistoricalBarsAccessService(self.market_data)
 
     def refresh_bars(self, tickers: list[str], lookback_days: int = 6) -> dict[str, object]:
         end_date = datetime.now(timezone.utc)
@@ -215,39 +212,22 @@ class BarsRefreshService:
                 start_date.isoformat(),
             )
 
-            df = self._download_bars(ticker=ticker, start_date=start_date, end_date=end_date)
-            if df is None or df.empty:
+            persisted = self.market_data.ingest_bars(
+                ticker=ticker,
+                timeframe="1m",
+                start_at=start_date,
+                end_at=end_date,
+            )
+            if not persisted:
+                provider_label = "Yahoo" if self.market_data.provider.provider_name == "yahoo" else self.market_data.provider.provider_name
                 return {
                     "status": "empty",
                     "ingested": 0,
-                    "message": f"{ticker}: No data returned from Yahoo",
+                    "message": f"{ticker}: No data returned from {provider_label}",
                 }
 
-            df = self._normalize_downloaded_frame(ticker, df)
-            df = df[df.index >= start_date]
-            if df.empty:
-                logger.info("  No new bars found for %s", ticker)
-                return {"status": "no_new_bars", "ingested": 0, "message": None}
-
-            bars_to_upsert: list[HistoricalMarketBar] = []
-            for timestamp, row in df.iterrows():
-                bar = self._create_bar_model(ticker, timestamp, row)
-                if bar:
-                    bars_to_upsert.append(bar)
-
-            if not bars_to_upsert:
-                logger.info("  No valid bars processed for %s", ticker)
-                return {"status": "no_valid_bars", "ingested": 0, "message": None}
-
-            logger.info("  Ingesting %s bars for %s", len(bars_to_upsert), ticker)
-            sub_batch_size = 1000
-            for index in range(0, len(bars_to_upsert), sub_batch_size):
-                self.repository.upsert_bars(bars_to_upsert[index : index + sub_batch_size])
-
-            ingested = len(bars_to_upsert)
-            del df
-            del bars_to_upsert
-            gc.collect()
+            ingested = len(persisted)
+            logger.info("  Ingested %s bars for %s", ingested, ticker)
             return {"status": "success", "ingested": ingested, "message": None}
         except Exception as exc:
             logger.error("Failed to refresh bars for %s: %s", ticker, exc)
@@ -256,68 +236,3 @@ class BarsRefreshService:
                 "ingested": 0,
                 "message": str(exc),
             }
-
-    @staticmethod
-    def _download_bars(*, ticker: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        start_str = start_date.strftime("%Y-%m-%d")
-        end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        return yf.download(
-            ticker,
-            start=start_str,
-            end=end_str,
-            interval="1m",
-            progress=False,
-            auto_adjust=False,
-        )
-
-    @staticmethod
-    def _normalize_downloaded_frame(ticker: str, df: pd.DataFrame) -> pd.DataFrame:
-        if not isinstance(df.columns, pd.MultiIndex):
-            return df
-        if ticker in df.columns.get_level_values(1):
-            return df.xs(ticker, axis=1, level=1)
-        if ticker in df.columns.get_level_values(0):
-            return df.xs(ticker, axis=1, level=0)
-
-        standard_cols = {"Open", "High", "Low", "Close", "Adj Close", "Volume"}
-        for level in range(df.columns.nlevels):
-            if any(col in standard_cols for col in df.columns.get_level_values(level)):
-                normalized = df.copy()
-                normalized.columns = normalized.columns.get_level_values(level)
-                return normalized
-        return df
-
-    def _create_bar_model(self, ticker: str, timestamp: datetime, row: pd.Series) -> HistoricalMarketBar | None:
-        try:
-            row_dict = {str(k).strip(): v for k, v in row.to_dict().items()}
-            close_val = row_dict.get("Close") or row_dict.get("Adj Close")
-            if close_val is None or pd.isna(close_val):
-                return None
-
-            open_val = row_dict.get("Open", close_val)
-            high_val = row_dict.get("High", close_val)
-            low_val = row_dict.get("Low", close_val)
-            vol_val = row_dict.get("Volume", 0.0)
-
-            bar_time = timestamp.to_pydatetime()
-            if bar_time.tzinfo is None:
-                bar_time = bar_time.replace(tzinfo=timezone.utc)
-            else:
-                bar_time = bar_time.astimezone(timezone.utc)
-
-            available_at = bar_time + timedelta(minutes=1)
-
-            return HistoricalMarketBar(
-                ticker=ticker,
-                timeframe="1m",
-                bar_time=bar_time,
-                available_at=available_at,
-                open_price=float(open_val),
-                high_price=float(high_val),
-                low_price=float(low_val),
-                close_price=float(close_val),
-                volume=float(vol_val) if not pd.isna(vol_val) else 0.0,
-                source="yfinance_refresh",
-            )
-        except Exception:
-            return None

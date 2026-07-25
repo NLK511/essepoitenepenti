@@ -1,0 +1,163 @@
+import unittest
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from trade_proposer_app.domain.models import HistoricalMarketBar
+from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.bars_refresh import BarsRefreshService
+from trade_proposer_app.services.historical_market_data import (
+    EtoroHistoricalBarProvider,
+    HistoricalBarFetchResult,
+    HistoricalBarProvider,
+    HistoricalMarketDataError,
+)
+
+
+def create_session() -> Session:
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(bind=engine)
+    return Session(bind=engine)
+
+
+class FakeEtoroClient:
+    def __init__(self, *, search_payload=None, candle_payload=None) -> None:
+        self.search_payload = search_payload or {
+            "items": [{"instrumentId": 1001, "internalSymbolFull": "AAPL", "name": "Apple"}]
+        }
+        self.candle_payload = candle_payload or {
+            "interval": "OneMinute",
+            "candles": [
+                {
+                    "instrumentId": 1001,
+                    "candles": [
+                        {
+                            "instrumentID": 1001,
+                            "fromDate": "2026-07-25T14:30:00Z",
+                            "open": 100.0,
+                            "high": 101.0,
+                            "low": 99.5,
+                            "close": 100.5,
+                            "volume": 1200,
+                        }
+                    ],
+                }
+            ],
+        }
+        self.candle_calls: list[dict[str, object]] = []
+
+    def search_market_data(self, symbol: str):
+        return self.search_payload
+
+    def get_instrument_candles(self, **kwargs):
+        self.candle_calls.append(kwargs)
+        return self.candle_payload
+
+
+class StubIntradayProvider(HistoricalBarProvider):
+    provider_name = "stub"
+    source_tier = "test"
+    supported_timeframes = ("1m",)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[dict[str, object]] = []
+
+    def fetch_bars(self, ticker, timeframe, start_at, end_at):
+        self.calls.append(
+            {
+                "ticker": ticker,
+                "timeframe": timeframe,
+                "start_at": start_at,
+                "end_at": end_at,
+            }
+        )
+        bar_time = start_at + timedelta(minutes=1)
+        return HistoricalBarFetchResult(
+            provider=self.provider_name,
+            source_tier=self.source_tier,
+            timeframe=timeframe,
+            bars=[
+                HistoricalMarketBar(
+                    ticker=ticker,
+                    timeframe=timeframe,
+                    bar_time=bar_time,
+                    available_at=bar_time + timedelta(minutes=1),
+                    open_price=100,
+                    high_price=101,
+                    low_price=99,
+                    close_price=100.5,
+                    volume=1000,
+                    source="stub",
+                    source_tier="test",
+                )
+            ],
+        )
+
+    def fetch_daily_bars(self, ticker, start_at, end_at):
+        raise NotImplementedError
+
+
+class HistoricalBarProviderTests(unittest.TestCase):
+    def test_etoro_provider_normalizes_candle_payload(self) -> None:
+        client = FakeEtoroClient()
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+        start_at = datetime(2026, 7, 25, 14, 29, tzinfo=timezone.utc)
+        end_at = datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc)
+
+        result = provider.fetch_bars("AAPL", "1m", start_at, end_at)
+
+        self.assertEqual("etoro", result.provider)
+        self.assertEqual("OneMinute", client.candle_calls[0]["interval"])
+        self.assertEqual(1, len(result.bars))
+        bar = result.bars[0]
+        self.assertEqual("AAPL", bar.ticker)
+        self.assertEqual("1m", bar.timeframe)
+        self.assertEqual(datetime(2026, 7, 25, 14, 30, tzinfo=timezone.utc), bar.bar_time)
+        self.assertEqual(100.5, bar.close_price)
+        self.assertEqual("etoro", bar.source)
+        self.assertEqual("broker", bar.source_tier)
+
+    def test_etoro_provider_rejects_ambiguous_instrument_resolution(self) -> None:
+        provider = EtoroHistoricalBarProvider(
+            client=FakeEtoroClient(  # type: ignore[arg-type]
+                search_payload={
+                    "items": [
+                        {"instrumentId": 1001, "internalSymbolFull": "AAPL"},
+                        {"instrumentId": 2002, "internalSymbolFull": "AAPL"},
+                    ]
+                }
+            )
+        )
+
+        with self.assertRaises(HistoricalMarketDataError):
+            provider.fetch_bars(
+                "AAPL",
+                "1m",
+                datetime(2026, 7, 25, 14, 29, tzinfo=timezone.utc),
+                datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+            )
+
+    def test_bars_refresh_delegates_intraday_fetch_to_provider(self) -> None:
+        session = create_session()
+        try:
+            provider = StubIntradayProvider()
+            repository = HistoricalMarketDataRepository(session)
+            service = BarsRefreshService(repository, provider=provider)
+
+            result = service.refresh_bars(["AAPL"], lookback_days=2)
+
+            self.assertEqual(1, len(provider.calls))
+            self.assertEqual("1m", provider.calls[0]["timeframe"])
+            self.assertEqual(1, result["total_ingested"])
+            stored = repository.list_bars(ticker="AAPL", timeframe="1m", limit=5)
+            self.assertEqual(1, len(stored))
+            self.assertEqual("stub", stored[0].source)
+        finally:
+            session.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

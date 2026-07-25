@@ -31,8 +31,22 @@ This spec does not cover:
 
 ## Current implemented behavior
 
+### Provider architecture
+- Bars refresh uses a common historical bar provider interface instead of
+  embedding provider-specific download code in the job.
+- Providers return normalized `HistoricalMarketBar` rows plus provider
+  diagnostics.
+- The canonical local cache remains `historical_market_bars`.
+- Remote provider fallback must be explicit in run artifacts. A provider failure
+  must not silently change the source used for persisted bars.
+- Replay, tuning, and evaluation reads must consume persisted bars through the
+  cache access layer. They must not fetch remote bars implicitly.
+
 ### Fetch target
-- The job refreshes `1m` bars from Yahoo/yfinance.
+- The default job refreshes `1m` bars from Yahoo/yfinance through
+  `YahooHistoricalBarProvider`.
+- eToro candle fetching is implemented as a provider candidate but must remain
+  shadow/validation-only until its data quality gates pass.
 - For each ticker, it starts from the later of:
   - `now - lookback_days`
   - the latest persisted `1m` `bar_time` for that ticker plus one minute
@@ -95,9 +109,34 @@ The automated tests must cover at least:
 - a ticker that first returns empty and then succeeds is retried and eventually ingested
 - a ticker that keeps raising exceptions is retried up to the cap and ends as a warning
 - completed tickers are not retried after they succeed
+- bars refresh delegates remote fetching through the provider interface
+- replay/tuning cache access does not remote-fetch intraday bars
+- eToro candle payloads normalize into canonical bar models without mutating the
+  canonical cache during validation
 
 ## Current limitations
 
 - Empty results are retried even though some empties may be structurally non-recoverable.
 - Retry classification is still coarse; it does not yet distinguish likely-transient empties from likely-permanent empties.
 - Retry diagnostics are persisted in run artifacts, but operator-facing UI rendering is still minimal.
+- eToro has not passed a production data-quality validation period. Yahoo remains
+  the canonical provider until validation proves eToro coverage, timestamps,
+  price agreement, volume quality, and corporate-action behavior are adequate.
+
+## eToro validation gate
+
+Before eToro can become the primary canonical bars provider:
+- run shadow validation for 20 trading sessions
+- compare eToro against the current canonical provider without overwriting
+  canonical rows
+- require exact eToro instrument resolution for at least 99% of default
+  watchlist tickers
+- require no silent ambiguous symbol mapping
+- require valid OHLC ordering and monotonic timestamps
+- require at least 98% overlapping 1m coverage for supported liquid tickers
+- require median close-price difference no greater than 5 bps and p95 no greater
+  than 25 bps, excluding documented corporate-action/session exceptions
+- understand split/corporate-action behavior before using eToro for long
+  historical replay
+- require usable volume, or restrict eToro to price-only freshness while Yahoo
+  remains the volume-sensitive fallback

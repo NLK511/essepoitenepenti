@@ -83,6 +83,22 @@ class EtoroClientReadOnlyTests(unittest.TestCase):
         self.assertEqual(rate_error.exception.error_type, "rate_limited")
         self.assertEqual(rate_error.exception.retry_after_seconds, 7.0)
 
+    def test_get_instrument_candles_uses_documented_market_data_path(self) -> None:
+        http = FakeHttpClient([FakeResponse(200, {"candles": []})])
+        client = EtoroClient(api_key="api-key", user_key="user-key", http_client=http)
+
+        client.get_instrument_candles(
+            instrument_id=1001,
+            direction="asc",
+            interval="OneMinute",
+            candles_count=100,
+        )
+
+        self.assertEqual(
+            "https://public-api.etoro.com/api/v1/market-data/instruments/1001/history/candles/asc/OneMinute/100",
+            http.calls[0]["url"],
+        )
+
     def test_adapter_parses_portfolio_pnl_and_history_fixtures(self) -> None:
         http = FakeHttpClient(
             [

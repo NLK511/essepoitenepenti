@@ -1,18 +1,31 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta, timezone
+from math import ceil
 
 import httpx
 
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.brokers.etoro import EtoroClient, EtoroClientError
 from trade_proposer_app.services.input_access import stable_hash
 
 
 class HistoricalMarketDataError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class HistoricalBarFetchResult:
+    provider: str
+    source_tier: str
+    timeframe: str
+    bars: list[HistoricalMarketBar]
+    request_count: int = 1
+    warnings: list[str] = field(default_factory=list)
+    diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -21,6 +34,26 @@ class HistoricalBarProvider:
 
     provider_name: str = "generic"
     source_tier: str = "research"
+    supported_timeframes: tuple[str, ...] = ("1d",)
+
+    def fetch_bars(
+        self,
+        ticker: str,
+        timeframe: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> HistoricalBarFetchResult:
+        if timeframe != "1d":
+            raise HistoricalMarketDataError(
+                f"{self.provider_name} does not support {timeframe} bars"
+            )
+        bars = self.fetch_daily_bars(ticker, start_at, end_at)
+        return HistoricalBarFetchResult(
+            provider=self.provider_name,
+            source_tier=self.source_tier,
+            timeframe=timeframe,
+            bars=bars,
+        )
 
     def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
         raise NotImplementedError
@@ -34,7 +67,32 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
         super().__init__(timeout=timeout)
         self.provider_name = "yahoo"
         self.source_tier = "research"
+        self.supported_timeframes = ("1m", "1d")
         self.base_url = base_url.rstrip("/")
+
+    def fetch_bars(
+        self,
+        ticker: str,
+        timeframe: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> HistoricalBarFetchResult:
+        if timeframe == "1d":
+            bars = self.fetch_daily_bars(ticker, start_at, end_at)
+        elif timeframe == "1m":
+            bars = self.fetch_intraday_bars(ticker, start_at, end_at)
+        else:
+            raise HistoricalMarketDataError(f"Yahoo provider does not support {timeframe} bars")
+        return HistoricalBarFetchResult(
+            provider=self.provider_name,
+            source_tier=self.source_tier,
+            timeframe=timeframe,
+            bars=bars,
+            diagnostics={
+                "requested_start": self._normalize(start_at).isoformat(),
+                "requested_end": self._normalize(end_at).isoformat(),
+            },
+        )
 
     def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
         normalized_start = self._normalize(start_at)
@@ -111,11 +169,316 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
             )
         return bars
 
+    def fetch_intraday_bars(
+        self,
+        ticker: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> list[HistoricalMarketBar]:
+        import pandas as pd
+        import yfinance as yf
+
+        normalized_start = self._normalize(start_at)
+        normalized_end = self._normalize(end_at)
+        start_str = normalized_start.strftime("%Y-%m-%d")
+        end_str = (normalized_end + timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            frame = yf.download(
+                ticker,
+                start=start_str,
+                end=end_str,
+                interval="1m",
+                progress=False,
+                auto_adjust=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HistoricalMarketDataError(f"intraday bar request failed for {ticker}: {exc}") from exc
+        if frame is None or frame.empty:
+            return []
+        frame = self._normalize_downloaded_frame(ticker, frame)
+        frame = frame[frame.index >= normalized_start]
+        frame = frame[frame.index <= normalized_end]
+        bars: list[HistoricalMarketBar] = []
+        for timestamp, row in frame.iterrows():
+            bar = self._create_intraday_bar_model(ticker, timestamp, row)
+            if bar is not None:
+                bars.append(bar)
+        return bars
+
     @staticmethod
     def _normalize(value: datetime) -> datetime:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _normalize_downloaded_frame(ticker: str, frame):
+        import pandas as pd
+
+        if not isinstance(frame.columns, pd.MultiIndex):
+            return frame
+        if ticker in frame.columns.get_level_values(1):
+            return frame.xs(ticker, axis=1, level=1)
+        if ticker in frame.columns.get_level_values(0):
+            return frame.xs(ticker, axis=1, level=0)
+
+        standard_cols = {"Open", "High", "Low", "Close", "Adj Close", "Volume"}
+        for level in range(frame.columns.nlevels):
+            if any(col in standard_cols for col in frame.columns.get_level_values(level)):
+                normalized = frame.copy()
+                normalized.columns = normalized.columns.get_level_values(level)
+                return normalized
+        return frame
+
+    def _create_intraday_bar_model(self, ticker: str, timestamp, row) -> HistoricalMarketBar | None:
+        import pandas as pd
+
+        try:
+            row_dict = {str(k).strip(): v for k, v in row.to_dict().items()}
+            close_val = row_dict.get("Close") or row_dict.get("Adj Close")
+            if close_val is None or pd.isna(close_val):
+                return None
+
+            open_val = row_dict.get("Open", close_val)
+            high_val = row_dict.get("High", close_val)
+            low_val = row_dict.get("Low", close_val)
+            volume_val = row_dict.get("Volume", 0.0)
+
+            bar_time = timestamp.to_pydatetime()
+            bar_time = self._normalize(bar_time)
+            metadata = {
+                "provider": self.provider_name,
+                "requested_timeframe": "1m",
+            }
+            return HistoricalMarketBar(
+                ticker=ticker,
+                timeframe="1m",
+                bar_time=bar_time,
+                available_at=bar_time + timedelta(minutes=1),
+                open_price=float(open_val),
+                high_price=float(high_val),
+                low_price=float(low_val),
+                close_price=float(close_val),
+                volume=float(volume_val) if not pd.isna(volume_val) else 0.0,
+                source="yfinance_refresh",
+                source_tier=self.source_tier,
+                point_in_time_confidence=0.8,
+                metadata_json=json.dumps(metadata, sort_keys=True),
+            )
+        except Exception:
+            return None
+
+
+class EtoroHistoricalBarProvider(HistoricalBarProvider):
+    provider_name = "etoro"
+    source_tier = "broker"
+
+    _INTERVALS = {
+        "1m": ("OneMinute", timedelta(minutes=1)),
+        "5m": ("FiveMinutes", timedelta(minutes=5)),
+        "10m": ("TenMinutes", timedelta(minutes=10)),
+        "15m": ("FifteenMinutes", timedelta(minutes=15)),
+        "30m": ("ThirtyMinutes", timedelta(minutes=30)),
+        "1h": ("OneHour", timedelta(hours=1)),
+        "4h": ("FourHours", timedelta(hours=4)),
+        "1d": ("OneDay", timedelta(days=1)),
+        "1wk": ("OneWeek", timedelta(weeks=1)),
+    }
+
+    def __init__(self, *, client: EtoroClient, timeout: float = 20.0) -> None:
+        super().__init__(timeout=timeout)
+        self.client = client
+        self.provider_name = "etoro"
+        self.source_tier = "broker"
+        self.supported_timeframes = tuple(self._INTERVALS)
+
+    def fetch_bars(
+        self,
+        ticker: str,
+        timeframe: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> HistoricalBarFetchResult:
+        normalized_timeframe = self._normalize_timeframe(timeframe)
+        if normalized_timeframe not in self._INTERVALS:
+            raise HistoricalMarketDataError(f"eToro provider does not support {timeframe} bars")
+        interval, interval_delta = self._INTERVALS[normalized_timeframe]
+        normalized_start = self._normalize(start_at)
+        normalized_end = self._normalize(end_at)
+        instrument_id, resolution = self.resolve_instrument_id(ticker)
+        requested_count = min(
+            1000,
+            max(1, ceil((normalized_end - normalized_start).total_seconds() / interval_delta.total_seconds()) + 2),
+        )
+        try:
+            payload = self.client.get_instrument_candles(
+                instrument_id=instrument_id,
+                direction="asc",
+                interval=interval,
+                candles_count=requested_count,
+            )
+        except EtoroClientError as exc:
+            raise HistoricalMarketDataError(f"eToro candle request failed for {ticker}: {exc}") from exc
+        bars = self._parse_candles(
+            payload=payload,
+            ticker=ticker,
+            timeframe=normalized_timeframe,
+            interval=interval,
+            instrument_id=instrument_id,
+            start_at=normalized_start,
+            end_at=normalized_end,
+            available_delta=interval_delta,
+        )
+        return HistoricalBarFetchResult(
+            provider=self.provider_name,
+            source_tier=self.source_tier,
+            timeframe=normalized_timeframe,
+            bars=bars,
+            diagnostics={
+                "instrument_id": instrument_id,
+                "instrument_resolution": resolution,
+                "interval": interval,
+                "candles_count": requested_count,
+                "requested_start": normalized_start.isoformat(),
+                "requested_end": normalized_end.isoformat(),
+                "max_candles_per_request": 1000,
+            },
+        )
+
+    def fetch_daily_bars(self, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+        return self.fetch_bars(ticker, "1d", start_at, end_at).bars
+
+    def resolve_instrument_id(self, ticker: str) -> tuple[int, dict[str, object]]:
+        normalized = ticker.strip().upper()
+        payload = self.client.search_market_data(normalized)
+        items = payload.get("items") if isinstance(payload, dict) else None
+        if not isinstance(items, list):
+            items = []
+        exact = [
+            item for item in items
+            if isinstance(item, dict)
+            and str(item.get("internalSymbolFull") or "").strip().upper() == normalized
+            and item.get("instrumentId") is not None
+        ]
+        if len(exact) != 1:
+            raise HistoricalMarketDataError(
+                f"eToro instrument resolution for {ticker} returned {len(exact)} exact matches"
+            )
+        instrument_id = int(exact[0]["instrumentId"])
+        return instrument_id, {
+            "ticker": normalized,
+            "match_count": len(exact),
+            "instrument_id": instrument_id,
+            "raw_name": exact[0].get("name"),
+            "raw_symbol": exact[0].get("internalSymbolFull"),
+        }
+
+    @classmethod
+    def _parse_candles(
+        cls,
+        *,
+        payload: dict[str, object],
+        ticker: str,
+        timeframe: str,
+        interval: str,
+        instrument_id: int,
+        start_at: datetime,
+        end_at: datetime,
+        available_delta: timedelta,
+    ) -> list[HistoricalMarketBar]:
+        groups = payload.get("candles") if isinstance(payload, dict) else None
+        if not isinstance(groups, list):
+            return []
+        bars: list[HistoricalMarketBar] = []
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            candles = group.get("candles")
+            if not isinstance(candles, list):
+                continue
+            for candle in candles:
+                if not isinstance(candle, dict):
+                    continue
+                bar = cls._bar_from_candle(
+                    candle=candle,
+                    ticker=ticker,
+                    timeframe=timeframe,
+                    interval=interval,
+                    instrument_id=instrument_id,
+                    start_at=start_at,
+                    end_at=end_at,
+                    available_delta=available_delta,
+                )
+                if bar is not None:
+                    bars.append(bar)
+        return bars
+
+    @classmethod
+    def _bar_from_candle(
+        cls,
+        *,
+        candle: dict[str, object],
+        ticker: str,
+        timeframe: str,
+        interval: str,
+        instrument_id: int,
+        start_at: datetime,
+        end_at: datetime,
+        available_delta: timedelta,
+    ) -> HistoricalMarketBar | None:
+        try:
+            raw_time = candle.get("fromDate")
+            if not raw_time:
+                return None
+            bar_time = cls._normalize_datetime_string(str(raw_time))
+            if bar_time < start_at or bar_time > end_at:
+                return None
+            open_price = float(candle["open"])
+            high_price = float(candle["high"])
+            low_price = float(candle["low"])
+            close_price = float(candle["close"])
+            volume = float(candle.get("volume") or 0.0)
+            if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
+                return None
+            metadata = {
+                "provider": "etoro",
+                "instrument_id": instrument_id,
+                "interval": interval,
+                "raw_from_date": raw_time,
+            }
+            return HistoricalMarketBar(
+                ticker=ticker.strip().upper(),
+                timeframe=timeframe,
+                bar_time=bar_time,
+                available_at=bar_time + available_delta,
+                open_price=open_price,
+                high_price=high_price,
+                low_price=low_price,
+                close_price=close_price,
+                volume=volume,
+                source="etoro",
+                source_tier="broker",
+                point_in_time_confidence=0.8,
+                metadata_json=json.dumps(metadata, sort_keys=True),
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _normalize_timeframe(timeframe: str) -> str:
+        return "1h" if timeframe == "60m" else timeframe
+
+    @staticmethod
+    def _normalize(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @classmethod
+    def _normalize_datetime_string(cls, value: str) -> datetime:
+        normalized = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        return cls._normalize(parsed)
 
 
 class HistoricalMarketDataService:
@@ -123,12 +486,55 @@ class HistoricalMarketDataService:
         self.historical_market_data = historical_market_data
         self.provider = provider or YahooHistoricalBarProvider()
 
-    def ingest_daily_bars(self, *, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+    def fetch_bars(
+        self,
+        *,
+        ticker: str,
+        timeframe: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> HistoricalBarFetchResult:
+        fetcher = getattr(self.provider, "fetch_bars", None)
+        if callable(fetcher):
+            return fetcher(ticker, timeframe, start_at, end_at)
+        if timeframe != "1d":
+            raise HistoricalMarketDataError(
+                f"{self.provider.provider_name} does not support {timeframe} bars"
+            )
         bars = self.provider.fetch_daily_bars(ticker, start_at, end_at)
-        persisted: list[HistoricalMarketBar] = []
-        for bar in bars:
-            persisted.append(self.historical_market_data.upsert_bar(bar))
-        return persisted
+        return HistoricalBarFetchResult(
+            provider=self.provider.provider_name,
+            source_tier=self.provider.source_tier,
+            timeframe=timeframe,
+            bars=bars,
+        )
+
+    def ingest_bars(
+        self,
+        *,
+        ticker: str,
+        timeframe: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> list[HistoricalMarketBar]:
+        result = self.fetch_bars(
+            ticker=ticker,
+            timeframe=timeframe,
+            start_at=start_at,
+            end_at=end_at,
+        )
+        return self.persist_bars(result.bars)
+
+    def persist_bars(self, bars: list[HistoricalMarketBar]) -> list[HistoricalMarketBar]:
+        if not bars:
+            return []
+        sub_batch_size = 1000
+        for index in range(0, len(bars), sub_batch_size):
+            self.historical_market_data.upsert_bars(bars[index : index + sub_batch_size])
+        return bars
+
+    def ingest_daily_bars(self, *, ticker: str, start_at: datetime, end_at: datetime) -> list[HistoricalMarketBar]:
+        return self.ingest_bars(ticker=ticker, timeframe="1d", start_at=start_at, end_at=end_at)
 
     def hydrate_batch_inputs(self, *, tickers: list[str], start_at: datetime, end_at: datetime) -> dict[str, object]:
         ingested_by_ticker: dict[str, int] = {}
