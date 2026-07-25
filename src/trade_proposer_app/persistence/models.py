@@ -297,6 +297,8 @@ class BrokerPositionRecord(Base, TimestampMixin):
     side: Mapped[str] = mapped_column(String(16), index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     current_quantity: Mapped[int] = mapped_column(Integer, default=0)
+    unit_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_unit_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="submitted", index=True)
     entry_order_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     entry_avg_price: Mapped[float | None] = mapped_column(Float, nullable=True)

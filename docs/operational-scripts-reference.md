@@ -242,18 +242,31 @@ Builds a JSON summary and optional CSV review queue for broker-position steering
 - **Rule:** Passing dry-run count thresholds is not enough; close-now and amendment samples must be reviewed before setting `steering_dry_run=false`.
 
 ### `scripts/check_etoro_release_readiness.py`
-Runs the multi-broker/eToro release readiness checklist before any eToro live micro-size rollout.
+Runs the multi-broker/eToro release readiness checklist before any eToro demo default flip or future eToro live micro-size rollout.
 
-- **Use case:** Fail closed unless required external evidence exists and the local broker/risk validation suite passes.
+- **Use case:** Fail closed unless required external evidence exists and the local broker/risk validation suite passes. During the eToro demo migration, use it to preserve the observed official OpenAPI version and keep Real mutation gates separate from demo work.
+- **Live docs refresh before use:**
+  ```bash
+  curl -A 'Mozilla/5.0' -fsSL https://api-portal.etoro.com/llms.txt >/tmp/etoro-llms.txt
+  curl -A 'Mozilla/5.0' -fsSL https://api-portal.etoro.com/api-reference/openapi.json \
+    >/tmp/etoro-openapi.json
+  python3 - <<'PY'
+  import json
+  print(json.load(open("/tmp/etoro-openapi.json"))["info"]["version"])
+  PY
+  ```
+  Record the printed value with `--openapi-version` or `ETORO_OPENAPI_VERSION`.
 - **Required artifact environment variables for a real release:**
   - `ETORO_READONLY_VALIDATION_ARTIFACT_ID`
   - `ETORO_DEMO_VALIDATION_ARTIFACT_ID`
+  - `ETORO_DEMO_LIFECYCLE_ARTIFACT_ID`
   - `ETORO_LIVE_SHADOW_EVIDENCE_ID`
 - **Behavior:** Runs the default pytest suite, focused broker/eToro risk tests, migration tests, broker migration/backfill smoke validation, optional Postgres validation via `scripts/check_postgres_validation.py`, and frontend type checks when `frontend/package.json` exists. Postgres validation now checks upgrade-to-head on a clean schema, broker-account tables, account-scoped columns, safety tables, and the default Alpaca paper account after upgrade. Data-dependent Postgres recomputation tests are opt-in with `POSTGRES_VALIDATION_INCLUDE_DATA_TESTS=1` because they require a restored database containing historical recommendation plan ids 315 and 635.
 - **Usage:**
   ```bash
   ETORO_READONLY_VALIDATION_ARTIFACT_ID=<id> \
   ETORO_DEMO_VALIDATION_ARTIFACT_ID=<id> \
+  ETORO_DEMO_LIFECYCLE_ARTIFACT_ID=<id> \
   ETORO_LIVE_SHADOW_EVIDENCE_ID=<id> \
     .venv/bin/python scripts/check_etoro_release_readiness.py
   ```
@@ -261,19 +274,54 @@ Runs the multi-broker/eToro release readiness checklist before any eToro live mi
   ```bash
   ETORO_READONLY_VALIDATION_ARTIFACT_ID=<id> \
   ETORO_DEMO_VALIDATION_ARTIFACT_ID=<id> \
+  ETORO_DEMO_LIFECYCLE_ARTIFACT_ID=<id> \
   ETORO_LIVE_SHADOW_EVIDENCE_ID=<id> \
     .venv/bin/python scripts/check_etoro_release_readiness.py \
+      --openapi-version v1.311.0 \
       --report-output artifacts/etoro-release-readiness.json
   ```
-  The JSON report records artifact ids, validation commands/results, missing artifacts, and live micro-size defaults.
+  The JSON report records artifact ids, validation commands/results, missing artifacts, observed OpenAPI version, expected OpenAPI version, and live micro-size defaults.
 - **Local dry-run only:**
   ```bash
   .venv/bin/python scripts/check_etoro_release_readiness.py \
     --dry-run \
     --allow-missing-external-artifacts \
+    --openapi-version v1.311.0 \
     --report-output artifacts/local-etoro-readiness-dry-run.json
   ```
   Do not use `--allow-missing-external-artifacts` for a real release.
+
+### `scripts/validate_etoro_demo_integration.py`
+Builds a redacted eToro Demo validation artifact from official demo endpoints.
+
+- **Use case:** Validate eToro Demo credentials, read-only demo portfolio/P&L, symbol resolution, market rates, demo eligibility, demo what-if costs, and optionally a controlled demo order lifecycle. This script is demo-only and refuses to run when `ETORO_ENV` is not `demo`.
+- **Credential variables:** Prefer `ETORO_DEMO_API_KEY` and `ETORO_DEMO_USER_KEY`. The script falls back to `ETORO_API_KEY` and `ETORO_USER_KEY` only when `ETORO_ENV=demo`.
+- **Read/precheck validation artifact:**
+  ```bash
+  ETORO_ENV=demo \
+  ETORO_DEMO_API_KEY=<demo-api-key> \
+  ETORO_DEMO_USER_KEY=<demo-user-key> \
+    .venv/bin/python scripts/validate_etoro_demo_integration.py \
+      --symbol AAPL \
+      --openapi-version v1.311.0 \
+      --output artifacts/etoro-demo-validation.json
+  ```
+- **Controlled demo lifecycle artifact:** only use after reviewing the resolved instrument, current rates, eligibility, and cost response.
+  ```bash
+  ETORO_ENV=demo \
+  ETORO_DEMO_API_KEY=<demo-api-key> \
+  ETORO_DEMO_USER_KEY=<demo-user-key> \
+    .venv/bin/python scripts/validate_etoro_demo_integration.py \
+      --symbol AAPL \
+      --amount-usd 25 \
+      --stop-loss-rate <rate> \
+      --take-profit-rate <rate> \
+      --submit-demo-order \
+      --close-after-submit \
+      --openapi-version v1.311.0 \
+      --output artifacts/etoro-demo-lifecycle-validation.json
+  ```
+- **Rule:** Do not use Real credentials. The artifact redacts key-like payload fields, but the command environment is still sensitive.
 
 ### `scripts/compare_replay_confidence_regression.py`
 Performs a side-by-side comparison of a replay run between the current "fixed" code and a simulated "buggy" version.

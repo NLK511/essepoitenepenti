@@ -5,13 +5,13 @@ import socket
 import traceback
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
+from typing import Any
 
 from sqlalchemy import select
 
 from scripts.large_plan_generation_parameter_search import run_large_parameter_search
 from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
-from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
     Recommendation,
@@ -19,13 +19,16 @@ from trade_proposer_app.domain.models import (
     Watchlist,
     WorkerHeartbeat,
 )
+from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.actionability_floor_calibration import (
+    ActionabilityFloorCalibrationService,
+)
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.broker_position_steering_workflow import BrokerSteeringService
-from trade_proposer_app.services.actionability_floor_calibration import ActionabilityFloorCalibrationService
 from trade_proposer_app.services.confidence_calibration_snapshots import (
     ConfidenceCalibrationSnapshotService,
 )
@@ -38,7 +41,6 @@ from trade_proposer_app.services.historical_replay import HistoricalReplayServic
 from trade_proposer_app.services.input_access import ArtifactProvenance, stable_hash
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
-from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_calibration import (
@@ -70,7 +72,7 @@ class JobExecutionService:
         industry_context=None,
         watchlist_orchestration=None,
         recommendation_plans=None,
-        order_execution: OrderExecutionService | None = None,
+        order_execution: Any | None = None,
         historical_replay: HistoricalReplayService | None = None,
         bars_refresh: BarsRefreshService | None = None,
         fundamental_analysis_refresh: FundamentalAnalysisRefreshService | None = None,
@@ -96,9 +98,9 @@ class JobExecutionService:
             else None
         )
         if self.order_execution is None and getattr(self.runs, "session", None) is not None:
-            from trade_proposer_app.services.builders import create_order_execution_service
+            from trade_proposer_app.services.builders import create_multi_broker_execution_service
 
-            self.order_execution = create_order_execution_service(self.runs.session)
+            self.order_execution = create_multi_broker_execution_service(self.runs.session)
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
@@ -374,7 +376,8 @@ class JobExecutionService:
                 hasattr(plan.signal_breakdown, "get")
                 and (
                     plan.signal_breakdown.get("execution_eligible") is False
-                    or plan.signal_breakdown.get("decision_tier") in {"research_plan", "shadow_observation", "discarded"}
+                    or plan.signal_breakdown.get("decision_tier")
+                    in {"research_plan", "shadow_observation", "discarded"}
                 )
             )
         ]

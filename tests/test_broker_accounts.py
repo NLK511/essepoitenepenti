@@ -33,16 +33,43 @@ class BrokerAccountRepositoryTests(unittest.TestCase):
         self.assertFalse(account.enabled)
         self.assertFalse(account.autonomous_execution_enabled)
 
+    def test_bootstrap_default_etoro_demo_account_is_disabled_and_capped(self) -> None:
+        repo = BrokerAccountRepository(self.session)
+
+        account = repo.ensure_default_etoro_demo_account()
+
+        self.assertEqual(account.broker_account_id, "etoro-demo-main")
+        self.assertEqual(account.broker, "etoro")
+        self.assertEqual(account.account_mode, "demo")
+        self.assertEqual(account.account_label, "eToro Demo")
+        self.assertFalse(account.enabled)
+        self.assertFalse(account.autonomous_execution_enabled)
+        self.assertTrue(account.manual_actions_enabled)
+        self.assertEqual(account.symbol_allowlist, [])
+        self.assertEqual(account.supported_actions, ["long"])
+        self.assertEqual(account.supported_instruments, ["resolved_equity"])
+        self.assertEqual(account.supported_order_types, ["market"])
+        self.assertEqual(account.notional_cap_usd, 25.0)
+        self.assertEqual(account.max_open_positions, 1)
+        self.assertTrue(account.risk_settings["demo_only"])
+        self.assertTrue(account.risk_settings["side_by_side_trial_required"])
+
     def test_startup_bootstrap_ensures_default_alpaca_paper_account_idempotently(self) -> None:
         first = ensure_default_broker_accounts(self.session)
         second = ensure_default_broker_accounts(self.session)
 
         self.assertEqual(first["default_alpaca_paper_account_id"], "alpaca-paper-default")
         self.assertEqual(second["default_alpaca_paper_account_id"], "alpaca-paper-default")
+        self.assertEqual(first["default_etoro_demo_account_id"], "etoro-demo-main")
+        self.assertEqual(second["default_etoro_demo_account_id"], "etoro-demo-main")
         accounts = BrokerAccountRepository(self.session).list_all()
         self.assertEqual(
-            [account.broker_account_id for account in accounts], ["alpaca-paper-default"]
+            [account.broker_account_id for account in accounts],
+            ["alpaca-paper-default", "etoro-demo-main"],
         )
+        by_id = {account.broker_account_id: account for account in accounts}
+        self.assertFalse(by_id["etoro-demo-main"].enabled)
+        self.assertFalse(by_id["etoro-demo-main"].autonomous_execution_enabled)
 
     def test_account_label_is_mutable_but_account_id_is_stable(self) -> None:
         repo = BrokerAccountRepository(self.session)

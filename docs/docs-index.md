@@ -38,6 +38,7 @@ These are the primary narrative source of truth for the product today:
 ## Active plans and operating trackers
 
 - `production-readiness-plan.md` — production hardening, staging soak, external broker gates, and rollout ladder
+- `etoro-demo-migration-plan.md` — phased eToro-demo-first migration plan for deprecating Alpaca paper without enabling real-money mutation
 - `docker-deployment-implementation-plan.md` — optional single-host Docker Compose deployment checklist
 - `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
 - `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups

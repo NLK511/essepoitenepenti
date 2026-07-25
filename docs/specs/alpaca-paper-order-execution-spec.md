@@ -1,14 +1,23 @@
 # Alpaca paper order execution spec
 
-**Status:** current behavior
+**Status:** current behavior; planned legacy fallback after eToro demo migration
 
-This document defines the first automated order-execution integration for Trade Proposer App.
+This document defines the first automated order-execution integration for Trade Proposer App. Alpaca paper remains the current implemented behavior and regression baseline. The active eToro demo migration plan will deprecate Alpaca paper as the default paper-trading path only after eToro demo has passed parity, reconciliation, and rollback gates.
 
 ## Goal
 
-After proposal generation, the app should be able to submit actionable plans to **Alpaca paper trading** automatically.
+After proposal generation, the app can submit actionable plans to **Alpaca paper trading** automatically while Alpaca remains enabled. After the eToro demo migration, this behavior becomes a legacy fallback that must be explicitly enabled.
 
 This feature is order execution only. It does not change plan generation, calibration, or outcome evaluation.
+
+## Deprecation condition
+
+Alpaca paper may be demoted from default only when:
+
+- eToro demo has completed a side-by-side trial with no unresolved `needs_review` older than one market session
+- eToro demo reconciliation explains all app-owned active exposure
+- default broker rollback can be performed through settings, not a code revert
+- Alpaca paper regression tests still pass until the fallback is intentionally removed
 
 ## Scope v1
 

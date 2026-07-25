@@ -62,7 +62,7 @@ When proposal generation produces actionable plans:
 9. The run summary must report broker execution counts grouped by broker account.
 10. Candidate creation and duplicate detection must be transactionally safe under concurrent workers. If the app cannot acquire a durable uniqueness lock for a candidate, it must persist/return a skip or warning rather than risk duplicate live orders.
 
-Example: if Alpaca paper and eToro live are both enabled, a long AAPL plan may create two broker-order rows: one Alpaca paper submission and one eToro live submission or safety skip.
+Example: if Alpaca paper and eToro demo are both enabled, a long AAPL plan may create two broker-order rows: one Alpaca paper submission and one eToro demo submission or safety skip. A future eToro live account remains separate and fail-closed unless a separate live rollout is approved.
 
 ## Settings
 
@@ -104,6 +104,7 @@ Per-broker-account settings:
 - `require_protective_stop`: default `true` for live
 - `require_take_profit`: default `true` for live
 - `demo_validation_required`: default `true` for live
+- `demo_validation_artifact_id`: validation evidence for eToro demo accounts before autonomous demo execution is enabled
 - `live_acknowledgement`: required before live autonomous execution
 - `broker_halt_enabled`
 - `broker_halt_reason`
@@ -111,7 +112,7 @@ Per-broker-account settings:
 - `validation_max_age_seconds`: maximum accepted credential/account validation age before live submissions are blocked
 - `broker_timezone`: broker-local timezone used for daily limits and drawdown reset
 
-Per-broker live defaults must be conservative. eToro live must default to `$25` `notional_cap_usd`, long-only, leverage `1`, empty allowlist, autonomous execution disabled, `max_order_count_per_day=1`, and a short snapshot freshness window.
+Per-broker demo and live defaults must be conservative. eToro demo should default to low notional, long-only, leverage `1`, autonomous execution disabled until validation, and account-scoped allowlist or denylist support. eToro live must default to `$25` `notional_cap_usd`, long-only, leverage `1`, empty allowlist, autonomous execution disabled, `max_order_count_per_day=1`, and a short snapshot freshness window.
 
 ## Risk manager behavior
 
@@ -331,7 +332,8 @@ Canonical current behavior includes broker-account settings, default Alpaca pape
 
 Still target/gated:
 
-- real eToro demo lifecycle against current external demo endpoints, not only test doubles
+- eToro demo lifecycle against current external demo endpoints with operator-provided demo credentials
+- eToro demo as the default paper-trading path after side-by-side parity evidence
 - real eToro live mutation enablement; live adapter currently fails closed with `etoro_live_mutation_disabled`
 - production-grade external validation artifacts and release-readiness evidence before live micro-size rollout
 - measured broker-backed trading edge before increasing live scope or notional caps

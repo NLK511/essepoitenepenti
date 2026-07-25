@@ -35,6 +35,7 @@ from trade_proposer_app.services.brokers import (
     FakeBrokerAdapter,
 )
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.multi_broker_execution import MultiBrokerExecutionService
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 
@@ -1850,5 +1851,17 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(order_stub.calls[0][0].ticker, "AAPL")
             self.assertIn("order_execution", summary)
             self.assertEqual(summary["order_execution"]["submitted_order_count"], 1)
+        finally:
+            session.close()
+
+    def test_job_execution_defaults_to_multi_broker_submission_service(self) -> None:
+        session = create_session()
+        try:
+            service = JobExecutionService(
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+            )
+
+            self.assertIsInstance(service.order_execution, MultiBrokerExecutionService)
         finally:
             session.close()

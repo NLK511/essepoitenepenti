@@ -36,7 +36,14 @@ class ExecutionCandidateResult:
 class ExecutionCandidateBuilder:
     """Builds broker-eligible execution candidates from immutable recommendation plans."""
 
-    def build(self, plan: RecommendationPlan, *, notional_per_plan: float, run_id: int | None = None) -> ExecutionCandidateResult:
+    def build(
+        self,
+        plan: RecommendationPlan,
+        *,
+        notional_per_plan: float,
+        run_id: int | None = None,
+        allow_amount_sizing: bool = False,
+    ) -> ExecutionCandidateResult:
         if plan.id is None:
             return ExecutionCandidateResult(skip_reason="missing_plan_id")
         if plan.action not in {"long", "short"}:
@@ -49,19 +56,33 @@ class ExecutionCandidateBuilder:
         stop_loss = float(plan.stop_loss) if plan.stop_loss is not None else None
         take_profit = float(plan.take_profit) if plan.take_profit is not None else None
         if stop_loss is None or take_profit is None:
-            return ExecutionCandidateResult(skip_reason="missing_exit_levels", entry_price=entry_price)
-        if not self.levels_are_directionally_valid(plan.action, entry_price, stop_loss, take_profit):
-            return ExecutionCandidateResult(skip_reason="invalid_trade_levels", entry_price=entry_price, stop_loss=stop_loss, take_profit=take_profit)
+            return ExecutionCandidateResult(
+                skip_reason="missing_exit_levels", entry_price=entry_price
+            )
+        if not self.levels_are_directionally_valid(
+            plan.action, entry_price, stop_loss, take_profit
+        ):
+            return ExecutionCandidateResult(
+                skip_reason="invalid_trade_levels",
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
         quantity = int(math.floor(float(notional_per_plan) / float(entry_price)))
-        if quantity < 1:
-            return ExecutionCandidateResult(skip_reason="quantity_below_minimum", entry_price=entry_price, stop_loss=stop_loss, take_profit=take_profit)
+        if quantity < 1 and not allow_amount_sizing:
+            return ExecutionCandidateResult(
+                skip_reason="quantity_below_minimum",
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
         return ExecutionCandidateResult(
             candidate=ExecutionCandidate(
                 plan=plan,
                 entry_price=entry_price,
                 stop_loss=float(stop_loss),
                 take_profit=take_profit,
-                quantity=quantity,
+                quantity=max(0, quantity),
                 client_order_id=self.client_order_id(plan, run_id=run_id),
             ),
             entry_price=entry_price,
@@ -74,7 +95,11 @@ class ExecutionCandidateBuilder:
         breakdown = plan.signal_breakdown
         if hasattr(breakdown, "get") and breakdown.get("execution_eligible") is False:
             return False
-        if hasattr(breakdown, "get") and breakdown.get("decision_tier") in {"research_plan", "shadow_observation", "discarded"}:
+        if hasattr(breakdown, "get") and breakdown.get("decision_tier") in {
+            "research_plan",
+            "shadow_observation",
+            "discarded",
+        }:
             return False
         return True
 
@@ -89,7 +114,9 @@ class ExecutionCandidateBuilder:
         return None
 
     @staticmethod
-    def levels_are_directionally_valid(action: str, entry_price: float, stop_loss: float, take_profit: float) -> bool:
+    def levels_are_directionally_valid(
+        action: str, entry_price: float, stop_loss: float, take_profit: float
+    ) -> bool:
         if action == "long":
             return stop_loss < entry_price < take_profit
         if action == "short":

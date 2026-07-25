@@ -220,6 +220,8 @@ class BrokerAdapter(Protocol):
         self, order_id: str | None = None, client_order_id: str | None = None
     ) -> BrokerOrderResult: ...
 
+    def lookup_close_order(self, order_id: str) -> BrokerOrderResult: ...
+
     def cancel_order(self, order_id: str) -> BrokerOrderResult: ...
 
     def close_position(
@@ -305,6 +307,14 @@ class FakeBrokerAdapter:
             client_request_id=str(uuid4()),
             broker_order_id=order_id,
             broker_status="canceled",
+        )
+
+    def lookup_close_order(self, order_id: str) -> BrokerOrderResult:
+        return BrokerOrderResult(
+            status=BrokerAdapterResultStatus.NOT_FOUND,
+            operation="lookup_close_order",
+            client_request_id=order_id,
+            message="close order not found",
         )
 
     def close_position(self, position_id: str, quantity: float | None = None) -> BrokerOrderResult:

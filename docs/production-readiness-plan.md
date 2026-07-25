@@ -183,13 +183,14 @@ Tasks:
 2. Run read-only validation with real credentials and record:
    - `ETORO_READONLY_VALIDATION_ARTIFACT_ID`
 3. Run controlled demo lifecycle validation and record:
-   - `ETORO_DEMO_VALIDATION_ARTIFACT_ID`
+   - `ETORO_DEMO_LIFECYCLE_ARTIFACT_ID`
 4. Run live-shadow for at least one full market session and record:
    - `ETORO_LIVE_SHADOW_EVIDENCE_ID`
 5. Run release readiness:
    ```bash
    ETORO_READONLY_VALIDATION_ARTIFACT_ID=<id> \
    ETORO_DEMO_VALIDATION_ARTIFACT_ID=<id> \
+   ETORO_DEMO_LIFECYCLE_ARTIFACT_ID=<id> \
    ETORO_LIVE_SHADOW_EVIDENCE_ID=<id> \
      .venv/bin/python scripts/check_etoro_release_readiness.py \
        --report-output artifacts/etoro-release-readiness.json

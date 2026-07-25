@@ -26,9 +26,9 @@ DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS: list[dict[str, str]] = [
 ]
 
 DEFAULT_BROKER_STEERING_JOB_SPEC = {
-    "name": "Auto: Broker Steering Dry Run",
+    "name": "Auto: Broker Steering Paper Pilot",
     "cron": "*/30 * * * *",
-    "schedule_rationale": "Runs a conservative dry-run steering pass periodically so decision audits stay fresh before live enablement.",
+    "schedule_rationale": "Runs conservative paper-account steering periodically with mutation classes controlled by steering settings.",
 }
 
 DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC = {
@@ -184,8 +184,13 @@ def ensure_default_performance_assessment_job(session) -> dict[str, str]:
 
 
 def ensure_default_broker_accounts(session) -> dict[str, str]:
-    account = BrokerAccountRepository(session).ensure_default_alpaca_paper_account()
-    return {"default_alpaca_paper_account_id": account.broker_account_id}
+    repo = BrokerAccountRepository(session)
+    alpaca = repo.ensure_default_alpaca_paper_account()
+    etoro_demo = repo.ensure_default_etoro_demo_account()
+    return {
+        "default_alpaca_paper_account_id": alpaca.broker_account_id,
+        "default_etoro_demo_account_id": etoro_demo.broker_account_id,
+    }
 
 
 def _ensure_job(

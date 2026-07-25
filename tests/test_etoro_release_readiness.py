@@ -35,6 +35,7 @@ def test_missing_external_artifacts_fail_closed() -> None:
 def test_dry_run_can_be_used_for_local_non_release_checks(monkeypatch) -> None:
     monkeypatch.delenv("ETORO_READONLY_VALIDATION_ARTIFACT_ID", raising=False)
     monkeypatch.delenv("ETORO_DEMO_VALIDATION_ARTIFACT_ID", raising=False)
+    monkeypatch.delenv("ETORO_DEMO_LIFECYCLE_ARTIFACT_ID", raising=False)
     monkeypatch.delenv("ETORO_LIVE_SHADOW_EVIDENCE_ID", raising=False)
 
     assert (
@@ -54,6 +55,7 @@ def test_release_artifact_environment_satisfies_gate() -> None:
     env = {
         "ETORO_READONLY_VALIDATION_ARTIFACT_ID": "readonly-1",
         "ETORO_DEMO_VALIDATION_ARTIFACT_ID": "demo-1",
+        "ETORO_DEMO_LIFECYCLE_ARTIFACT_ID": "lifecycle-1",
         "ETORO_LIVE_SHADOW_EVIDENCE_ID": "shadow-1",
     }
 
@@ -64,6 +66,7 @@ def test_release_report_contains_artifacts_validation_results_and_micro_size_def
     env = {
         "ETORO_READONLY_VALIDATION_ARTIFACT_ID": "readonly-1",
         "ETORO_DEMO_VALIDATION_ARTIFACT_ID": "demo-1",
+        "ETORO_DEMO_LIFECYCLE_ARTIFACT_ID": "lifecycle-1",
         "ETORO_LIVE_SHADOW_EVIDENCE_ID": "shadow-1",
     }
 
@@ -79,10 +82,19 @@ def test_release_report_contains_artifacts_validation_results_and_micro_size_def
             )
         ],
         status="passed",
+        openapi_version="v1.311.0",
     )
 
     assert report["status"] == "passed"
+    assert report["openapi"] == {
+        "expected_version": "v1.311.0",
+        "observed_version": "v1.311.0",
+        "version_matches_expected": True,
+    }
     assert report["required_artifacts"]["ETORO_DEMO_VALIDATION_ARTIFACT_ID"] == "demo-1"
+    assert (
+        report["required_artifacts"]["ETORO_DEMO_LIFECYCLE_ARTIFACT_ID"] == "lifecycle-1"
+    )
     assert report["validations"][0]["status"] == "passed"
     assert report["live_micro_size_defaults"] == {
         "max_notional_usd": 25,
@@ -95,6 +107,7 @@ def test_release_report_contains_artifacts_validation_results_and_micro_size_def
 def test_dry_run_writes_release_report(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("ETORO_READONLY_VALIDATION_ARTIFACT_ID", raising=False)
     monkeypatch.delenv("ETORO_DEMO_VALIDATION_ARTIFACT_ID", raising=False)
+    monkeypatch.delenv("ETORO_DEMO_LIFECYCLE_ARTIFACT_ID", raising=False)
     monkeypatch.delenv("ETORO_LIVE_SHADOW_EVIDENCE_ID", raising=False)
     output = tmp_path / "release-readiness.json"
 
@@ -104,6 +117,8 @@ def test_dry_run_writes_release_report(tmp_path, monkeypatch) -> None:
             "--skip-frontend",
             "--skip-postgres",
             "--allow-missing-external-artifacts",
+            "--openapi-version",
+            "v1.311.0",
             "--report-output",
             str(output),
         ]
@@ -112,5 +127,6 @@ def test_dry_run_writes_release_report(tmp_path, monkeypatch) -> None:
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "dry_run"
+    assert payload["openapi"]["observed_version"] == "v1.311.0"
     assert payload["missing_artifacts"] == list(readiness.REQUIRED_ARTIFACT_ENV_VARS)
     assert payload["validations"][0]["status"] == "dry_run"

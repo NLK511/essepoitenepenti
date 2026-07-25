@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import httpx
@@ -63,7 +63,7 @@ class EtoroLiveManualCloseApiTests(unittest.IsolatedAsyncioTestCase):
                     notional_amount=25.0,
                     status="accepted",
                     client_order_id="live-close-client",
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
             self.position_id = (

@@ -142,7 +142,14 @@ class BrokerRiskManager:
             app_open_ticker_counts[ticker] = app_open_ticker_counts.get(ticker, 0) + 1
             open_ticker_counts[ticker] = open_ticker_counts.get(ticker, 0) + 1
             if position.entry_avg_price is not None:
-                open_notional += abs(float(position.entry_avg_price) * float(position.current_quantity or position.quantity))
+                quantity = (
+                    position.current_unit_quantity
+                    if position.current_unit_quantity is not None
+                    else position.unit_quantity
+                )
+                if quantity is None:
+                    quantity = float(position.current_quantity or position.quantity)
+                open_notional += abs(float(position.entry_avg_price) * float(quantity))
             else:
                 intended = position.raw_broker_payload.get("notional_amount") if isinstance(position.raw_broker_payload, dict) else None
                 try:

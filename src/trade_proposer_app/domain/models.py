@@ -448,6 +448,8 @@ class BrokerPosition(BaseModel):
     side: str
     quantity: int = 0
     current_quantity: int = 0
+    unit_quantity: float | None = None
+    current_unit_quantity: float | None = None
     status: str = "submitted"
     entry_order_id: str | None = None
     entry_avg_price: float | None = None

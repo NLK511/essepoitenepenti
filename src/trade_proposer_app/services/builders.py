@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
+from trade_proposer_app.repositories.broker_account_safety import BrokerAccountSafetyRepository
+from trade_proposer_app.repositories.broker_accounts import BrokerAccountRepository
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
@@ -22,6 +24,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient
+from trade_proposer_app.services.brokers.factory import BrokerAdapterFactory
 from trade_proposer_app.services.confidence_calibration_snapshots import (
     ConfidenceCalibrationSnapshotService,
 )
@@ -32,6 +35,7 @@ from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
+from trade_proposer_app.services.multi_broker_execution import MultiBrokerExecutionService
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.proposals import ProposalService
@@ -164,6 +168,18 @@ def create_order_execution_service(session: Session) -> OrderExecutionService:
         positions=BrokerPositionRepository(session),
         observability=ObservabilityEventRepository(session),
         reconciliation_snapshots=BrokerReconciliationSnapshotRepository(session),
+    )
+
+
+def create_multi_broker_execution_service(session: Session) -> MultiBrokerExecutionService:
+    repository = _settings_repository(session)
+    accounts = BrokerAccountRepository(session)
+    return MultiBrokerExecutionService(
+        settings=repository,
+        accounts=accounts,
+        executions=BrokerOrderExecutionRepository(session),
+        adapter_factory=BrokerAdapterFactory(settings=repository, accounts=accounts),
+        safety=BrokerAccountSafetyRepository(session),
     )
 
 

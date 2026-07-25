@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Protocol
 
@@ -139,6 +139,7 @@ class MultiBrokerExecutionService:
             plan,
             notional_per_plan=self._notional_for_account(account, config),
             run_id=run_id,
+            allow_amount_sizing=account.broker == "etoro" and account.account_mode == "demo",
         )
         if skip_reason is None and candidate_result.skip_reason is not None:
             skip_reason = candidate_result.skip_reason
@@ -146,7 +147,9 @@ class MultiBrokerExecutionService:
             skip_reason = self._pre_submit_risk_reason(
                 plan=plan,
                 account=account,
-                candidate_notional=self._candidate_notional(candidate_result),
+                candidate_notional=self._candidate_notional_for_account(
+                    account, config, candidate_result
+                ),
                 existing_orders=existing_orders,
             )
         if candidate_result.candidate is None:
@@ -161,9 +164,26 @@ class MultiBrokerExecutionService:
                 take_profit=candidate_result.take_profit,
             )
         candidate = candidate_result.candidate
+        adapter: BrokerAdapter | None = None
+        instrument_id: str | None = None
+        if skip_reason is None and account.broker == "etoro" and account.account_mode == "demo":
+            try:
+                adapter = self.adapter_factory.for_account_id(account.broker_account_id)
+                skip_reason, instrument_id = self._etoro_demo_preflight(
+                    adapter, symbol=plan.ticker
+                )
+            except Exception:
+                skip_reason = "etoro_demo_preflight_failed"
         entry_price = self._normalize_price(candidate.entry_price)
         stop_loss = self._normalize_price(candidate.stop_loss)
         take_profit = self._normalize_price(candidate.take_profit)
+        order_type = self._order_type_for_account(account)
+        notional_amount = self._order_notional_amount(
+            account=account,
+            config=config,
+            quantity=candidate.quantity,
+            entry_price=entry_price,
+        )
         order = BrokerOrderExecution(
             broker_account_id=account.broker_account_id,
             broker=account.broker,
@@ -175,10 +195,10 @@ class MultiBrokerExecutionService:
             ticker=plan.ticker.upper(),
             action=plan.action,
             side=candidate.side,
-            order_type="limit",
+            order_type=order_type,
             time_in_force="gtc",
             quantity=candidate.quantity,
-            notional_amount=round(candidate.quantity * entry_price, 4),
+            notional_amount=notional_amount,
             entry_price=entry_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
@@ -189,6 +209,9 @@ class MultiBrokerExecutionService:
                 entry_price=entry_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
+                account=account,
+                notional_amount=notional_amount,
+                instrument_id=instrument_id,
                 skip_reason=skip_reason,
             ),
             error_message=skip_reason or "",
@@ -196,9 +219,10 @@ class MultiBrokerExecutionService:
         if skip_reason:
             return self.executions.create_candidate_once(order)
         try:
-            adapter = self.adapter_factory.for_account_id(account.broker_account_id)
+            if adapter is None:
+                adapter = self.adapter_factory.for_account_id(account.broker_account_id)
             result = adapter.submit_order(self._broker_order_request(order))
-            order.submitted_at = datetime.now(timezone.utc)
+            order.submitted_at = datetime.now(UTC)
             order.response_payload = result.payload
             order.broker_order_id = result.broker_order_id
             if result.status == BrokerAdapterResultStatus.AMBIGUOUS:
@@ -227,7 +251,7 @@ class MultiBrokerExecutionService:
         except Exception as exc:  # pragma: no cover - defensive adapter boundary
             order.status = ExecutionStatus.FAILED.value
             order.error_message = str(exc)
-            order.submitted_at = datetime.now(timezone.utc)
+            order.submitted_at = datetime.now(UTC)
         return self.executions.create_candidate_once(order)
 
     @staticmethod
@@ -265,6 +289,8 @@ class MultiBrokerExecutionService:
             return "broker_symbol_denied"
         if allowlist and ticker not in allowlist:
             return "broker_symbol_not_allowlisted"
+        if account.broker == "etoro" and plan.action != "long":
+            return "etoro_short_not_supported_v1"
         if account.max_position_notional_usd is not None and account.max_position_notional_usd > 0:
             if candidate_notional > float(account.max_position_notional_usd):
                 return "risk_position_notional_limit_exceeded"
@@ -429,9 +455,9 @@ class MultiBrokerExecutionService:
 
     @staticmethod
     def _today_order_count(orders: list[BrokerOrderExecution]) -> int:
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         return sum(
-            1 for order in orders if order.created_at.astimezone(timezone.utc).date() == today
+            1 for order in orders if order.created_at.astimezone(UTC).date() == today
         )
 
     @staticmethod
@@ -475,11 +501,35 @@ class MultiBrokerExecutionService:
             return 0.0
         return round(float(candidate.quantity) * float(candidate.entry_price), 4)
 
+    @classmethod
+    def _candidate_notional_for_account(
+        cls,
+        account: BrokerAccount,
+        config: dict[str, object],
+        candidate_result: object,
+    ) -> float:
+        if account.broker == "etoro" and account.account_mode == "demo":
+            return cls._notional_for_account(account, config)
+        return cls._candidate_notional(candidate_result)
+
     @staticmethod
     def _notional_for_account(account: BrokerAccount, config: dict[str, object]) -> float:
         if account.notional_cap_usd is not None and account.notional_cap_usd > 0:
             return float(account.notional_cap_usd)
         return float(config.get("notional_per_plan") or 0.0)
+
+    @classmethod
+    def _order_notional_amount(
+        cls,
+        *,
+        account: BrokerAccount,
+        config: dict[str, object],
+        quantity: int,
+        entry_price: float,
+    ) -> float:
+        if account.broker == "etoro" and account.account_mode == "demo":
+            return round(cls._notional_for_account(account, config), 4)
+        return round(quantity * entry_price, 4)
 
     def _store_skip(
         self,
@@ -512,7 +562,10 @@ class MultiBrokerExecutionService:
             stop_loss=stop_loss,
             take_profit=take_profit,
             status=ExecutionStatus.SKIPPED.value,
-            client_order_id=f"tp-run-{run_id or 'none'}-plan-{plan.id or 'new'}-{plan.ticker.lower()}-{account.broker_account_id}",
+            client_order_id=(
+                f"tp-run-{run_id or 'none'}-plan-{plan.id or 'new'}-"
+                f"{plan.ticker.lower()}-{account.broker_account_id}"
+            ),
             request_payload={
                 "reason": reason,
                 "would_submit": reason == "etoro_live_shadow_would_submit",
@@ -528,20 +581,36 @@ class MultiBrokerExecutionService:
         entry_price: float,
         stop_loss: float,
         take_profit: float,
+        account: BrokerAccount,
+        notional_amount: float,
+        instrument_id: str | None = None,
         skip_reason: str | None = None,
     ) -> dict[str, object]:
-        payload = {
-            "symbol": candidate.plan.ticker.upper(),
-            "qty": candidate.quantity,
-            "side": candidate.side,
-            "type": "limit",
-            "time_in_force": "gtc",
-            "limit_price": entry_price,
-            "order_class": "bracket",
-            "take_profit": {"limit_price": take_profit},
-            "stop_loss": {"stop_price": stop_loss},
-            "client_order_id": candidate.client_order_id,
-        }
+        if account.broker == "etoro" and account.account_mode == "demo":
+            payload = {
+                "symbol": candidate.plan.ticker.upper(),
+                "side": candidate.side,
+                "type": "market",
+                "time_in_force": "gtc",
+                "amount": notional_amount,
+                "instrumentId": instrument_id or "",
+                "stopLossRate": stop_loss,
+                "takeProfitRate": take_profit,
+                "client_order_id": candidate.client_order_id,
+            }
+        else:
+            payload = {
+                "symbol": candidate.plan.ticker.upper(),
+                "qty": candidate.quantity,
+                "side": candidate.side,
+                "type": "limit",
+                "time_in_force": "gtc",
+                "limit_price": entry_price,
+                "order_class": "bracket",
+                "take_profit": {"limit_price": take_profit},
+                "stop_loss": {"stop_price": stop_loss},
+                "client_order_id": candidate.client_order_id,
+            }
         if skip_reason == "etoro_live_shadow_would_submit":
             payload["would_submit"] = True
             payload["reason"] = skip_reason
@@ -562,11 +631,40 @@ class MultiBrokerExecutionService:
             order_type=order.order_type,
             quantity=order.quantity,
             notional_amount=order.notional_amount,
+            instrument_id=(
+                str(order.request_payload.get("instrumentId"))
+                if order.request_payload.get("instrumentId")
+                else None
+            ),
             time_in_force=order.time_in_force,
             stop_loss=order.stop_loss,
             take_profit=order.take_profit,
             payload=order.request_payload,
         )
+
+    @staticmethod
+    def _order_type_for_account(account: BrokerAccount) -> str:
+        if account.broker == "etoro" and account.account_mode == "demo":
+            return "market"
+        return "limit"
+
+    @staticmethod
+    def _etoro_demo_preflight(
+        adapter: BrokerAdapter, *, symbol: str
+    ) -> tuple[str | None, str | None]:
+        validation = adapter.validate_credentials()
+        if not validation.valid:
+            return "etoro_demo_validation_failed", None
+        if validation.account_mode not in {"demo", "unknown"}:
+            return "etoro_demo_validation_wrong_environment", None
+        instrument = adapter.resolve_instrument(symbol)
+        if instrument.ambiguous:
+            return "etoro_instrument_ambiguous", None
+        if not instrument.instrument_id:
+            return "etoro_instrument_missing", None
+        if not instrument.tradable:
+            return "etoro_instrument_unavailable", None
+        return None, instrument.instrument_id
 
     @staticmethod
     def _bump(values: dict[str, int], key: str) -> None:

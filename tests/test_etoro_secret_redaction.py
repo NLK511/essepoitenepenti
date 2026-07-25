@@ -7,8 +7,18 @@ from trade_proposer_app.services.brokers.etoro import EtoroClient, EtoroReadOnly
 
 class EtoroSecretRedactionTests(unittest.TestCase):
     def test_user_key_is_redacted_from_errors_and_adapter_payloads(self) -> None:
-        redacted = redacted_payload({"headers": {"x-user-key": "very-secret-user-key"}})
+        redacted = redacted_payload(
+            {
+                "headers": {
+                    "x-user-key": "very-secret-user-key",
+                    "x_api_key": "very-secret-api-key",
+                    "user_key": "very-secret-snake-user-key",
+                }
+            }
+        )
         self.assertNotIn("very-secret-user-key", str(redacted))
+        self.assertNotIn("very-secret-api-key", str(redacted))
+        self.assertNotIn("very-secret-snake-user-key", str(redacted))
 
         http = FakeHttpClient(
             [FakeResponse(200, {"x-user-key": "very-secret-user-key", "equity": 1})]

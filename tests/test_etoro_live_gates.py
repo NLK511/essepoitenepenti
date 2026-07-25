@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -55,7 +55,7 @@ class EtoroLiveGatesTests(unittest.TestCase):
             entry_price_high=26.0,
             stop_loss=20.0,
             take_profit=30.0,
-            computed_at=datetime.now(timezone.utc),
+            computed_at=datetime.now(UTC),
         )
 
     def _account(

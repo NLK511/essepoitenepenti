@@ -16,8 +16,11 @@ FRONTEND_DIR = ROOT / "frontend"
 REQUIRED_ARTIFACT_ENV_VARS = (
     "ETORO_READONLY_VALIDATION_ARTIFACT_ID",
     "ETORO_DEMO_VALIDATION_ARTIFACT_ID",
+    "ETORO_DEMO_LIFECYCLE_ARTIFACT_ID",
     "ETORO_LIVE_SHADOW_EVIDENCE_ID",
 )
+
+EXPECTED_ETORO_OPENAPI_VERSION = "v1.311.0"
 
 FOCUSED_BROKER_RISK_TESTS = (
     "tests/test_broker_accounts.py",
@@ -117,6 +120,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--report-output",
         help="Write a JSON release-readiness report to this path.",
     )
+    parser.add_argument(
+        "--openapi-version",
+        default=os.environ.get("ETORO_OPENAPI_VERSION", ""),
+        help="Observed official eToro OpenAPI version recorded during docs refresh.",
+    )
     return parser.parse_args(argv)
 
 
@@ -126,10 +134,16 @@ def build_release_report(
     missing: list[str],
     results: list[ValidationResult],
     status: str,
+    openapi_version: str = "",
 ) -> dict[str, object]:
     return {
         "status": status,
         "generated_at": datetime.now(UTC).isoformat(),
+        "openapi": {
+            "expected_version": EXPECTED_ETORO_OPENAPI_VERSION,
+            "observed_version": openapi_version,
+            "version_matches_expected": openapi_version == EXPECTED_ETORO_OPENAPI_VERSION,
+        },
         "required_artifacts": {name: env.get(name, "") for name in REQUIRED_ARTIFACT_ENV_VARS},
         "missing_artifacts": missing,
         "validations": [result.__dict__ for result in results],
@@ -165,7 +179,13 @@ def main(argv: list[str] | None = None) -> int:
             print("Use --allow-missing-external-artifacts only for non-release local dry runs.")
             write_report(
                 args.report_output,
-                build_release_report(env=env, missing=missing, results=results, status="failed"),
+                build_release_report(
+                    env=env,
+                    missing=missing,
+                    results=results,
+                    status="failed",
+                    openapi_version=args.openapi_version,
+                ),
             )
             return 2
     else:
@@ -180,7 +200,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         write_report(
             args.report_output,
-            build_release_report(env=env, missing=missing, results=results, status="dry_run"),
+            build_release_report(
+                env=env,
+                missing=missing,
+                results=results,
+                status="dry_run",
+                openapi_version=args.openapi_version,
+            ),
         )
         return 0
 
@@ -198,10 +224,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Validation step failed: {command.name} exited with {code}")
             write_report(
                 args.report_output,
-                build_release_report(env=env, missing=missing, results=results, status="failed"),
+                build_release_report(
+                    env=env,
+                    missing=missing,
+                    results=results,
+                    status="failed",
+                    openapi_version=args.openapi_version,
+                ),
             )
             return code
-    report = build_release_report(env=env, missing=missing, results=results, status="passed")
+    report = build_release_report(
+        env=env,
+        missing=missing,
+        results=results,
+        status="passed",
+        openapi_version=args.openapi_version,
+    )
     write_report(args.report_output, report)
     print("eToro release readiness validation completed successfully.")
     return 0

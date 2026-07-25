@@ -13,6 +13,7 @@ from trade_proposer_app.services.brokers.adapter import (
     BrokerOrderRequest,
     BrokerOrderResult,
     BrokerPortfolioResult,
+    BrokerProtectionAmendRequest,
     BrokerTradeHistoryResult,
     redacted_payload,
 )
@@ -55,41 +56,103 @@ class EtoroClient:
         return self._request("GET", "/api/v1/trading/info/portfolio")
 
     def search_market_data(self, symbol: str) -> dict[str, object]:
-        return self._request("GET", "/api/v1/market-data/search", params={"query": symbol})
+        return self._request(
+            "GET",
+            "/api/v1/market-data/search",
+            params={
+                "fields": "instrumentId",
+                "internalSymbolFull": symbol.strip().upper(),
+                "pageSize": 25,
+            },
+        )
+
+    def get_instrument_display_data(self, instrument_id: int | str) -> dict[str, object]:
+        return self._request(
+            "GET",
+            "/api/v1/market-data/instruments",
+            params={"instrumentIds": str(instrument_id)},
+        )
+
+    def get_market_rates(self, instrument_ids: list[int | str]) -> dict[str, object]:
+        return self._request(
+            "GET",
+            "/api/v1/market-data/instruments/rates",
+            params={"instrumentIds": ",".join(str(item) for item in instrument_ids)},
+        )
 
     def get_portfolio(self) -> dict[str, object]:
         return self._request("GET", "/api/v1/trading/info/portfolio")
 
+    def get_demo_portfolio(self) -> dict[str, object]:
+        return self._request("GET", "/api/v1/trading/info/demo/portfolio")
+
     def get_pnl(self) -> dict[str, object]:
         return self._request("GET", "/api/v1/trading/info/real/pnl")
+
+    def get_demo_pnl(self) -> dict[str, object]:
+        return self._request("GET", "/api/v1/trading/info/demo/pnl")
+
+    def get_demo_aggregate_portfolio(self) -> dict[str, object]:
+        return self._request("GET", "/api/v1/trading/info/demo/aggregate-portfolio")
 
     def get_trade_history(self) -> dict[str, object]:
         return self._request("GET", "/api/v1/trading/info/trade/history")
 
+    def get_demo_trade_history(self) -> dict[str, object]:
+        return self._request("GET", "/api/v1/trading/info/trade/demo/history")
+
+    def check_demo_eligibility(self, payload: dict[str, object]) -> dict[str, object]:
+        return self._request(
+            "POST", "/api/v2/trading/info/demo/eligibility", json_payload=payload
+        )
+
+    def get_demo_costs(self, payload: dict[str, object]) -> dict[str, object]:
+        return self._request("POST", "/api/v2/trading/info/demo/costs", json_payload=payload)
+
     def submit_demo_order(self, payload: dict[str, object]) -> dict[str, object]:
-        return self._request("POST", "/api/v2/trading/demo/execution/orders", json_payload=payload)
+        return self._request("POST", "/api/v2/trading/execution/demo/orders", json_payload=payload)
 
     def lookup_demo_order(
         self, order_id: str | None = None, reference_id: str | None = None
     ) -> dict[str, object]:
-        params = {"orderId": order_id, "referenceId": reference_id}
+        params = {"orderId": order_id} if order_id else {"referenceId": reference_id}
         return self._request(
             "GET",
-            "/api/v2/trading/demo/info/orders:lookup",
+            "/api/v2/trading/info/demo/orders:lookup",
             params={k: v for k, v in params.items() if v},
         )
 
     def cancel_demo_order(self, order_id: str) -> dict[str, object]:
-        return self._request("DELETE", f"/api/v2/trading/demo/execution/orders/{order_id}")
+        return self._request("DELETE", f"/api/v2/trading/execution/demo/orders/{order_id}")
 
     def close_demo_position(
-        self, position_id: str, quantity: float | None = None
+        self,
+        position_id: str,
+        quantity: float | None = None,
+        instrument_id: int | str | None = None,
     ) -> dict[str, object]:
-        payload = {"quantity": quantity} if quantity is not None else {}
+        payload = {"UnitsToDeduct": quantity}
+        if instrument_id is not None:
+            payload["InstrumentID"] = int(instrument_id)
         return self._request(
             "POST",
-            f"/api/v1/trading/demo/execution/market-close-orders/positions/{position_id}",
+            f"/api/v1/trading/execution/demo/market-close-orders/positions/{position_id}",
             json_payload=payload,
+        )
+
+    def cancel_pending_demo_close(self, order_id: str) -> dict[str, object]:
+        return self._request(
+            "DELETE", f"/api/v1/trading/execution/demo/market-close-orders/{order_id}"
+        )
+
+    def lookup_demo_close_order(self, order_id: str) -> dict[str, object]:
+        return self._request("GET", f"/api/v1/trading/info/demo/close-orders/{order_id}")
+
+    def amend_demo_position_protection(
+        self, position_id: str, payload: dict[str, object]
+    ) -> dict[str, object]:
+        return self._request(
+            "PATCH", f"/api/v2/trading/demo/positions/{position_id}", json_payload=payload
         )
 
     def _request(
@@ -109,6 +172,8 @@ class EtoroClient:
             "x-user-key": self.user_key,
             "x-request-id": str(uuid4()),
         }
+        if json_payload is not None:
+            headers["Content-Type"] = "application/json"
         url = f"{self.base_url}{path}"
         client = self.http_client
         try:
@@ -209,7 +274,7 @@ class EtoroReadOnlyBrokerAdapter:
             account_mode="unknown",
             supported_actions=["long"],
             supported_order_types=["market"],
-            supported_instruments=["allowlisted_equity"],
+            supported_instruments=["resolved_equity"],
             supports_cancel=True,
             supports_close_position=True,
             supports_trade_history=True,
@@ -224,42 +289,60 @@ class EtoroReadOnlyBrokerAdapter:
         normalized = symbol.strip().upper()
         if normalized in self._instrument_cache:
             return self._instrument_cache[normalized]
-        try:
-            payload = self.client.search_market_data(normalized)
-        except EtoroClientError as exc:
-            return BrokerInstrument(
-                symbol=normalized, instrument_id="", tradable=False, raw_payload=exc.payload
-            )
-        rows = self._instrument_rows(payload)
-        matches = [row for row in rows if str(row.get("symbol") or "").upper() == normalized]
+        aliases = self._symbol_aliases(normalized)
+        rows: list[dict[str, object]] = []
+        attempts: list[dict[str, object]] = []
+        for alias in aliases:
+            try:
+                payload = self.client.search_market_data(alias)
+            except EtoroClientError as exc:
+                attempts.append({"symbol": alias, "error": exc.payload})
+                continue
+            attempts.append({"symbol": alias, "payload": payload})
+            rows.extend(self._enriched_instrument_rows(alias, payload))
+        matches = [
+            row
+            for row in rows
+            if str(row.get("symbolFull") or row.get("symbol") or "").upper() in aliases
+        ]
         if len(matches) != 1:
             instrument = BrokerInstrument(
                 symbol=normalized,
                 instrument_id="",
                 tradable=False,
                 ambiguous=bool(matches),
-                raw_payload=payload,
+                raw_payload={"attempts": attempts, "matched_symbols": aliases},
             )
             self._instrument_cache[normalized] = instrument
             return instrument
         row = matches[0]
-        product_type = str(row.get("productType") or row.get("product_type") or "unknown").lower()
+        product_type = str(
+            row.get("instrumentType")
+            or row.get("productType")
+            or row.get("product_type")
+            or "equity"
+        ).lower()
         currency = str(row.get("currency") or row.get("orderCurrency") or "usd").lower()
         min_notional = self._float(row.get("minAmount") or row.get("min_notional_usd"))
         tradable = (
-            bool(row.get("tradable", True))
-            and product_type in {"stock", "equity"}
+            bool(row.get("tradable", row.get("isCurrentlyTradable", True)))
+            and product_type in {"stock", "stocks", "equity"}
             and currency == "usd"
         )
         if min_notional is not None and min_notional > 1000:
             tradable = False
         instrument = BrokerInstrument(
             symbol=normalized,
-            instrument_id=str(row.get("instrumentId") or row.get("instrument_id") or ""),
+            instrument_id=str(
+                row.get("instrumentId")
+                or row.get("instrumentID")
+                or row.get("instrument_id")
+                or ""
+            ),
             tradable=tradable,
             ambiguous=False,
             product_type=product_type,
-            exchange=str(row.get("exchange") or row.get("market") or ""),
+            exchange=str(row.get("priceSource") or row.get("exchange") or row.get("market") or ""),
             currency=currency,
             min_notional_usd=min_notional,
             max_notional_usd=self._float(row.get("maxAmount") or row.get("max_notional_usd")),
@@ -275,18 +358,34 @@ class EtoroReadOnlyBrokerAdapter:
         self._instrument_cache[normalized] = instrument
         return instrument
 
+    @staticmethod
+    def _symbol_aliases(symbol: str) -> list[str]:
+        aliases = [symbol]
+        if "-" in symbol:
+            aliases.append(symbol.replace("-", "."))
+        if "." in symbol:
+            aliases.append(symbol.replace(".", "-"))
+        if symbol.endswith(".US"):
+            aliases.append(symbol.removesuffix(".US"))
+        return list(dict.fromkeys(aliases))
+
     def get_account_snapshot(self) -> BrokerPortfolioResult:
         try:
             payload = self.client.get_portfolio()
         except EtoroClientError as exc:
             return self._portfolio_error("get_account_snapshot", exc)
+        portfolio = self._client_portfolio(payload)
         return BrokerPortfolioResult(
             status=BrokerAdapterResultStatus.SUCCESS,
             operation="get_account_snapshot",
             client_request_id=str(uuid4()),
             account=BrokerAccountSnapshot(
-                equity=self._float(payload.get("equity") or payload.get("balance")),
-                cash=self._float(payload.get("cash") or payload.get("availableCash")),
+                equity=self._float(portfolio.get("equity") or portfolio.get("balance")),
+                cash=self._float(
+                    portfolio.get("cash")
+                    or portfolio.get("availableCash")
+                    or portfolio.get("credit")
+                ),
                 payload=payload,
             ),
             payload=payload,
@@ -297,11 +396,12 @@ class EtoroReadOnlyBrokerAdapter:
             payload = self.client.get_portfolio()
         except EtoroClientError as exc:
             return self._portfolio_error("get_open_orders", exc)
+        portfolio = self._client_portfolio(payload)
         return BrokerPortfolioResult(
             status=BrokerAdapterResultStatus.SUCCESS,
             operation="get_open_orders",
             client_request_id=str(uuid4()),
-            items=self._list(payload.get("orders") or payload.get("openOrders")),
+            items=self._list(portfolio.get("orders") or portfolio.get("openOrders")),
             payload=payload,
         )
 
@@ -310,11 +410,12 @@ class EtoroReadOnlyBrokerAdapter:
             payload = self.client.get_portfolio()
         except EtoroClientError as exc:
             return self._portfolio_error("get_open_positions", exc)
+        portfolio = self._client_portfolio(payload)
         return BrokerPortfolioResult(
             status=BrokerAdapterResultStatus.SUCCESS,
             operation="get_open_positions",
             client_request_id=str(uuid4()),
-            items=self._list(payload.get("positions") or payload.get("openPositions")),
+            items=self._list(portfolio.get("positions") or portfolio.get("openPositions")),
             payload=payload,
         )
 
@@ -355,6 +456,14 @@ class EtoroReadOnlyBrokerAdapter:
             message="eToro order lookup is not enabled in read-only adapter",
         )
 
+    def lookup_close_order(self, order_id: str) -> BrokerOrderResult:
+        return BrokerOrderResult(
+            status=BrokerAdapterResultStatus.FAILED,
+            operation="lookup_close_order",
+            client_request_id=order_id,
+            message="eToro close-order lookup is not enabled in read-only adapter",
+        )
+
     def cancel_order(self, order_id: str) -> BrokerOrderResult:
         return BrokerOrderResult.ambiguous(
             operation="cancel_order",
@@ -367,6 +476,13 @@ class EtoroReadOnlyBrokerAdapter:
             operation="close_position",
             client_request_id=position_id,
             message="eToro read-only adapter does not close positions",
+        )
+
+    def amend_position_protection(self, request: BrokerProtectionAmendRequest) -> BrokerOrderResult:
+        return BrokerOrderResult.ambiguous(
+            operation="amend_position_protection",
+            client_request_id=request.client_order_id or request.broker_order_id,
+            message="eToro read-only adapter does not amend position protection",
         )
 
     @staticmethod
@@ -393,9 +509,37 @@ class EtoroReadOnlyBrokerAdapter:
                 return [item for item in value if isinstance(item, dict)]
         return []
 
+    def _enriched_instrument_rows(
+        self, symbol: str, payload: dict[str, object]
+    ) -> list[dict[str, object]]:
+        rows = self._instrument_rows(payload)
+        if any(row.get("symbol") or row.get("symbolFull") for row in rows):
+            return rows
+        enriched: list[dict[str, object]] = []
+        for row in rows:
+            instrument_id = row.get("instrumentId") or row.get("instrumentID")
+            if not instrument_id:
+                continue
+            try:
+                display_payload = self.client.get_instrument_display_data(str(instrument_id))
+            except EtoroClientError:
+                continue
+            display_rows = self._list(display_payload.get("instrumentDisplayDatas"))
+            enriched.extend(display_rows)
+        return [
+            row
+            for row in enriched
+            if str(row.get("symbolFull") or row.get("symbol") or "").upper() == symbol
+        ] or enriched
+
     @staticmethod
     def _list(value: object) -> list[dict[str, object]]:
         return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+    @staticmethod
+    def _client_portfolio(payload: dict[str, object]) -> dict[str, object]:
+        nested = payload.get("clientPortfolio")
+        return nested if isinstance(nested, dict) else payload
 
     @staticmethod
     def _float(value: object) -> float | None:
@@ -430,6 +574,15 @@ class EtoroLiveBrokerAdapter(EtoroReadOnlyBrokerAdapter):
             payload={"reason": "etoro_live_mutation_disabled"},
         )
 
+    def lookup_close_order(self, order_id: str) -> BrokerOrderResult:
+        return BrokerOrderResult(
+            status=BrokerAdapterResultStatus.REJECTED,
+            operation="lookup_close_order",
+            client_request_id=order_id,
+            message="etoro_live_close_lookup_disabled",
+            payload={"reason": "etoro_live_close_lookup_disabled"},
+        )
+
     def close_position(self, position_id: str, quantity: float | None = None) -> BrokerOrderResult:
         return BrokerOrderResult(
             status=BrokerAdapterResultStatus.REJECTED,
@@ -439,8 +592,118 @@ class EtoroLiveBrokerAdapter(EtoroReadOnlyBrokerAdapter):
             payload={"reason": "etoro_live_mutation_disabled", "quantity": quantity},
         )
 
+    def amend_position_protection(self, request: BrokerProtectionAmendRequest) -> BrokerOrderResult:
+        return BrokerOrderResult(
+            status=BrokerAdapterResultStatus.REJECTED,
+            operation="amend_position_protection",
+            client_request_id=request.client_order_id or request.broker_order_id,
+            message="etoro_live_mutation_disabled",
+            payload={"reason": "etoro_live_mutation_disabled"},
+        )
+
 
 class EtoroDemoBrokerAdapter(EtoroReadOnlyBrokerAdapter):
+    def validate_credentials(self) -> BrokerCredentialValidation:
+        try:
+            payload = self.client.get_demo_pnl()
+        except EtoroClientError as exc:
+            return BrokerCredentialValidation(
+                valid=False,
+                permission_scope="invalid",
+                account_mode="unknown",
+                message=str(exc),
+                raw_payload=exc.payload,
+            )
+        permissions = (
+            [str(item) for item in payload.get("permissions", [])]
+            if isinstance(payload.get("permissions"), list)
+            else []
+        )
+        mode = str(payload.get("mode") or payload.get("accountMode") or "demo").lower()
+        scope = "demo" if "demo_trading" in permissions or mode == "demo" else "read_only"
+        return BrokerCredentialValidation(
+            valid=True,
+            permission_scope=scope,
+            account_mode=mode,
+            permissions=permissions,
+            raw_payload=payload,
+        )
+
+    def get_capabilities(self) -> BrokerCapabilities:
+        capabilities = super().get_capabilities()
+        capabilities.account_mode = "demo"
+        return capabilities
+
+    def get_account_snapshot(self) -> BrokerPortfolioResult:
+        try:
+            payload = self.client.get_demo_pnl()
+        except EtoroClientError as exc:
+            return self._portfolio_error("get_account_snapshot", exc)
+        portfolio = self._client_portfolio(payload)
+        return BrokerPortfolioResult(
+            status=BrokerAdapterResultStatus.SUCCESS,
+            operation="get_account_snapshot",
+            client_request_id=str(uuid4()),
+            account=BrokerAccountSnapshot(
+                equity=self._float(portfolio.get("equity") or portfolio.get("balance")),
+                cash=self._float(
+                    portfolio.get("cash")
+                    or portfolio.get("availableCash")
+                    or portfolio.get("credit")
+                ),
+                payload=payload,
+            ),
+            payload=payload,
+        )
+
+    def get_open_orders(self) -> BrokerPortfolioResult:
+        try:
+            payload = self.client.get_demo_portfolio()
+        except EtoroClientError as exc:
+            return self._portfolio_error("get_open_orders", exc)
+        portfolio = self._client_portfolio(payload)
+        return BrokerPortfolioResult(
+            status=BrokerAdapterResultStatus.SUCCESS,
+            operation="get_open_orders",
+            client_request_id=str(uuid4()),
+            items=self._list(portfolio.get("orders") or portfolio.get("openOrders")),
+            payload=payload,
+        )
+
+    def get_open_positions(self) -> BrokerPortfolioResult:
+        try:
+            payload = self.client.get_demo_portfolio()
+        except EtoroClientError as exc:
+            return self._portfolio_error("get_open_positions", exc)
+        portfolio = self._client_portfolio(payload)
+        return BrokerPortfolioResult(
+            status=BrokerAdapterResultStatus.SUCCESS,
+            operation="get_open_positions",
+            client_request_id=str(uuid4()),
+            items=self._list(portfolio.get("positions") or portfolio.get("openPositions")),
+            payload=payload,
+        )
+
+    def get_trade_history(self) -> BrokerTradeHistoryResult:
+        try:
+            payload = self.client.get_demo_trade_history()
+        except EtoroClientError as exc:
+            return BrokerTradeHistoryResult(
+                status=BrokerAdapterResultStatus.FAILED,
+                operation="get_trade_history",
+                client_request_id=str(uuid4()),
+                payload=exc.payload,
+                message=str(exc),
+            )
+        trades = self._list(payload.get("trades") or payload.get("history") or payload.get("items"))
+        return BrokerTradeHistoryResult(
+            status=BrokerAdapterResultStatus.SUCCESS,
+            operation="get_trade_history",
+            client_request_id=str(uuid4()),
+            trades=trades,
+            payload=payload,
+        )
+
     def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderResult:
         rejection = self._validate_demo_order(request)
         if rejection is not None:
@@ -515,6 +778,24 @@ class EtoroDemoBrokerAdapter(EtoroReadOnlyBrokerAdapter):
             )
         return self._order_result("cancel_order", order_id, result)
 
+    def lookup_close_order(self, order_id: str) -> BrokerOrderResult:
+        try:
+            result = self.client.lookup_demo_close_order(order_id)
+        except EtoroClientError as exc:
+            status = (
+                BrokerAdapterResultStatus.NOT_FOUND
+                if exc.status_code == 404
+                else BrokerAdapterResultStatus.FAILED
+            )
+            return BrokerOrderResult(
+                status=status,
+                operation="lookup_close_order",
+                client_request_id=order_id,
+                payload=exc.payload,
+                message=str(exc),
+            )
+        return self._order_result("lookup_close_order", order_id, result)
+
     def close_position(self, position_id: str, quantity: float | None = None) -> BrokerOrderResult:
         try:
             result = self.client.close_demo_position(position_id, quantity=quantity)
@@ -533,6 +814,41 @@ class EtoroDemoBrokerAdapter(EtoroReadOnlyBrokerAdapter):
                 message=str(exc),
             )
         return self._order_result("close_position", position_id, result)
+
+    def amend_position_protection(self, request: BrokerProtectionAmendRequest) -> BrokerOrderResult:
+        payload: dict[str, object] = {}
+        if request.stop_loss is not None:
+            payload["stopLossRate"] = request.stop_loss
+        if request.take_profit is not None:
+            payload["takeProfitRate"] = request.take_profit
+        if not payload:
+            return BrokerOrderResult(
+                status=BrokerAdapterResultStatus.REJECTED,
+                operation="amend_position_protection",
+                client_request_id=request.client_order_id or request.broker_order_id,
+                message="etoro_protective_levels_missing",
+            )
+        try:
+            result = self.client.amend_demo_position_protection(request.broker_order_id, payload)
+        except EtoroClientError as exc:
+            if exc.error_type == "timeout":
+                return BrokerOrderResult.ambiguous(
+                    operation="amend_position_protection",
+                    client_request_id=request.client_order_id or request.broker_order_id,
+                    message=str(exc),
+                )
+            return BrokerOrderResult(
+                status=BrokerAdapterResultStatus.FAILED,
+                operation="amend_position_protection",
+                client_request_id=request.client_order_id or request.broker_order_id,
+                payload=exc.payload,
+                message=str(exc),
+            )
+        return self._order_result(
+            "amend_position_protection",
+            request.client_order_id or request.broker_order_id,
+            result,
+        )
 
     @staticmethod
     def _validate_demo_order(request: BrokerOrderRequest) -> str | None:
@@ -555,8 +871,8 @@ class EtoroDemoBrokerAdapter(EtoroReadOnlyBrokerAdapter):
         return {
             "action": "open",
             "transaction": "buy",
-            "symbol": request.symbol.upper(),
             "instrumentId": request.instrument_id,
+            "settlementType": "real",
             "orderType": "mkt",
             "leverage": 1,
             "amount": float(request.notional_amount or 0.0),
@@ -570,8 +886,15 @@ class EtoroDemoBrokerAdapter(EtoroReadOnlyBrokerAdapter):
     def _order_result(
         operation: str, client_request_id: str, payload: dict[str, object]
     ) -> BrokerOrderResult:
-        broker_order_id = payload.get("orderId") or payload.get("order_id") or payload.get("id")
-        broker_position_id = payload.get("positionId") or payload.get("position_id")
+        broker_order_id = (
+            payload.get("orderId")
+            or payload.get("orderID")
+            or payload.get("order_id")
+            or payload.get("id")
+        )
+        broker_position_id = (
+            payload.get("positionId") or payload.get("positionID") or payload.get("position_id")
+        )
         return BrokerOrderResult(
             status=BrokerAdapterResultStatus.SUCCESS,
             operation=operation,

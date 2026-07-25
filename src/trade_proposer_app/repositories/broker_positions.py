@@ -137,6 +137,8 @@ class BrokerPositionRepository:
         record.side = position.side
         record.quantity = position.quantity
         record.current_quantity = position.current_quantity
+        record.unit_quantity = position.unit_quantity
+        record.current_unit_quantity = position.current_unit_quantity
         record.status = position.status
         record.entry_order_id = position.entry_order_id
         record.entry_avg_price = position.entry_avg_price
@@ -177,6 +179,8 @@ class BrokerPositionRepository:
             side=record.side,
             quantity=record.quantity,
             current_quantity=record.current_quantity,
+            unit_quantity=record.unit_quantity,
+            current_unit_quantity=record.current_unit_quantity,
             status=record.status,
             entry_order_id=record.entry_order_id,
             entry_avg_price=record.entry_avg_price,

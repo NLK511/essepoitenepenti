@@ -14,7 +14,7 @@ Safety requirements in this spec remain mandatory before any live mutation path 
 
 ## External API basis
 
-The integration is based on the official eToro Developer Portal observed on 2026-06-01:
+The integration was originally based on the official eToro Developer Portal observed on 2026-06-01. The demo migration refreshed the endpoint basis on 2026-07-24 against the official OpenAPI `v1.311.0`:
 
 - Documentation: `https://api-portal.etoro.com`
 - Base URL: `https://public-api.etoro.com`
@@ -23,8 +23,26 @@ The integration is based on the official eToro Developer Portal observed on 2026
   - `x-user-key` — user account key
   - `x-request-id` — unique UUID per request, used by the app as the idempotency/audit request id
 - Key generation path documented by eToro: eToro account `Settings > Trading > API Key Management`
-- Relevant documented endpoints:
+- Relevant current demo endpoints:
   - `GET /api/v1/market-data/search` — resolve symbol to eToro instrument id
+  - `GET /api/v1/market-data/instruments/rates` — fetch current rates
+  - `POST /api/v2/trading/execution/demo/orders` — create demo order
+  - `GET /api/v2/trading/info/demo/orders:lookup` — lookup demo order by order id or reference id
+  - `DELETE /api/v2/trading/execution/demo/orders/{orderId}` — cancel pending demo order
+  - `POST /api/v1/trading/execution/demo/market-close-orders/positions/{positionId}` — close all or part of a demo position
+  - `DELETE /api/v1/trading/execution/demo/market-close-orders/{orderId}` — cancel pending demo close order
+  - `GET /api/v1/trading/info/demo/portfolio` — demo portfolio breakdown
+  - `GET /api/v1/trading/info/demo/pnl` — demo account portfolio and P&L summary
+  - `GET /api/v1/trading/info/demo/aggregate-portfolio` — demo aggregated portfolio snapshot
+  - `GET /api/v1/trading/info/demo/close-orders/{orderId}` — demo close-order lookup
+  - `GET /api/v1/trading/info/trade/demo/history` — demo closed trade history. OpenAPI
+    `v1.311.0` documents this route, but current Demo runtime returned `404` during
+    validation on 2026-07-24. The app must therefore treat history as optional
+    evidence, not as the authority for exits.
+  - `POST /api/v2/trading/info/demo/eligibility` — demo instrument eligibility
+  - `POST /api/v2/trading/info/demo/costs` — demo what-if costs
+  - `PATCH /api/v2/trading/demo/positions/{positionId}` — modify demo stop-loss and take-profit settings
+- Relevant current real endpoints remain documented for future validation only:
   - `POST /api/v2/trading/execution/orders` — create real order
   - `GET /api/v2/trading/info/orders:lookup` — lookup real order by order id or reference id
   - `DELETE /api/v2/trading/execution/orders/{orderId}` — cancel pending real order
@@ -32,15 +50,14 @@ The integration is based on the official eToro Developer Portal observed on 2026
   - `GET /api/v1/trading/info/portfolio` — real account portfolio/open positions/open orders
   - `GET /api/v1/trading/info/real/pnl` — real account portfolio and P&L summary
   - `GET /api/v1/trading/info/trade/history` — closed trade history
-  - demo-equivalent endpoints under `Trading Demo` for validation before live enablement
 
-Current implementation status: read-only eToro client, mocked/demo adapter plumbing, and a fail-closed live adapter are implemented. The live adapter advertises live account mode but rejects submit/cancel/close with `etoro_live_mutation_disabled` and must not call live mutation endpoints. Demo mutation methods are currently covered against test doubles using explicit demo endpoint paths derived from the documented real endpoint names with a `/demo/` namespace. Before connecting these methods to real eToro demo credentials, the implementation must re-read the current eToro docs and update this section with the exact official demo endpoint paths if they differ.
+Current implementation status: read-only eToro client, demo adapter plumbing, and a fail-closed live adapter are implemented. The live adapter advertises live account mode but rejects submit/cancel/close with `etoro_live_mutation_disabled` and must not call live mutation endpoints. Current migration work is limited to demo endpoints from OpenAPI `v1.311.0`; Real mutation remains out of scope.
 
 If eToro changes endpoint names, payload semantics, or permission behavior, implementation must update this spec before code is changed. Before implementing any live mutation, the implementation task must re-read the current eToro docs and record the exact demo and real endpoint paths used. If a documented demo endpoint differs from the real endpoint path, tests must cover both mappings.
 
 ## Goal
 
-Trade Proposer App must support eToro as a first-class broker alongside Alpaca paper trading, with enough safety controls to submit, reconcile, and audit real-money trades without relying on broker UI inspection as the primary control.
+Trade Proposer App must support eToro demo as the first-class paper-trading broker alongside or instead of Alpaca paper trading, with enough safety controls to submit, reconcile, and audit broker activity without relying on broker UI inspection as the primary control.
 
 The integration must allow an operator to:
 
@@ -49,14 +66,14 @@ The integration must allow an operator to:
 3. Validate credentials and account mode without placing an order.
 4. Run read-only portfolio and market-data checks.
 5. Run demo eToro order submission and reconciliation.
-6. Enable live eToro trading only after explicit safety gates pass.
+6. Keep live eToro trading disabled unless a future explicit live-mutation plan passes separate safety gates.
 7. See every request, response, position, close, error, and safety block in the existing broker-order and broker-position UI/API.
 
 ## Non-negotiable safety principles
 
 1. **Default off:** eToro live trading is disabled by default in every environment.
 2. **Two-step live enablement:** enabling an eToro broker account is not enough. That broker account must have live trading explicitly enabled, and both the global halt and that broker account's halt must be off.
-3. **Demo-first:** live order submission must remain blocked until eToro credentials have passed read-only checks and at least one demo order lifecycle test has been recorded in the app, unless the operator explicitly records a documented override reason. That override may only bypass the demo-order prerequisite; it must not bypass credential permission validation, live acknowledgement, allowlists, drawdown baseline, risk limits, protective stops, untracked-exposure checks, or circuit breakers.
+3. **Demo-first:** this migration may submit only to eToro Demo. Live order submission must remain blocked regardless of demo success until a separate operator-approved live implementation exists.
 4. **Small first money:** initial live notional caps must be stricter than general broker caps. The first implementation must default to no more than `$25` per live eToro order until an operator raises it.
 5. **No leverage by default:** live eToro orders must use `leverage: 1`. Any leveraged or CFD-specific behavior is out of scope until separately specified and tested.
 6. **Long-only initial live scope:** live eToro v1 must skip short plans. Short/CFD support is a future spec because it changes real-money risk and broker semantics.
@@ -69,13 +86,13 @@ The integration must allow an operator to:
 
 ## Scope v1
 
-The first eToro implementation must include:
+The demo-first eToro implementation must include:
 
 - eToro credential storage and validation
 - broker-account support so eToro can be enabled together with Alpaca or any future broker
-- eToro client for read-only account, market-data, demo trading, and real trading endpoints
+- eToro client for read-only demo account, market-data, and demo trading endpoints
 - order submission for actionable `long` plans only
-- fixed USD amount sizing, not unit sizing, for eToro live v1
+- fixed USD amount sizing, not unit sizing, for eToro demo v1
 - stop-loss and take-profit rates included in the open-order payload whenever provided by the plan
 - one eToro order per plan
 - eToro instrument-id lookup with local caching
@@ -85,9 +102,9 @@ The first eToro implementation must include:
 - reconciliation from order lookup, portfolio, P&L, and trade-history endpoints
 - broker-order and broker-position persistence using the existing audit/lifecycle tables where possible
 - UI/API visibility in the existing Execution & Risk workflow
-- risk manager integration using eToro live snapshots before every live submit/resubmit
-- eToro permission/scope validation, including detecting read-only, demo-only, expired, revoked, or real-trading-disabled keys
-- eToro broker capability validation for each allowlisted instrument before any live order is accepted
+- risk manager integration using eToro demo snapshots before every demo submit/resubmit where available
+- eToro permission/scope validation, including detecting read-only, demo-enabled, expired, revoked, or wrong-environment keys where eToro exposes enough evidence
+- eToro broker capability validation for each allowlisted instrument before any demo order is accepted
 
 ## Out of scope v1
 
@@ -101,23 +118,64 @@ The first eToro implementation must include:
 - automatic broad cancel-all on halt
 - position scaling, pyramiding, or partial profit-taking beyond explicit operator close
 - trusting simulated outcomes over broker evidence for live performance
-- live order submission for instruments whose eToro product type, exchange, currency, market-hours behavior, minimum size, or protective-order constraints have not been validated and cached
+- demo order submission for instruments whose eToro product type, exchange, currency, market-hours behavior, minimum size, or protective-order constraints have not been validated and cached
 
 ## Broker abstraction requirements
+
+## eToro Demo exit reconciliation
+
+The normal broker sync path must reconcile eToro Demo exits without relying on broker UI
+inspection.
+
+Required evidence order:
+
+1. `GET /api/v2/trading/info/demo/orders:lookup` is the entry-order lifecycle signal.
+   `positionExecutions[].state=open` keeps a local position active. A `closed` or
+   `closing` state removes active exposure.
+2. `GET /api/v1/trading/info/demo/portfolio` is the open-exposure authority. A local
+   eToro Demo position that is missing from the broker portfolio must not count as
+   active risk even if earlier entry-order evidence was filled.
+3. `GET /api/v1/trading/info/demo/close-orders/{orderId}` is the close-order evidence
+   source when the app has an `exit_order_id`. It must populate close rate/time/units
+   from the close-order `positions[]` rows. It may populate realized P&L only when the
+   close-order payload explicitly provides it.
+4. `GET /api/v1/trading/info/trade/demo/history` may be used only when it succeeds. A
+   `404` or unavailable history result must not fail reconciliation and must not cause
+   guessed realized P&L.
+
+If order lookup says a position is closed, or the portfolio no longer contains that
+position, but no close-order/history evidence confirms realized P&L, the local position
+must be marked `needs_review`, set `current_quantity=0`, set
+`current_unit_quantity=0`, preserve the raw broker evidence, and stop counting it as
+active exposure.
+
+If close-order evidence confirms an exit, the position must store:
+
+- `exit_order_id`
+- `exit_avg_price`
+- `exit_filled_at`
+- `current_quantity=0`
+- `current_unit_quantity=0`
+- `status=win` when confirmed realized P&L is positive
+- `status=loss` when confirmed realized P&L is negative
+- `status=needs_review` when realized P&L is unavailable or zero
+
+Rejected eToro orders, including post-execution reverse-close cases, must remain
+non-active and keep the broker error payload in the audit row.
 
 The Alpaca-specific execution path has been separated behind the broker-account adapter defined in `multi-broker-execution-risk-spec.md` while preserving Alpaca paper behavior. Existing Alpaca tests remain the regression suite for the abstraction. eToro-specific tests must cover every eToro API call used for opening, closing, canceling, lookup, portfolio snapshots, trade history, and drawdown/equity evidence before any external demo/live mutation path is enabled.
 
 ## eToro order construction rules
 
-For each actionable plan considered for eToro live v1:
+For each actionable plan considered for eToro demo v1:
 
 1. Skip if action is not `long`.
 2. Skip if execution levels are missing: entry, stop loss, or take profit.
-3. Skip if the ticker is not in the eToro live allowlist.
+3. Skip if the ticker is not in the eToro demo allowlist when an allowlist is configured.
 4. Resolve the eToro `instrumentId` from the plan ticker/symbol.
 5. Validate the resolved instrument against cached eToro metadata: product type, exchange/market, base currency, tradability, minimum/maximum order amount, stop-loss/take-profit constraints, market hours, and whether the instrument is traded as underlying asset or CFD.
 6. Compute entry reference from the plan entry zone using the existing midpoint rule.
-7. Use the configured eToro live notional cap as the payload `amount`, then clamp/block according to broker minimums, operator maximums, account cash, global live caps, and per-broker risk caps.
+7. Use the configured eToro demo notional cap as the payload `amount`, then clamp/block according to broker minimums, operator maximums, demo account cash, and per-broker risk caps.
 8. Enforce all risk-manager caps before submission.
 9. Submit only market open orders unless a later spec adds MIT/limit behavior. Market orders must include a pre-submit latest-price/slippage sanity check when eToro market data is available; if the latest price is outside the plan entry zone by more than the configured tolerance, skip with `etoro_price_outside_entry_tolerance`.
 10. Submit payload with:
@@ -136,7 +194,7 @@ For each actionable plan considered for eToro live v1:
 
 If eToro rejects a payload because a stop-loss/take-profit value violates broker constraints, the order must be recorded as rejected. The app must not retry without the protective level unless the operator manually performs a separate explicitly labeled action.
 
-If eToro supports both underlying assets and CFDs for a symbol, v1 live must block unless instrument metadata proves the intended non-leveraged underlying/cash product is being traded. Ambiguous product mapping is `etoro_instrument_ambiguous`.
+If eToro supports both underlying assets and CFDs for a symbol, v1 demo must block unless instrument metadata proves the intended non-leveraged underlying/cash product is being traded. Ambiguous product mapping is `etoro_instrument_ambiguous`.
 
 ## Settings
 
@@ -147,10 +205,10 @@ Required eToro broker-account settings:
 - `enabled`: default `false`; allows read-only/demo eToro use for this account when credentials exist
 - `account_mode`: `demo` or `live`
 - `autonomous_execution_enabled`: default `false`; allows autonomous submission for this eToro account only
+- `demo_validation_artifact_id`: recommended before enabling autonomous demo execution after external credential/lifecycle validation
 - `live_trading_enabled`: default `false` for live accounts; allows real-order submission only when all safety gates pass
 - `live_acknowledgement` / `live_acknowledged`: operator-entered confirmation text/timestamp or server boolean required before live enablement
 - `live_shadow_enabled`: default `false`; when true, the server stores a would-submit audit row and never calls a mutation endpoint
-- `demo_validation_artifact_id`: required when `require_demo_validation` is true unless a documented `demo_validation_override` is set
 - `max_entry_slippage_pct`: optional latest-price tolerance around the plan entry range; when set, missing price blocks live submission
 - `notional_cap_usd`: default `25` for live, must also respect this account's `max_position_notional_usd`
 - `symbol_allowlist`: default empty list for live

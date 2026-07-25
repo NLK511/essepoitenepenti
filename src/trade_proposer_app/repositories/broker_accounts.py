@@ -11,6 +11,7 @@ from trade_proposer_app.persistence.models import BrokerAccountCredentialRecord,
 from trade_proposer_app.security import credential_cipher
 
 DEFAULT_ALPACA_PAPER_ACCOUNT_ID = "alpaca-paper-default"
+DEFAULT_ETORO_DEMO_ACCOUNT_ID = "etoro-demo-main"
 
 
 class BrokerAccountRepository:
@@ -31,6 +32,41 @@ class BrokerAccountRepository:
                 credential_reference=f"broker_account:{DEFAULT_ALPACA_PAPER_ACCOUNT_ID}",
                 supported_actions_json=self._dump(["long", "short"]),
                 supported_order_types_json=self._dump(["limit", "market"]),
+            )
+            self.session.add(existing)
+            self.session.commit()
+            self.session.refresh(existing)
+        return self._to_model(existing)
+
+    def ensure_default_etoro_demo_account(self) -> BrokerAccount:
+        existing = self.session.get(BrokerAccountRecord, DEFAULT_ETORO_DEMO_ACCOUNT_ID)
+        if existing is None:
+            existing = BrokerAccountRecord(
+                broker_account_id=DEFAULT_ETORO_DEMO_ACCOUNT_ID,
+                broker="etoro",
+                account_mode="demo",
+                account_label="eToro Demo",
+                enabled=False,
+                autonomous_execution_enabled=False,
+                manual_actions_enabled=True,
+                credential_reference=f"broker_account:{DEFAULT_ETORO_DEMO_ACCOUNT_ID}",
+                symbol_allowlist_json=self._dump([]),
+                supported_actions_json=self._dump(["long"]),
+                supported_instruments_json=self._dump(["resolved_equity"]),
+                supported_order_types_json=self._dump(["market"]),
+                notional_cap_usd=25.0,
+                max_open_positions=1,
+                max_open_notional_usd=25.0,
+                max_position_notional_usd=25.0,
+                max_same_ticker_open_positions=1,
+                risk_settings_json=self._dump(
+                    {
+                        "demo_only": True,
+                        "require_demo_validation": True,
+                        "require_demo_lifecycle_validation": True,
+                        "side_by_side_trial_required": True,
+                    }
+                ),
             )
             self.session.add(existing)
             self.session.commit()
