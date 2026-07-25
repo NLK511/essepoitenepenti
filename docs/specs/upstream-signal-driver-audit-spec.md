@@ -142,9 +142,12 @@ After prospective driver tags are emitted, the app must provide a read-only moni
 The monitor must:
 
 - inspect stored recommendation plans that contain `signal_breakdown.upstream_signal_quality_drivers`;
-- count all tagged plans, even when replay outcomes are not available yet;
-- report tag cohorts by stable tag key, feature, value, setup family, ticker mix, action mix, date spread, and replay outcome mix;
-- report phantom win/loss expected value only for tagged rows that already have intraday replay labels and usable trade geometry;
+- count all tagged plans, even when outcome evidence is not available yet;
+- use the canonical plan outcome evidence access layer instead of joining storage tables directly;
+- treat historical replay eligibility labels as the strongest outcome source, and fall back to live recommendation evaluation outcomes when replay labels are not present;
+- keep the evidence source explicit so live monitoring evidence is not confused with promotion-grade replay evidence;
+- report tag cohorts by stable tag key, feature, value, setup family, ticker mix, action mix, date spread, evidence source mix, and outcome mix;
+- report phantom win/loss expected value only for tagged rows that already have intraday-compatible outcome evidence and usable trade geometry;
 - report closed trade outcome mix when win/loss/flat labels are available;
 - mark whether each tag is promotion-watchable, still accumulating evidence, or empty;
 - never change plan generation, replay state, tuning config, jobs, orders, scheduler state, or broker behavior.

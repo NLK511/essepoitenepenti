@@ -68,6 +68,7 @@ class ProspectiveSignalDriverTagObservation:
     signal_breakdown: dict[str, object] = field(default_factory=dict)
     replay_outcome: str | None = None
     replay_resolution_source: str | None = None
+    label_source: str | None = None
     reward_pct: float | None = None
     risk_pct: float | None = None
 
@@ -183,6 +184,7 @@ def build_prospective_signal_driver_tag_monitor_report(
         "metrics": {
             "tagged_population": _prospective_population_metrics(tagged_rows),
             "replay_labeled_population": _prospective_population_metrics(replay_labeled_rows),
+            "label_source_counts": _prospective_label_source_mix(replay_labeled_rows),
         },
         "tags": tag_payloads,
         "recommendation": _prospective_tag_monitor_recommendation(verdict),
@@ -466,6 +468,7 @@ def _prospective_tag_payload(
         "replay_labeled_metrics": replay_labeled_metrics,
         "phantom_outcome_metrics": _prospective_phantom_metrics(phantom_rows),
         "outcome_mix": _prospective_outcome_mix(rows),
+        "label_source_mix": _prospective_label_source_mix(replay_labeled_rows),
         "mix": {
             "tickers": ticker_mix,
             "setup_family": _prospective_top_values(
@@ -515,6 +518,13 @@ def _prospective_outcome_mix(
     rows: list[ProspectiveSignalDriverTagObservation],
 ) -> dict[str, int]:
     counter: Counter[str] = Counter(_clean(item.replay_outcome) for item in rows)
+    return dict(sorted(counter.items()))
+
+
+def _prospective_label_source_mix(
+    rows: list[ProspectiveSignalDriverTagObservation],
+) -> dict[str, int]:
+    counter: Counter[str] = Counter(_clean(item.label_source) for item in rows)
     return dict(sorted(counter.items()))
 
 

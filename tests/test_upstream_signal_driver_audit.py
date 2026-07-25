@@ -63,6 +63,7 @@ def _tagged_obs(
     tag_key: str = "volatility_30_40",
     reward_pct: float = 8.0,
     risk_pct: float = 4.0,
+    label_source: str | None = None,
 ) -> ProspectiveSignalDriverTagObservation:
     return ProspectiveSignalDriverTagObservation(
         plan_id=None,
@@ -72,6 +73,7 @@ def _tagged_obs(
         setup_family="catalyst_follow_through",
         replay_outcome=outcome,
         replay_resolution_source="intraday" if outcome else None,
+        label_source=label_source,
         reward_pct=reward_pct,
         risk_pct=risk_pct,
         signal_breakdown={
@@ -153,6 +155,34 @@ def test_prospective_signal_driver_tag_monitor_marks_review_ready_tag() -> None:
     assert tag["tag_verdict"] == "promotion_watchable"
     assert tag["phantom_outcome_metrics"]["win_rate_percent"] == 80.0
     assert tag["phantom_outcome_metrics"]["expected_value_per_observation"] == 5.6
+
+
+def test_prospective_signal_driver_tag_monitor_reports_label_source_mix() -> None:
+    rows = [
+        _tagged_obs(
+            day=date(2026, 1, 1),
+            ticker="PANW",
+            outcome="phantom_win",
+            label_source="live_evaluation",
+        ),
+        _tagged_obs(
+            day=date(2026, 1, 2),
+            ticker="HUM",
+            outcome="phantom_loss",
+            label_source="historical_replay",
+        ),
+    ]
+
+    report = build_prospective_signal_driver_tag_monitor_report(rows)
+
+    assert report["metrics"]["label_source_counts"] == {
+        "historical_replay": 1,
+        "live_evaluation": 1,
+    }
+    assert report["tags"][0]["label_source_mix"] == {
+        "historical_replay": 1,
+        "live_evaluation": 1,
+    }
 
 
 def test_upstream_signal_audit_finds_reusable_feature_lead() -> None:

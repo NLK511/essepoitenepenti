@@ -254,6 +254,8 @@ Scheduled or otherwise unscoped recommendation evaluation must be a bounded batc
 
 - do not select all unresolved recommendation plans into memory
 - select only actionable/watchlist/no-action open candidates in deterministic order
+- prioritize plans with no outcome row before refreshing stale unresolved outcome rows
+- never let old pending/open/no-entry outcome rows starve newly generated plans that have no outcome evidence yet
 - cap the selected candidates with a configurable safe batch size
 - keep explicit `recommendation_plan_ids` exact and uncapped by the scheduled batch limit, because that path is an operator/requested scope
 - prepare price histories only for the selected batch

@@ -1581,6 +1581,35 @@ class BatchFilteringTests(EvalTestBase):
         self.assertNotIn(newest.id, {plan.id for plan in listed})
         self.assertTrue(svc.last_unscoped_batch_limited)
 
+    def test_unscoped_batch_prioritizes_missing_outcomes_before_stale_unresolved(self) -> None:
+        stale = self._create(
+            ticker="OLDP",
+            action="long",
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
+        fresh = self._create(
+            ticker="NEWP",
+            action="long",
+            computed_at=datetime(2026, 1, 7, 15, 0, tzinfo=timezone.utc),
+        )
+        self.outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=stale.id or 0,
+                ticker="OLDP",
+                action="long",
+                outcome="pending",
+                status="open",
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+            )
+        )
+        svc = RecommendationPlanEvaluationService(self.session)
+        with patch.object(RecommendationPlanEvaluationService, "DEFAULT_UNSCOPED_BATCH_SIZE", 1):
+            listed = svc._list_plans(None)
+
+        self.assertEqual([plan.id for plan in listed], [fresh.id])
+        self.assertTrue(svc.last_unscoped_batch_limited)
+
     def test_explicit_plan_ids_are_not_capped_by_unscoped_batch_limit(self) -> None:
         plans = [
             self._create(

@@ -9,9 +9,10 @@ from pathlib import Path
 from sqlalchemy import select
 
 from trade_proposer_app.db import SessionLocal
-from trade_proposer_app.persistence.models import (
-    RecommendationPlanRecord,
-    ReplayEligibilityRecord,
+from trade_proposer_app.persistence.models import RecommendationPlanRecord
+from trade_proposer_app.services.plan_outcome_evidence import (
+    PlanOutcomeEvidence,
+    PlanOutcomeEvidenceService,
 )
 from trade_proposer_app.services.upstream_signal_driver_audit import (
     ProspectiveSignalDriverTagMonitorGates,
@@ -35,12 +36,11 @@ def run_monitor(
     session = SessionLocal()
     try:
         plans = _tagged_plan_rows(session, limit=limit, since_days=since_days)
-        replay_by_plan_id = _best_replay_label_by_plan_id(
-            session,
-            [int(row.id) for row in plans],
+        evidence_by_plan_id = PlanOutcomeEvidenceService(session).best_by_plan_id(
+            [int(row.id) for row in plans]
         )
         observations = [
-            _observation_from_plan(row, replay_by_plan_id.get(int(row.id)))
+            _observation_from_plan(row, evidence_by_plan_id.get(int(row.id)))
             for row in plans
         ]
         gates = ProspectiveSignalDriverTagMonitorGates(
@@ -84,41 +84,9 @@ def _tagged_plan_rows(session, *, limit: int | None, since_days: int | None):
     return list(session.scalars(query).all())
 
 
-def _best_replay_label_by_plan_id(session, plan_ids: list[int]) -> dict[int, ReplayEligibilityRecord]:
-    if not plan_ids:
-        return {}
-    rows = list(
-        session.scalars(
-            select(ReplayEligibilityRecord)
-            .where(ReplayEligibilityRecord.recommendation_plan_id.in_(plan_ids))
-            .order_by(
-                ReplayEligibilityRecord.recommendation_plan_id.asc(),
-                ReplayEligibilityRecord.tier.asc(),
-                ReplayEligibilityRecord.updated_at.desc(),
-                ReplayEligibilityRecord.id.desc(),
-            )
-        ).all()
-    )
-    selected: dict[int, ReplayEligibilityRecord] = {}
-    for row in rows:
-        plan_id = int(row.recommendation_plan_id)
-        current = selected.get(plan_id)
-        if current is None or _replay_label_rank(row) > _replay_label_rank(current):
-            selected[plan_id] = row
-    return selected
-
-
-def _replay_label_rank(row: ReplayEligibilityRecord) -> tuple[int, int, int]:
-    source_rank = 2 if str(row.resolution_source or "").strip().lower() == "intraday" else 1
-    outcome_rank = 1 if str(row.outcome or "").strip().lower() else 0
-    tier_text = str(row.tier or "").strip().lower()
-    tier_rank = {"tier_a": 3, "tier_b": 2, "tier_c": 1}.get(tier_text, 0)
-    return (source_rank, outcome_rank, tier_rank)
-
-
 def _observation_from_plan(
     plan: RecommendationPlanRecord,
-    replay: ReplayEligibilityRecord | None,
+    evidence: PlanOutcomeEvidence | None,
 ) -> ProspectiveSignalDriverTagObservation:
     signal = loads_json_object(plan.signal_breakdown_json)
     setup_family = str(signal.get("setup_family") or "unknown").strip().lower()
@@ -141,10 +109,9 @@ def _observation_from_plan(
         action=str(plan.action or "").strip().lower(),
         setup_family=setup_family,
         signal_breakdown=signal,
-        replay_outcome=str(replay.outcome or "").strip().lower() if replay else None,
-        replay_resolution_source=str(replay.resolution_source or "").strip().lower()
-        if replay
-        else None,
+        replay_outcome=evidence.outcome if evidence else None,
+        replay_resolution_source=evidence.resolution_source if evidence else None,
+        label_source=evidence.evidence_source if evidence else None,
         reward_pct=reward_pct,
         risk_pct=risk_pct,
     )

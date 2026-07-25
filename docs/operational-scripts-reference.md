@@ -25,6 +25,27 @@ Monitors prospectively emitted `signal_breakdown.upstream_signal_quality_drivers
   ```
 - **Read first:** `docs/evidence-and-tuning-operations-runbook.md`.
 
+### `scripts/recover_recommendation_plan_evaluations.py`
+Recovers missing recommendation plan outcome rows through explicit, bounded chunks.
+
+- **Use case:** Catch up evaluation evidence after scheduler starvation or operator-requested recovery without changing jobs, tuning config, broker settings, or orders.
+- **Behavior:** Selects missing outcome rows first, can prioritize prospectively tagged plans, commits each chunk, and can write a progress artifact.
+- **Dry run:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/recover_recommendation_plan_evaluations.py --dry-run'
+  ```
+- **Tagged recovery:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/recover_recommendation_plan_evaluations.py \
+    --only-tagged \
+    --artifact /app/.prod-run/workers/artifacts/recommendation-evaluation-recovery.json'
+  ```
+- **Full missing-outcome recovery:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/recover_recommendation_plan_evaluations.py \
+    --artifact /app/.prod-run/workers/artifacts/recommendation-evaluation-recovery.json'
+  ```
+
 ### `scripts/audit_phantom_selectivity_separability.py`
 Audits whether `phantom_win` rows are separable from `phantom_loss` rows before candidate replay.
 

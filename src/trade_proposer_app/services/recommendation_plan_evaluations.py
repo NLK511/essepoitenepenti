@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
@@ -211,12 +211,21 @@ class RecommendationPlanEvaluationService:
         resolved_plan_ids = select(RecommendationOutcomeRecord.recommendation_plan_id).where(
             RecommendationOutcomeRecord.status == OutcomeStatus.RESOLVED.value
         )
+        outcome_plan_ids = select(RecommendationOutcomeRecord.recommendation_plan_id)
+        missing_outcome_priority = case(
+            (RecommendationPlanRecord.id.not_in(outcome_plan_ids), 0),
+            else_=1,
+        )
         limit = self._unscoped_batch_size()
         rows = list(
             self.session.scalars(
                 query.where(RecommendationPlanRecord.action.in_({"long", "short", "no_action", "watchlist"}))
                 .where(RecommendationPlanRecord.id.not_in(resolved_plan_ids))
-                .order_by(RecommendationPlanRecord.computed_at.asc(), RecommendationPlanRecord.id.asc())
+                .order_by(
+                    missing_outcome_priority,
+                    RecommendationPlanRecord.computed_at.asc(),
+                    RecommendationPlanRecord.id.asc(),
+                )
                 .limit(limit + 1)
             ).all()
         )
