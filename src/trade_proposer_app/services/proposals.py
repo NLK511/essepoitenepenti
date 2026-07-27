@@ -29,6 +29,7 @@ from trade_proposer_app.services.news import (
 )
 from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
+from trade_proposer_app.services.finite_numbers import finite_float, finite_ohlc, finite_or_default
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryRequest, SummaryService, summary_fallback_warning
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
@@ -638,6 +639,10 @@ class ProposalService:
             return
         bars: list[HistoricalMarketBar] = []
         for timestamp, row in history.iterrows():
+            ohlc = finite_ohlc(row.get("Open"), row.get("High"), row.get("Low"), row.get("Close"))
+            if ohlc is None:
+                continue
+            open_price, high_price, low_price, close_price = ohlc
             bar_time = timestamp if isinstance(timestamp, datetime) else pd.to_datetime(timestamp).to_pydatetime()
             if bar_time.tzinfo is None:
                 bar_time = bar_time.replace(tzinfo=timezone.utc)
@@ -649,12 +654,12 @@ class ProposalService:
                     timeframe="1d",
                     bar_time=bar_time,
                     available_at=datetime.combine(bar_time.date(), datetime.max.time(), tzinfo=timezone.utc),
-                    open_price=float(row["Open"]),
-                    high_price=float(row["High"]),
-                    low_price=float(row["Low"]),
-                    close_price=float(row["Close"]),
-                    volume=float(row.get("Volume", 0.0) or 0.0),
-                    adjusted_close=float(row["Adj Close"]) if "Adj Close" in history.columns and pd.notna(row.get("Adj Close")) else None,
+                    open_price=open_price,
+                    high_price=high_price,
+                    low_price=low_price,
+                    close_price=close_price,
+                    volume=finite_or_default(row.get("Volume")),
+                    adjusted_close=finite_float(row.get("Adj Close")) if "Adj Close" in history.columns else None,
                     source="yahoo_fallback",
                     source_tier="tier_b",
                     point_in_time_confidence=0.8,

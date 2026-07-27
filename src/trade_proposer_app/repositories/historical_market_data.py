@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.persistence.models import HistoricalMarketBarRecord
+from trade_proposer_app.services.finite_numbers import finite_float, finite_ohlc, finite_or_default
 
 
 class HistoricalMarketDataRepository:
@@ -21,25 +22,32 @@ class HistoricalMarketDataRepository:
         
         records = []
         for bar in bars:
+            ohlc = finite_ohlc(bar.open_price, bar.high_price, bar.low_price, bar.close_price)
+            if ohlc is None:
+                continue
+            open_price, high_price, low_price, close_price = ohlc
             normalized_bar_time = self._normalize(bar.bar_time)
             values = {
                 "ticker": bar.ticker,
                 "timeframe": bar.timeframe,
                 "bar_time": normalized_bar_time,
-                "open_price": bar.open_price,
-                "high_price": bar.high_price,
-                "low_price": bar.low_price,
-                "close_price": bar.close_price,
-                "volume": bar.volume,
-                "adjusted_close": bar.adjusted_close,
+                "open_price": open_price,
+                "high_price": high_price,
+                "low_price": low_price,
+                "close_price": close_price,
+                "volume": finite_or_default(bar.volume),
+                "adjusted_close": finite_float(bar.adjusted_close),
                 "source": bar.source,
                 "source_tier": bar.source_tier,
-                "point_in_time_confidence": bar.point_in_time_confidence,
+                "point_in_time_confidence": finite_or_default(bar.point_in_time_confidence, 1.0),
                 "metadata_json": bar.metadata_json,
             }
             if has_available_at:
                 values["available_at"] = self._normalize(bar.available_at) if bar.available_at else normalized_bar_time
             records.append(values)
+
+        if not records:
+            return 0
 
         dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
         
@@ -74,20 +82,24 @@ class HistoricalMarketDataRepository:
 
     def upsert_bar(self, bar: HistoricalMarketBar) -> HistoricalMarketBar:
         table = HistoricalMarketBarRecord.__table__
+        ohlc = finite_ohlc(bar.open_price, bar.high_price, bar.low_price, bar.close_price)
+        if ohlc is None:
+            raise ValueError("historical market bar OHLC values must be finite")
+        open_price, high_price, low_price, close_price = ohlc
         normalized_bar_time = self._normalize(bar.bar_time)
         values = {
             "ticker": bar.ticker,
             "timeframe": bar.timeframe,
             "bar_time": normalized_bar_time,
-            "open_price": bar.open_price,
-            "high_price": bar.high_price,
-            "low_price": bar.low_price,
-            "close_price": bar.close_price,
-            "volume": bar.volume,
-            "adjusted_close": bar.adjusted_close,
+            "open_price": open_price,
+            "high_price": high_price,
+            "low_price": low_price,
+            "close_price": close_price,
+            "volume": finite_or_default(bar.volume),
+            "adjusted_close": finite_float(bar.adjusted_close),
             "source": bar.source,
             "source_tier": bar.source_tier,
-            "point_in_time_confidence": bar.point_in_time_confidence,
+            "point_in_time_confidence": finite_or_default(bar.point_in_time_confidence, 1.0),
             "metadata_json": bar.metadata_json,
         }
         if self._has_available_at_column():
@@ -113,15 +125,15 @@ class HistoricalMarketDataRepository:
                 timeframe=bar.timeframe,
                 bar_time=normalized_bar_time,
                 available_at=values.get("available_at") or self._infer_available_at(normalized_bar_time, bar.timeframe),
-                open_price=bar.open_price,
-                high_price=bar.high_price,
-                low_price=bar.low_price,
-                close_price=bar.close_price,
-                volume=bar.volume,
-                adjusted_close=bar.adjusted_close,
+                open_price=open_price,
+                high_price=high_price,
+                low_price=low_price,
+                close_price=close_price,
+                volume=finite_or_default(bar.volume),
+                adjusted_close=finite_float(bar.adjusted_close),
                 source=bar.source,
                 source_tier=bar.source_tier,
-                point_in_time_confidence=bar.point_in_time_confidence,
+                point_in_time_confidence=finite_or_default(bar.point_in_time_confidence, 1.0),
                 metadata_json=bar.metadata_json,
             )
         return self._to_model_from_row(stored)
@@ -139,7 +151,8 @@ class HistoricalMarketDataRepository:
         rows = self.session.execute(
             self._select_bar_rows(ticker, timeframe, start_at, end_at, available_at, limit=limit)
         ).mappings().all()
-        return [self._to_model_from_row(row) for row in reversed(rows)]
+        valid_rows = [row for row in rows if self._row_has_finite_ohlc(row)]
+        return [self._to_model_from_row(row) for row in reversed(valid_rows)]
 
     def count_bars(
         self,
@@ -260,19 +273,28 @@ class HistoricalMarketDataRepository:
             timeframe=timeframe,
             bar_time=bar_time,
             available_at=normalized_available_at,
-            open_price=float(row.get("open_price") or 0.0),
-            high_price=float(row.get("high_price") or 0.0),
-            low_price=float(row.get("low_price") or 0.0),
-            close_price=float(row.get("close_price") or 0.0),
-            volume=float(row.get("volume") or 0.0),
-            adjusted_close=(float(row["adjusted_close"]) if row.get("adjusted_close") is not None else None),
+            open_price=finite_or_default(row.get("open_price")),
+            high_price=finite_or_default(row.get("high_price")),
+            low_price=finite_or_default(row.get("low_price")),
+            close_price=finite_or_default(row.get("close_price")),
+            volume=finite_or_default(row.get("volume")),
+            adjusted_close=finite_float(row.get("adjusted_close")),
             source=str(row.get("source") or ""),
             source_tier=str(row.get("source_tier") or "tier_a"),
-            point_in_time_confidence=float(row.get("point_in_time_confidence") or 1.0),
+            point_in_time_confidence=finite_or_default(row.get("point_in_time_confidence"), 1.0),
             metadata_json=str(row.get("metadata_json") or "{}"),
             created_at=cls._normalize(row.get("created_at")),
             updated_at=cls._normalize(row.get("updated_at")),
         )
+
+    @staticmethod
+    def _row_has_finite_ohlc(row: dict[str, object]) -> bool:
+        return finite_ohlc(
+            row.get("open_price"),
+            row.get("high_price"),
+            row.get("low_price"),
+            row.get("close_price"),
+        ) is not None
 
 
 HistoricalMarketDataRepository = HistoricalMarketDataRepository

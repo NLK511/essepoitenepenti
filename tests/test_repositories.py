@@ -22,6 +22,7 @@ from trade_proposer_app.domain.statuses import (
 )
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
+    HistoricalMarketBar,
     IndustryContextRefreshPayload,
     IndustryContextSnapshot,
     MacroContextRefreshPayload,
@@ -66,6 +67,7 @@ from trade_proposer_app.services.recommendation_plan_calibration import Recommen
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.risk_management import BrokerRiskManager, LiveBrokerSnapshot, TradeCandidate
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
+from trade_proposer_app.services.ticker_technical_features import TickerTechnicalFeatureService
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_policy_evaluator import PlanPolicyEvaluator
@@ -1386,6 +1388,25 @@ class RepositoryTests(unittest.TestCase):
         self.assertFalse(result.is_candidate)
         self.assertEqual(result.skip_reason, "invalid_trade_levels")
 
+    def test_execution_candidate_builder_rejects_non_finite_trade_levels(self) -> None:
+        plan = RecommendationPlan(
+            id=45,
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70.0,
+            entry_price_low=float("nan"),
+            entry_price_high=float("nan"),
+            stop_loss=float("nan"),
+            take_profit=float("nan"),
+            thesis_summary="Non-finite candidate",
+        )
+
+        result = ExecutionCandidateBuilder().build(plan, notional_per_plan=1000.0, run_id=7)
+
+        self.assertFalse(result.is_candidate)
+        self.assertEqual(result.skip_reason, "non_finite_trade_levels")
+
     def test_execution_candidate_builder_rejects_research_tier_plan_even_with_trade_action(self) -> None:
         plan = RecommendationPlan(
             id=44,
@@ -2316,6 +2337,44 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(bars[1].available_at, datetime(2026, 3, 30, 23, 59, 59, tzinfo=timezone.utc))
         self.assertEqual(bars[1].high_price, 153.0)
 
+    def test_historical_market_data_repository_drops_non_finite_upserts(self) -> None:
+        session = create_session()
+        try:
+            repo = HistoricalMarketDataRepository(session)
+
+            count = repo.upsert_bars(
+                [
+                    HistoricalMarketBar(
+                        ticker="EOG",
+                        timeframe="1d",
+                        bar_time=datetime(2026, 3, 30, tzinfo=timezone.utc),
+                        open_price=150.0,
+                        high_price=151.0,
+                        low_price=149.0,
+                        close_price=float("nan"),
+                        volume=1000.0,
+                    ),
+                    HistoricalMarketBar(
+                        ticker="EOG",
+                        timeframe="1d",
+                        bar_time=datetime(2026, 3, 31, tzinfo=timezone.utc),
+                        open_price=151.0,
+                        high_price=152.0,
+                        low_price=150.0,
+                        close_price=151.5,
+                        volume=float("inf"),
+                    ),
+                ]
+            )
+
+            self.assertEqual(count, 1)
+            bars = repo.list_bars(ticker="EOG", timeframe="1d", limit=10)
+            self.assertEqual(len(bars), 1)
+            self.assertEqual(bars[0].bar_time, datetime(2026, 3, 31, tzinfo=timezone.utc))
+            self.assertEqual(bars[0].volume, 0.0)
+        finally:
+            session.close()
+
     def test_historical_market_data_infers_intraday_available_at(self) -> None:
         inferred = HistoricalMarketDataRepository._infer_available_at(
             datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc),
@@ -2323,6 +2382,22 @@ class RepositoryTests(unittest.TestCase):
         )
 
         self.assertEqual(inferred, datetime(2026, 3, 31, 15, 5, tzinfo=timezone.utc))
+
+    def test_ticker_technical_features_sanitize_nan_latest_values(self) -> None:
+        history = pd.DataFrame(
+            [
+                {"Open": 100.0, "High": 101.0, "Low": 99.0, "Close": 100.0, "Volume": 1000.0},
+                {"Open": 101.0, "High": 102.0, "Low": 100.0, "Close": float("nan"), "Volume": 1000.0},
+            ],
+            index=pd.to_datetime(["2026-03-30", "2026-03-31"], utc=True),
+        )
+        service = TickerTechnicalFeatureService()
+
+        context = service.build_context(service.enrich_history(history))
+        vector = service.build_feature_vector(context)
+
+        self.assertEqual(context["price"], 0.0)
+        self.assertEqual(vector["price_close"], 0.0)
 
     def test_job_execution_enqueues_and_processes_run(self) -> None:
         session = create_session()

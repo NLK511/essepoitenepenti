@@ -77,6 +77,9 @@ def _deep_output(
     confidence: float = 74.0,
     setup_family: str = "breakout",
     context_bias: str = "tailwind",
+    entry_price: float = 100.0,
+    stop_loss: float = 95.0,
+    take_profit: float = 112.0,
     extra_transmission: dict[str, object] | None = None,
 ) -> RunOutput:
     transmission: dict[str, object] = {
@@ -104,9 +107,9 @@ def _deep_output(
             ticker="AAPL",
             direction=direction,
             confidence=confidence,
-            entry_price=100.0,
-            stop_loss=95.0,
-            take_profit=112.0,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
         ),
         diagnostics=RunDiagnostics(
             analysis_json=json.dumps(
@@ -322,6 +325,35 @@ def test_actionable_short_plan_framing_payload_contract_is_stable() -> None:
     }
     assert contract["signal"]["intended_action"] == "short"
     assert contract["signal"]["deep_analysis_confidence_percent"] == 74.0
+
+
+def test_non_finite_trade_levels_are_not_execution_eligible() -> None:
+    service = _service()
+
+    plan = service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(
+            entry_price=float("nan"),
+            stop_loss=float("nan"),
+            take_profit=float("nan"),
+        ),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    assert plan.action == "no_action"
+    assert plan.entry_price_low is None
+    assert plan.entry_price_high is None
+    assert plan.stop_loss is None
+    assert plan.take_profit is None
+    assert plan.risk_reward_ratio is None
+    assert plan.evidence_summary["action_reason"] == "non_finite_trade_levels"
+    assert plan.signal_breakdown["decision_tier"] == "discarded"
+    assert plan.signal_breakdown["execution_eligible"] is False
 
 
 def test_replay_override_matches_live_config_for_identical_inputs_and_config() -> None:

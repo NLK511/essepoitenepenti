@@ -28,6 +28,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.historical_bars_access import HistoricalBarsAccessService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
+from trade_proposer_app.services.finite_numbers import finite_ohlc, finite_or_default
 from trade_proposer_app.services.plan_resolution_engine import (
     PlanResolutionConfig,
     PlanResolutionEngine,
@@ -1013,17 +1014,21 @@ class RecommendationPlanEvaluationService:
             available_at = self._normalize_datetime(row.get("available_at"))
             if bar_time is None:
                 continue
+            ohlc = finite_ohlc(row.get("Open"), row.get("High"), row.get("Low"), row.get("Close"))
+            if ohlc is None:
+                continue
+            open_price, high_price, low_price, close_price = ohlc
             bars.append(
                 HistoricalMarketBar(
                     ticker=ticker,
                     timeframe=timeframe,
                     bar_time=bar_time,
                     available_at=available_at,
-                    open_price=float(row.get("Open", 0.0)),
-                    high_price=float(row.get("High", 0.0)),
-                    low_price=float(row.get("Low", 0.0)),
-                    close_price=float(row.get("Close", 0.0)),
-                    volume=float(row.get("Volume", 0.0)),
+                    open_price=open_price,
+                    high_price=high_price,
+                    low_price=low_price,
+                    close_price=close_price,
+                    volume=finite_or_default(row.get("Volume")),
                     source="yfinance_auto_cache",
                 )
             )

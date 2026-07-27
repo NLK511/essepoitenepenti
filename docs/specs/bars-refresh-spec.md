@@ -37,6 +37,12 @@ This spec does not cover:
 - Providers return normalized `HistoricalMarketBar` rows plus provider
   diagnostics.
 - The canonical local cache remains `historical_market_bars`.
+- Canonical bar rows must contain finite OHLC values. `NaN`, positive infinity,
+  and negative infinity are invalid market data, even when the database can
+  store them.
+- Ingestion must drop non-finite OHLC rows before persistence. Cache read paths
+  must also ignore any pre-existing non-finite rows so one corrupted latest bar
+  cannot poison technical features or recommendation levels.
 - Remote provider fallback must be explicit in run artifacts. A provider failure
   must not silently change the source used for persisted bars.
 - Replay, tuning, and evaluation reads must consume persisted bars through the
@@ -113,6 +119,8 @@ The automated tests must cover at least:
 - replay/tuning cache access does not remote-fetch intraday bars
 - eToro candle payloads normalize into canonical bar models without mutating the
   canonical cache during validation
+- non-finite OHLC rows from Yahoo/yfinance or existing cache records are rejected
+  or ignored before they can affect downstream plan generation
 
 ## Current limitations
 

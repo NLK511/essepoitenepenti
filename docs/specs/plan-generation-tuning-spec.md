@@ -47,6 +47,22 @@ Live behavior includes:
 - weekly actionability-floor calibration runs as a `plan_generation_tuning` job mode, rescoring the latest completed replay batch across 40%-60% floors without executing new replay slices or promoting settings
 - full dry-run tuning must avoid duplicate eligible-record loads; final walk-forward validation should reuse the already loaded eligible record set rather than querying the same large outcome universe again
 
+### Executable trade-level quality gate
+
+Any recommendation plan marked as broker-execution eligible must have finite
+trade levels before it can become actionable:
+
+- entry reference must be finite and greater than zero
+- stop loss must be finite
+- take profit must be finite
+- long geometry must satisfy `stop_loss < entry < take_profit`
+- short geometry must satisfy `take_profit < entry < stop_loss`
+
+`NaN`, positive infinity, and negative infinity are degraded input, not prices.
+Plans with non-finite geometry may be kept for research visibility, but they
+must not be marked execution eligible and must not reach broker submission
+except as an auditable skip with reason `non_finite_trade_levels`.
+
 ## Target behavior
 
 Not fully autonomous yet:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from trade_proposer_app.domain.models import RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.services.finite_numbers import finite_float
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,18 @@ class WatchlistPlanFramingService:
             intended_action=intended_action,
             transmission_summary=transmission_summary,
         )
+        trade_level_rejection_reason = self._trade_level_rejection_reason(
+            intended_action,
+            entry_price_low,
+            entry_price_high,
+            stop_loss,
+            take_profit,
+        )
+        entry_price_low = finite_float(entry_price_low)
+        entry_price_high = finite_float(entry_price_high)
+        stop_loss = finite_float(stop_loss)
+        take_profit = finite_float(take_profit)
+        risk_reward_ratio = finite_float(risk_reward_ratio)
 
         action, action_reason = self._resolve_action(
             watchlist,
@@ -127,6 +140,10 @@ class WatchlistPlanFramingService:
             effective_threshold=effective_threshold,
             warnings=warnings,
         )
+        if action != "no_action" and trade_level_rejection_reason is not None:
+            action = "no_action"
+            action_reason = trade_level_rejection_reason
+            warnings.append(trade_level_rejection_reason)
 
         if action == "no_action":
             preferred_tier = self._preferred_non_execution_tier(
@@ -323,6 +340,34 @@ class WatchlistPlanFramingService:
             volatility_score=cheap_scan_component_scores.get("volatility_score") if isinstance(cheap_scan_component_scores.get("volatility_score"), (int, float)) else None,
         )
         return entry_price_low, entry_price_high, stop_loss, take_profit, o._risk_reward_ratio(recommendation)
+
+    @staticmethod
+    def _trade_level_rejection_reason(
+        intended_action: str | None,
+        entry_price_low: object,
+        entry_price_high: object,
+        stop_loss: object,
+        take_profit: object,
+    ) -> str | None:
+        if intended_action not in {"long", "short"}:
+            return None
+        raw_values = (entry_price_low, entry_price_high, stop_loss, take_profit)
+        finite_values = tuple(finite_float(value) for value in raw_values)
+        if any(raw is not None and finite is None for raw, finite in zip(raw_values, finite_values)):
+            return "non_finite_trade_levels"
+        low, high, stop, target = finite_values
+        if low is None and high is None:
+            return "missing_trade_levels"
+        if stop is None or target is None:
+            return "missing_trade_levels"
+        entry = (low + high) / 2.0 if low is not None and high is not None else low if low is not None else high
+        if entry is None or entry <= 0:
+            return "missing_trade_levels"
+        if intended_action == "long" and not (stop < entry < target):
+            return "invalid_trade_levels"
+        if intended_action == "short" and not (target < entry < stop):
+            return "invalid_trade_levels"
+        return None
 
     def _preferred_non_execution_tier(
         self,

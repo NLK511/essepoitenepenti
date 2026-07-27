@@ -10,6 +10,7 @@ import httpx
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.services.brokers.etoro import EtoroClient, EtoroClientError
+from trade_proposer_app.services.finite_numbers import finite_float, finite_ohlc, finite_or_default
 from trade_proposer_app.services.input_access import stable_hash
 
 
@@ -138,8 +139,10 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
             high_price = highs[index]
             low_price = lows[index]
             close_price = closes[index]
-            if None in {open_price, high_price, low_price, close_price}:
+            ohlc = finite_ohlc(open_price, high_price, low_price, close_price)
+            if ohlc is None:
                 continue
+            open_value, high_value, low_value, close_value = ohlc
             bar_dt = self._normalize(datetime.fromtimestamp(raw_timestamp, tz=timezone.utc))
             if bar_dt.date() < normalized_start.date() or bar_dt.date() > normalized_end.date():
                 continue
@@ -155,12 +158,12 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
                     timeframe="1d",
                     bar_time=bar_dt,
                     available_at=available_at,
-                    open_price=float(open_price),
-                    high_price=float(high_price),
-                    low_price=float(low_price),
-                    close_price=float(close_price),
-                    volume=float(volumes[index] or 0.0) if index < len(volumes) else 0.0,
-                    adjusted_close=(float(adjcloses[index]) if index < len(adjcloses) and adjcloses[index] is not None else None),
+                    open_price=open_value,
+                    high_price=high_value,
+                    low_price=low_value,
+                    close_price=close_value,
+                    volume=finite_or_default(volumes[index]) if index < len(volumes) else 0.0,
+                    adjusted_close=(finite_float(adjcloses[index]) if index < len(adjcloses) else None),
                     source=self.provider_name,
                     source_tier=self.source_tier,
                     point_in_time_confidence=0.6,
@@ -236,12 +239,17 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
         try:
             row_dict = {str(k).strip(): v for k, v in row.to_dict().items()}
             close_val = row_dict.get("Close") or row_dict.get("Adj Close")
-            if close_val is None or pd.isna(close_val):
+            close_value = finite_float(close_val)
+            if close_value is None or pd.isna(close_val):
                 return None
 
-            open_val = row_dict.get("Open", close_val)
-            high_val = row_dict.get("High", close_val)
-            low_val = row_dict.get("Low", close_val)
+            open_val = row_dict.get("Open", close_value)
+            high_val = row_dict.get("High", close_value)
+            low_val = row_dict.get("Low", close_value)
+            ohlc = finite_ohlc(open_val, high_val, low_val, close_value)
+            if ohlc is None:
+                return None
+            open_value, high_value, low_value, close_value = ohlc
             volume_val = row_dict.get("Volume", 0.0)
 
             bar_time = timestamp.to_pydatetime()
@@ -255,11 +263,11 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
                 timeframe="1m",
                 bar_time=bar_time,
                 available_at=bar_time + timedelta(minutes=1),
-                open_price=float(open_val),
-                high_price=float(high_val),
-                low_price=float(low_val),
-                close_price=float(close_val),
-                volume=float(volume_val) if not pd.isna(volume_val) else 0.0,
+                open_price=open_value,
+                high_price=high_value,
+                low_price=low_value,
+                close_price=close_value,
+                volume=finite_or_default(volume_val),
                 source="yfinance_refresh",
                 source_tier=self.source_tier,
                 point_in_time_confidence=0.8,
@@ -433,11 +441,16 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
             bar_time = cls._normalize_datetime_string(str(raw_time))
             if bar_time < start_at or bar_time > end_at:
                 return None
-            open_price = float(candle["open"])
-            high_price = float(candle["high"])
-            low_price = float(candle["low"])
-            close_price = float(candle["close"])
-            volume = float(candle.get("volume") or 0.0)
+            ohlc = finite_ohlc(
+                candle.get("open"),
+                candle.get("high"),
+                candle.get("low"),
+                candle.get("close"),
+            )
+            if ohlc is None:
+                return None
+            open_price, high_price, low_price, close_price = ohlc
+            volume = finite_or_default(candle.get("volume"))
             if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
                 return None
             metadata = {

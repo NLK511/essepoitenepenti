@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 
 from trade_proposer_app.domain.models import RecommendationPlan
+from trade_proposer_app.services.finite_numbers import finite_float
 
 
 @dataclass(frozen=True)
@@ -53,9 +54,15 @@ class ExecutionCandidateBuilder:
         entry_price = self.entry_reference(plan)
         if entry_price is None or entry_price <= 0:
             return ExecutionCandidateResult(skip_reason="missing_entry_price")
-        stop_loss = float(plan.stop_loss) if plan.stop_loss is not None else None
-        take_profit = float(plan.take_profit) if plan.take_profit is not None else None
+        if not math.isfinite(entry_price):
+            return ExecutionCandidateResult(skip_reason="non_finite_trade_levels")
+        stop_loss = finite_float(plan.stop_loss)
+        take_profit = finite_float(plan.take_profit)
         if stop_loss is None or take_profit is None:
+            if plan.stop_loss is not None or plan.take_profit is not None:
+                return ExecutionCandidateResult(
+                    skip_reason="non_finite_trade_levels", entry_price=entry_price
+                )
             return ExecutionCandidateResult(
                 skip_reason="missing_exit_levels", entry_price=entry_price
             )
@@ -105,18 +112,24 @@ class ExecutionCandidateBuilder:
 
     @staticmethod
     def entry_reference(plan: RecommendationPlan) -> float | None:
-        if plan.entry_price_low is not None and plan.entry_price_high is not None:
-            return (float(plan.entry_price_low) + float(plan.entry_price_high)) / 2.0
-        if plan.entry_price_low is not None:
-            return float(plan.entry_price_low)
-        if plan.entry_price_high is not None:
-            return float(plan.entry_price_high)
+        low = finite_float(plan.entry_price_low)
+        high = finite_float(plan.entry_price_high)
+        if low is not None and high is not None:
+            return (low + high) / 2.0
+        if low is not None:
+            return low
+        if high is not None:
+            return high
+        if plan.entry_price_low is not None or plan.entry_price_high is not None:
+            return float("nan")
         return None
 
     @staticmethod
     def levels_are_directionally_valid(
         action: str, entry_price: float, stop_loss: float, take_profit: float
     ) -> bool:
+        if not all(math.isfinite(value) for value in (entry_price, stop_loss, take_profit)):
+            return False
         if action == "long":
             return stop_loss < entry_price < take_profit
         if action == "short":

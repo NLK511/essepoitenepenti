@@ -16,6 +16,7 @@ from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, Run
 from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
     FundamentalAnalysisSnapshotRepository,
 )
+from trade_proposer_app.services.finite_numbers import finite_or_default
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.payload_utils import sanitize_for_json
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
@@ -82,10 +83,12 @@ class TickerDeepAnalysisService:
             normalized_vector = self._normalize_feature_vector(feature_vector, column_ranges)
             normalized_vector["normalized_atr_pct"] = normalized_vector.get("atr_pct", 0.5)
             feature_vector["normalized_atr_pct"] = normalized_vector["normalized_atr_pct"]
+            atr = finite_or_default(context.get("atr"))
+            price = finite_or_default(context.get("price"))
             aggregations = self._compute_aggregations(
                 normalized_vector,
-                float(context.get("atr", 0.0) or 0.0),
-                float(context.get("price", 0.0) or 0.0),
+                atr,
+                price,
             )
             direction = self._resolve_direction(context, aggregations)
             confidence_components = self._build_confidence_components(context, direction)
@@ -96,8 +99,8 @@ class TickerDeepAnalysisService:
             )
             entry_price, stop_loss, take_profit = self._suggest_price_levels(
                 direction,
-                float(context.get("price", 0.0) or 0.0),
-                float(context.get("atr", 0.0) or 0.0),
+                price,
+                atr,
                 aggregations,
             )
             transmission_analysis = self._build_transmission_analysis(context, direction)

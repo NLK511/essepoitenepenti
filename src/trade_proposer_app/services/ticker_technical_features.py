@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from trade_proposer_app.services.finite_numbers import finite_or_default
 from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT
 from trade_proposer_app.services.proposals import (
     AGGREGATOR_DEFAULTS,
@@ -104,22 +105,22 @@ class TickerTechnicalFeatureService:
             "momentum_short": momentum_short,
             "momentum_medium": momentum_medium,
             "momentum_long": momentum_long,
-            "price_change_1d": float(latest.get("price_change_1d") or 0.0),
-            "price_change_10d": float(latest.get("price_change_10d") or 0.0),
-            "price_change_63d": float(latest.get("price_change_63d") or 0.0),
-            "price_change_126d": float(latest.get("price_change_126d") or 0.0),
-            "entry_delta_2w": float(latest.get("entry_delta_2w") or 0.0),
-            "entry_delta_3m": float(latest.get("entry_delta_3m") or 0.0),
-            "entry_delta_12m": float(latest.get("entry_delta_12m") or 0.0),
-            "price_vs_sma20_ratio": float(latest.get("price_vs_sma20_ratio") or 0.0),
-            "price_vs_sma50_ratio": float(latest.get("price_vs_sma50_ratio") or 0.0),
-            "price_vs_sma200_ratio": float(latest.get("price_vs_sma200_ratio") or 0.0),
-            "price_vs_sma20_slope": float(latest.get("price_vs_sma20_slope") or 0.0),
-            "price_vs_sma50_slope": float(latest.get("price_vs_sma50_slope") or 0.0),
-            "price_vs_sma200_slope": float(latest.get("price_vs_sma200_slope") or 0.0),
-            "volatility_band_upper": float(latest.get("volatility_band_upper") or 0.0),
-            "volatility_band_lower": float(latest.get("volatility_band_lower") or 0.0),
-            "volatility_band_width": float(latest.get("volatility_band_width") or 0.0),
+            "price_change_1d": finite_or_default(latest.get("price_change_1d")),
+            "price_change_10d": finite_or_default(latest.get("price_change_10d")),
+            "price_change_63d": finite_or_default(latest.get("price_change_63d")),
+            "price_change_126d": finite_or_default(latest.get("price_change_126d")),
+            "entry_delta_2w": finite_or_default(latest.get("entry_delta_2w")),
+            "entry_delta_3m": finite_or_default(latest.get("entry_delta_3m")),
+            "entry_delta_12m": finite_or_default(latest.get("entry_delta_12m")),
+            "price_vs_sma20_ratio": finite_or_default(latest.get("price_vs_sma20_ratio")),
+            "price_vs_sma50_ratio": finite_or_default(latest.get("price_vs_sma50_ratio")),
+            "price_vs_sma200_ratio": finite_or_default(latest.get("price_vs_sma200_ratio")),
+            "price_vs_sma20_slope": finite_or_default(latest.get("price_vs_sma20_slope")),
+            "price_vs_sma50_slope": finite_or_default(latest.get("price_vs_sma50_slope")),
+            "price_vs_sma200_slope": finite_or_default(latest.get("price_vs_sma200_slope")),
+            "volatility_band_upper": finite_or_default(latest.get("volatility_band_upper")),
+            "volatility_band_lower": finite_or_default(latest.get("volatility_band_lower")),
+            "volatility_band_width": finite_or_default(latest.get("volatility_band_width")),
             "price_above_sma50": price_above_sma50,
             "price_above_sma200": price_above_sma200,
             "rel_return_5d_vs_spy": 0.0,
@@ -186,16 +187,16 @@ class TickerTechnicalFeatureService:
     @staticmethod
     def _latest_technical_values(latest: pd.Series) -> dict[str, float]:
         return {
-            "price": float(latest.get("Close", 0.0) or 0.0),
-            "sma20": float(latest.get("SMA_20") or 0.0),
-            "sma50": float(latest.get("SMA_50") or 0.0),
-            "sma200": float(latest.get("SMA_200") or 0.0),
-            "rsi": float(latest.get("RSI_14") or 50.0),
-            "atr": float(latest.get("ATR_14") or 0.0),
-            "atr_pct": float(latest.get("atr_pct") or 0.0),
-            "momentum_short": float(latest.get("momentum_short") or 0.0),
-            "momentum_medium": float(latest.get("momentum_medium") or 0.0),
-            "momentum_long": float(latest.get("momentum_long") or 0.0),
+            "price": finite_or_default(latest.get("Close")),
+            "sma20": finite_or_default(latest.get("SMA_20")),
+            "sma50": finite_or_default(latest.get("SMA_50")),
+            "sma200": finite_or_default(latest.get("SMA_200")),
+            "rsi": finite_or_default(latest.get("RSI_14"), 50.0),
+            "atr": finite_or_default(latest.get("ATR_14")),
+            "atr_pct": finite_or_default(latest.get("atr_pct")),
+            "momentum_short": finite_or_default(latest.get("momentum_short")),
+            "momentum_medium": finite_or_default(latest.get("momentum_medium")),
+            "momentum_long": finite_or_default(latest.get("momentum_long")),
         }
 
     @staticmethod
@@ -312,7 +313,7 @@ class TickerTechnicalFeatureService:
             "context_tag_general",
         ):
             value = context.get(key, context.get("price" if key == "price_close" else key, 0.0))
-            vector[key] = float(value or 0.0)
+            vector[key] = finite_or_default(value)
         return vector
 
     def normalize_feature_vector(
@@ -329,7 +330,9 @@ class TickerTechnicalFeatureService:
 
     @staticmethod
     def normalize_value(value: float, bounds: tuple[float, float]) -> float:
-        min_val, max_val = bounds
+        value = finite_or_default(value)
+        min_val = finite_or_default(bounds[0])
+        max_val = finite_or_default(bounds[1])
         if max_val == min_val:
             return 0.5
         return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
@@ -375,4 +378,3 @@ class TickerTechnicalFeatureService:
             "entry_adjustment": round(entry_adjustment, 4),
             "entry_drift_signal": round(entry_signal, 4),
         }
-
