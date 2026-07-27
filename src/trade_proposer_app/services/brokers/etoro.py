@@ -244,6 +244,81 @@ class EtoroClient:
             return None
 
 
+def etoro_symbol_aliases(symbol: str) -> list[str]:
+    normalized = symbol.strip().upper()
+    aliases = [normalized]
+    if "-" in normalized:
+        aliases.append(normalized.replace("-", "."))
+    if "." in normalized:
+        aliases.append(normalized.replace(".", "-"))
+    if normalized.endswith(".US"):
+        aliases.append(normalized.removesuffix(".US"))
+    suffix_alias = _class_share_suffix_alias(normalized)
+    if suffix_alias:
+        aliases.append(suffix_alias)
+    return list(dict.fromkeys(alias for alias in aliases if alias))
+
+
+def _class_share_suffix_alias(symbol: str) -> str | None:
+    if "." not in symbol:
+        return None
+    base, suffix = symbol.rsplit(".", 1)
+    if "-" not in base:
+        return None
+    root, share_class = base.rsplit("-", 1)
+    if not root or len(share_class) != 1 or not share_class.isalpha():
+        return None
+    return f"{root}{share_class}.{suffix}"
+
+
+def etoro_instrument_rows(payload: dict[str, object]) -> list[dict[str, object]]:
+    for key in ("instruments", "items", "results"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def etoro_candidate_symbol(row: dict[str, object]) -> str:
+    return str(
+        row.get("symbolFull")
+        or row.get("internalSymbolFull")
+        or row.get("symbol")
+        or ""
+    ).strip().upper()
+
+
+def etoro_enriched_instrument_rows(
+    client: EtoroClient,
+    symbol: str,
+    payload: dict[str, object],
+) -> list[dict[str, object]]:
+    rows = etoro_instrument_rows(payload)
+    if any(etoro_candidate_symbol(row) for row in rows):
+        return rows
+    enriched: list[dict[str, object]] = []
+    for row in rows:
+        instrument_id = row.get("instrumentId") or row.get("instrumentID")
+        if not instrument_id:
+            continue
+        try:
+            display_payload = client.get_instrument_display_data(str(instrument_id))
+        except EtoroClientError:
+            continue
+        enriched.extend(_etoro_list(display_payload.get("instrumentDisplayDatas")))
+    return [
+        row
+        for row in enriched
+        if etoro_candidate_symbol(row) == symbol.strip().upper()
+    ] or enriched
+
+
+def _etoro_list(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 class EtoroReadOnlyBrokerAdapter:
     def __init__(self, *, client: EtoroClient) -> None:
         self.client = client
@@ -302,7 +377,7 @@ class EtoroReadOnlyBrokerAdapter:
         normalized = symbol.strip().upper()
         if normalized in self._instrument_cache:
             return self._instrument_cache[normalized]
-        aliases = self._symbol_aliases(normalized)
+        aliases = etoro_symbol_aliases(normalized)
         rows: list[dict[str, object]] = []
         attempts: list[dict[str, object]] = []
         for alias in aliases:
@@ -312,11 +387,11 @@ class EtoroReadOnlyBrokerAdapter:
                 attempts.append({"symbol": alias, "error": exc.payload})
                 continue
             attempts.append({"symbol": alias, "payload": payload})
-            rows.extend(self._enriched_instrument_rows(alias, payload))
+            rows.extend(etoro_enriched_instrument_rows(self.client, alias, payload))
         matches = [
             row
             for row in rows
-            if str(row.get("symbolFull") or row.get("symbol") or "").upper() in aliases
+            if etoro_candidate_symbol(row) in aliases
         ]
         if len(matches) != 1:
             instrument = BrokerInstrument(
@@ -370,17 +445,6 @@ class EtoroReadOnlyBrokerAdapter:
         )
         self._instrument_cache[normalized] = instrument
         return instrument
-
-    @staticmethod
-    def _symbol_aliases(symbol: str) -> list[str]:
-        aliases = [symbol]
-        if "-" in symbol:
-            aliases.append(symbol.replace("-", "."))
-        if "." in symbol:
-            aliases.append(symbol.replace(".", "-"))
-        if symbol.endswith(".US"):
-            aliases.append(symbol.removesuffix(".US"))
-        return list(dict.fromkeys(aliases))
 
     def get_account_snapshot(self) -> BrokerPortfolioResult:
         try:
@@ -516,38 +580,16 @@ class EtoroReadOnlyBrokerAdapter:
 
     @staticmethod
     def _instrument_rows(payload: dict[str, object]) -> list[dict[str, object]]:
-        for key in ("instruments", "items", "results"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                return [item for item in value if isinstance(item, dict)]
-        return []
+        return etoro_instrument_rows(payload)
 
     def _enriched_instrument_rows(
         self, symbol: str, payload: dict[str, object]
     ) -> list[dict[str, object]]:
-        rows = self._instrument_rows(payload)
-        if any(row.get("symbol") or row.get("symbolFull") for row in rows):
-            return rows
-        enriched: list[dict[str, object]] = []
-        for row in rows:
-            instrument_id = row.get("instrumentId") or row.get("instrumentID")
-            if not instrument_id:
-                continue
-            try:
-                display_payload = self.client.get_instrument_display_data(str(instrument_id))
-            except EtoroClientError:
-                continue
-            display_rows = self._list(display_payload.get("instrumentDisplayDatas"))
-            enriched.extend(display_rows)
-        return [
-            row
-            for row in enriched
-            if str(row.get("symbolFull") or row.get("symbol") or "").upper() == symbol
-        ] or enriched
+        return etoro_enriched_instrument_rows(self.client, symbol, payload)
 
     @staticmethod
     def _list(value: object) -> list[dict[str, object]]:
-        return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+        return _etoro_list(value)
 
     @staticmethod
     def _client_portfolio(payload: dict[str, object]) -> dict[str, object]:

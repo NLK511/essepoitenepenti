@@ -53,6 +53,11 @@ This spec does not cover:
   `YahooHistoricalBarProvider`.
 - eToro candle fetching is implemented as a provider candidate but must remain
   shadow/validation-only until its data quality gates pass.
+- eToro candle fetching must use the same instrument-resolution contract as
+  eToro broker execution: try only conservative ticker aliases, enrich thin
+  search rows through instrument display data, require exactly one matching
+  `symbolFull`/`symbol`, and report unresolved or ambiguous resolution as data
+  quality failures instead of silently falling back to another instrument.
 - For each ticker, it starts from the later of:
   - `now - lookback_days`
   - the latest persisted `1m` `bar_time` for that ticker plus one minute

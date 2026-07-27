@@ -23,7 +23,13 @@ def create_session() -> Session:
 
 
 class FakeEtoroClient:
-    def __init__(self, *, search_payload=None, candle_payload=None) -> None:
+    def __init__(
+        self,
+        *,
+        search_payload=None,
+        candle_payload=None,
+        display_payloads=None,
+    ) -> None:
         self.search_payload = search_payload or {
             "items": [{"instrumentId": 1001, "internalSymbolFull": "AAPL", "name": "Apple"}]
         }
@@ -46,10 +52,25 @@ class FakeEtoroClient:
                 }
             ],
         }
+        self.display_payloads = display_payloads or {}
+        self.search_calls: list[str] = []
+        self.display_calls: list[str] = []
         self.candle_calls: list[dict[str, object]] = []
 
     def search_market_data(self, symbol: str):
+        self.search_calls.append(symbol)
+        if callable(self.search_payload):
+            return self.search_payload(symbol)
+        if isinstance(self.search_payload, dict) and symbol in self.search_payload:
+            return self.search_payload[symbol]
         return self.search_payload
+
+    def get_instrument_display_data(self, instrument_id):
+        self.display_calls.append(str(instrument_id))
+        return self.display_payloads.get(
+            str(instrument_id),
+            {"instrumentDisplayDatas": []},
+        )
 
     def get_instrument_candles(self, **kwargs):
         self.candle_calls.append(kwargs)
@@ -119,6 +140,95 @@ class HistoricalBarProviderTests(unittest.TestCase):
         self.assertEqual(100.5, bar.close_price)
         self.assertEqual("etoro", bar.source)
         self.assertEqual("broker", bar.source_tier)
+
+    def test_etoro_provider_enriches_thin_search_rows_before_candle_fetch(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={"items": [{"instrumentId": 1001}, {"instrumentId": 15569}]},
+            display_payloads={
+                "1001": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 1001,
+                            "symbolFull": "AAPL",
+                            "instrumentDisplayName": "Apple",
+                        }
+                    ]
+                },
+                "15569": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 15569,
+                            "symbolFull": "AAPL.24-7",
+                            "instrumentDisplayName": "Apple 24/7",
+                        }
+                    ]
+                },
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        result = provider.fetch_bars(
+            "AAPL",
+            "1m",
+            datetime(2026, 7, 25, 14, 29, tzinfo=timezone.utc),
+            datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual([1001], [call["instrument_id"] for call in client.candle_calls])
+        self.assertEqual(["1001", "15569"], client.display_calls)
+        self.assertEqual("matched", result.diagnostics["instrument_resolution"]["status"])
+        self.assertEqual("AAPL", result.diagnostics["instrument_resolution"]["raw_symbol"])
+
+    def test_etoro_provider_resolves_safe_symbol_punctuation_alias(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={"items": [{"instrumentId": 321}]},
+            display_payloads={
+                "321": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 321,
+                            "symbolFull": "BRK.B",
+                            "instrumentDisplayName": "Berkshire Hathaway",
+                        }
+                    ]
+                }
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        instrument_id, resolution = provider.resolve_instrument_id("BRK-B")
+
+        self.assertEqual(321, instrument_id)
+        self.assertEqual("matched", resolution["status"])
+        self.assertEqual(["BRK-B", "BRK.B"], client.search_calls)
+
+    def test_etoro_provider_resolves_suffixed_class_share_alias(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={
+                "MAERSK-B.CO": {"items": []},
+                "MAERSK.B.CO": {"items": []},
+                "MAERSK-B-CO": {"items": []},
+                "MAERSKB.CO": {"items": [{"instrumentId": 5569}]},
+            },
+            display_payloads={
+                "5569": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 5569,
+                            "symbolFull": "MAERSKB.CO",
+                            "instrumentDisplayName": "A P Moller Maersk",
+                        }
+                    ]
+                }
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        instrument_id, resolution = provider.resolve_instrument_id("MAERSK-B.CO")
+
+        self.assertEqual(5569, instrument_id)
+        self.assertEqual("MAERSKB.CO", resolution["raw_symbol"])
+        self.assertIn("MAERSKB.CO", resolution["aliases"])
 
     def test_etoro_provider_rejects_ambiguous_instrument_resolution(self) -> None:
         provider = EtoroHistoricalBarProvider(

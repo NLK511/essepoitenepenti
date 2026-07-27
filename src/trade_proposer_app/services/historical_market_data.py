@@ -9,7 +9,13 @@ import httpx
 
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
-from trade_proposer_app.services.brokers.etoro import EtoroClient, EtoroClientError
+from trade_proposer_app.services.brokers.etoro import (
+    EtoroClient,
+    EtoroClientError,
+    etoro_candidate_symbol,
+    etoro_enriched_instrument_rows,
+    etoro_symbol_aliases,
+)
 from trade_proposer_app.services.finite_numbers import finite_float, finite_ohlc, finite_or_default
 from trade_proposer_app.services.input_access import stable_hash
 
@@ -358,28 +364,57 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
 
     def resolve_instrument_id(self, ticker: str) -> tuple[int, dict[str, object]]:
         normalized = ticker.strip().upper()
-        payload = self.client.search_market_data(normalized)
-        items = payload.get("items") if isinstance(payload, dict) else None
-        if not isinstance(items, list):
-            items = []
-        exact = [
-            item for item in items
-            if isinstance(item, dict)
-            and str(item.get("internalSymbolFull") or "").strip().upper() == normalized
-            and item.get("instrumentId") is not None
-        ]
+        aliases = etoro_symbol_aliases(normalized)
+        rows: list[dict[str, object]] = []
+        attempts: list[dict[str, object]] = []
+        for alias in aliases:
+            try:
+                payload = self.client.search_market_data(alias)
+            except EtoroClientError as exc:
+                attempts.append({"symbol": alias, "error": exc.payload})
+                continue
+            attempts.append({"symbol": alias, "payload": payload})
+            rows.extend(etoro_enriched_instrument_rows(self.client, alias, payload))
+        exact = self._dedupe_instrument_matches(
+            [
+                row
+                for row in rows
+                if etoro_candidate_symbol(row) in aliases
+                and (row.get("instrumentId") or row.get("instrumentID")) is not None
+            ]
+        )
         if len(exact) != 1:
+            status = "ambiguous" if exact else "unresolved"
             raise HistoricalMarketDataError(
-                f"eToro instrument resolution for {ticker} returned {len(exact)} exact matches"
+                f"eToro instrument resolution for {ticker} is {status}; "
+                f"matched {len(exact)} exact symbols"
             )
-        instrument_id = int(exact[0]["instrumentId"])
+        row = exact[0]
+        raw_instrument_id = row.get("instrumentId") or row.get("instrumentID")
+        instrument_id = int(raw_instrument_id)
         return instrument_id, {
             "ticker": normalized,
+            "aliases": aliases,
+            "status": "matched",
             "match_count": len(exact),
             "instrument_id": instrument_id,
-            "raw_name": exact[0].get("name"),
-            "raw_symbol": exact[0].get("internalSymbolFull"),
+            "raw_name": row.get("name") or row.get("instrumentDisplayName"),
+            "raw_symbol": etoro_candidate_symbol(row),
+            "attempt_count": len(attempts),
         }
+
+    @staticmethod
+    def _dedupe_instrument_matches(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+        deduped: list[dict[str, object]] = []
+        seen: set[tuple[str, str]] = set()
+        for row in rows:
+            instrument_id = str(row.get("instrumentId") or row.get("instrumentID") or "")
+            key = (instrument_id, etoro_candidate_symbol(row))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(row)
+        return deduped
 
     @classmethod
     def _parse_candles(
