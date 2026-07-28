@@ -231,8 +231,8 @@ async def set_risk_management_settings(
 @router.post("/order-execution")
 async def set_order_execution_settings(
     enabled: str = Form(default="false"),
-    broker: str = Form(default="alpaca"),
-    account_mode: str = Form(default="paper"),
+    broker: str = Form(default="etoro"),
+    account_mode: str = Form(default="demo"),
     notional_per_plan: str = Form(default="1000"),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:

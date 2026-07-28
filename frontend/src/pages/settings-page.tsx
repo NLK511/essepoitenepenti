@@ -185,8 +185,8 @@ export function SettingsPage() {
       setNotice(null);
       await postForm<{ order_execution: SettingsResponse["order_execution"] }>("/api/settings/order-execution", {
         enabled: formData.get("enabled") ? "true" : "false",
-        broker: String(formData.get("broker") ?? data?.orderExecution.broker ?? "alpaca"),
-        account_mode: String(formData.get("account_mode") ?? data?.orderExecution.account_mode ?? "paper"),
+        broker: String(formData.get("broker") ?? data?.orderExecution.broker ?? "etoro"),
+        account_mode: String(formData.get("account_mode") ?? data?.orderExecution.account_mode ?? "demo"),
         notional_per_plan: String(formData.get("notional_per_plan") ?? data?.orderExecution.notional_per_plan ?? "1000"),
       });
       setNotice("Order execution settings saved");
@@ -313,15 +313,15 @@ export function SettingsPage() {
           </section>
 
           <section className="card-grid">
-            <DisclosureCard kicker="Execution" title="Alpaca paper order execution" subtitle="Toggle automated paper trading and control the fixed per-plan notional cap." defaultOpen actions={<HelpHint tooltip="When enabled, actionable plans are converted into Alpaca paper bracket orders with the plan entry, stop loss, and take profit levels." to="/docs?doc=specs-alpaca-paper-order-execution-spec" />}>
+            <DisclosureCard kicker="Execution" title="eToro demo order execution" subtitle="Toggle automated demo trading and control the fixed per-plan notional cap." defaultOpen actions={<HelpHint tooltip="When enabled, actionable plans are converted into eToro demo orders through the broker adapter." to="/docs?doc=specs-etoro-live-trading-integration-spec" />}>
               <form className="stack-form" onSubmit={(event) => void saveOrderExecutionSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.orderExecution.enabled} /> Order execution enabled</span></label>
-                  <label className="form-field"><span>Broker</span><input name="broker" defaultValue={data.orderExecution.broker} /></label>
-                  <label className="form-field"><span>Account mode</span><input name="account_mode" defaultValue={data.orderExecution.account_mode} /></label>
+                  <label className="form-field"><span>Broker</span><select name="broker" defaultValue={data.orderExecution.broker}><option value="etoro">eToro</option></select></label>
+                  <label className="form-field"><span>Account mode</span><select name="account_mode" defaultValue={data.orderExecution.account_mode}><option value="demo">Demo</option></select></label>
                   <label className="form-field"><span>Notional per plan</span><input name="notional_per_plan" type="number" min="1" step="1" defaultValue={String(data.orderExecution.notional_per_plan)} /></label>
                 </div>
-                <div className="helper-text">Actionable long/short plans are submitted as Alpaca paper bracket orders when this toggle is enabled.</div>
+                <div className="helper-text">Actionable eToro-compatible plans are submitted as eToro demo orders when this toggle is enabled.</div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "… Saving" : "✓ Save execution"}</button></div>
               </form>
             </DisclosureCard>

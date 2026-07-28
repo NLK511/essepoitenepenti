@@ -6,7 +6,6 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import BrokerOrderExecution
 from trade_proposer_app.repositories.broker_accounts import BrokerAccountRepository
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
-from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
 from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
 from trade_proposer_app.services.builders import create_order_execution_service
 
@@ -46,7 +45,7 @@ async def sync_broker_orders(session: Session = Depends(get_db_session)) -> dict
     try:
         outcome = service.sync_open_orders()
         return outcome.summary
-    except AlpacaPaperClientError as exc:
+    except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -73,6 +72,8 @@ async def resubmit_broker_order(
     service = create_order_execution_service(session)
     try:
         return service.resubmit_execution(execution_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         message = str(exc)
         raise HTTPException(
@@ -92,7 +93,7 @@ async def cancel_broker_order(
     service = create_order_execution_service(session)
     try:
         return service.cancel_execution(execution_id)
-    except AlpacaPaperClientError as exc:
+    except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         message = str(exc)
@@ -108,7 +109,7 @@ async def refresh_broker_order(
     service = create_order_execution_service(session)
     try:
         return service.refresh_execution(execution_id)
-    except AlpacaPaperClientError as exc:
+    except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         message = str(exc)

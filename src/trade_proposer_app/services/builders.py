@@ -165,6 +165,11 @@ def create_order_execution_service(session: Session) -> OrderExecutionService:
         settings=repository,
         executions=BrokerOrderExecutionRepository(session),
         client=client,
+        adapter_factory=BrokerAdapterFactory(
+            settings=repository,
+            accounts=BrokerAccountRepository(session),
+            alpaca_client_cls=AlpacaPaperClient,
+        ),
         positions=BrokerPositionRepository(session),
         observability=ObservabilityEventRepository(session),
         reconciliation_snapshots=BrokerReconciliationSnapshotRepository(session),

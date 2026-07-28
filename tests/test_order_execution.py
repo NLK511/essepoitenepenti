@@ -169,7 +169,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             observability = ObservabilityEventRepository(session)
             order_service = OrderExecutionService(
                 settings=settings,
@@ -231,7 +231,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             client = StubAlpacaClient()
             order_service = OrderExecutionService(
                 settings=settings,
@@ -276,7 +276,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
             repository = BrokerOrderExecutionRepository(session)
             original = repository.create(
@@ -328,7 +328,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             order_service = OrderExecutionService(
                 settings=settings,
                 executions=BrokerOrderExecutionRepository(session),
@@ -1166,7 +1166,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=False, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=False, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             service = OrderExecutionService(
                 settings=settings,
                 executions=BrokerOrderExecutionRepository(session),
@@ -1199,7 +1199,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             settings.set_risk_management_config(
                 enabled=True,
                 max_daily_realized_loss_usd=50.0,
@@ -1244,7 +1244,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             settings.get_provider_credential_map = lambda: {}  # type: ignore[method-assign]
             service = OrderExecutionService(
                 settings=settings, executions=BrokerOrderExecutionRepository(session)
@@ -1348,7 +1348,7 @@ class OrderExecutionTests(unittest.TestCase):
                 session = create_session()
                 try:
                     settings = SettingsRepository(session)
-                    settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+                    settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
                     service = OrderExecutionService(
                         settings=settings,
                         executions=BrokerOrderExecutionRepository(session),
@@ -1367,7 +1367,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             repository = BrokerOrderExecutionRepository(session)
             repository.create(
                 BrokerOrderExecution(
@@ -1587,7 +1587,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             service = OrderExecutionService(
                 settings=settings,
                 executions=BrokerOrderExecutionRepository(session),
@@ -1625,7 +1625,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             service = OrderExecutionService(
                 settings=settings,
                 executions=BrokerOrderExecutionRepository(session),
@@ -1670,7 +1670,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             repository = BrokerOrderExecutionRepository(session)
             client = UnavailableTickerClient()
             service = OrderExecutionService(settings=settings, executions=repository, client=client)
@@ -1721,7 +1721,7 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertIsNotNone(snapshot)
             self.assertEqual(snapshot.account["equity"], 100000.0)
             stored = BrokerReconciliationSnapshotRepository(session).list_latest(limit=1)[0]
-            self.assertEqual(stored.broker_account_id, "alpaca-paper-default")
+            self.assertEqual(stored.broker_account_id, "etoro-demo-main")
             self.assertEqual(stored.snapshot_type, "pre_submit")
         finally:
             session.close()
@@ -1732,7 +1732,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             repository = BrokerOrderExecutionRepository(session)
             service = OrderExecutionService(
                 settings=settings,
@@ -1776,7 +1776,7 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             settings = SettingsRepository(session)
-            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
             settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
             repository = BrokerOrderExecutionRepository(session)
             plan = RecommendationPlan(

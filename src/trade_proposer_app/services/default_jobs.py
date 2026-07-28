@@ -185,10 +185,8 @@ def ensure_default_performance_assessment_job(session) -> dict[str, str]:
 
 def ensure_default_broker_accounts(session) -> dict[str, str]:
     repo = BrokerAccountRepository(session)
-    alpaca = repo.ensure_default_alpaca_paper_account()
     etoro_demo = repo.ensure_default_etoro_demo_account()
     return {
-        "default_alpaca_paper_account_id": alpaca.broker_account_id,
         "default_etoro_demo_account_id": etoro_demo.broker_account_id,
     }
 

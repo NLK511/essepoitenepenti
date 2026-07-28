@@ -1314,6 +1314,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         try:
             settings_repo = SettingsRepository(session)
             settings_repo.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            settings_repo.set_order_execution_config(
+                enabled=True,
+                broker="alpaca",
+                account_mode="paper",
+                notional_per_plan=1000.0,
+            )
             settings_repo.set_risk_management_config(
                 enabled=True,
                 max_daily_realized_loss_usd=50.0,
@@ -1328,6 +1334,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             broker_orders = BrokerOrderExecutionRepository(session)
             failed_order = broker_orders.create(
                 BrokerOrderExecution(
+                    broker_account_id="alpaca-paper-default",
                     broker="alpaca",
                     account_mode="paper",
                     recommendation_plan_id=plan.id or 0,
@@ -1353,6 +1360,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             )
             open_order = broker_orders.create(
                 BrokerOrderExecution(
+                    broker_account_id="alpaca-paper-default",
                     broker="alpaca",
                     account_mode="paper",
                     recommendation_plan_id=plan.id or 0,

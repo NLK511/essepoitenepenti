@@ -21,18 +21,6 @@ class BrokerAccountRepositoryTests(unittest.TestCase):
         self.session.close()
         self.engine.dispose()
 
-    def test_bootstrap_default_alpaca_paper_account(self) -> None:
-        repo = BrokerAccountRepository(self.session)
-
-        account = repo.ensure_default_alpaca_paper_account()
-
-        self.assertEqual(account.broker_account_id, "alpaca-paper-default")
-        self.assertEqual(account.broker, "alpaca")
-        self.assertEqual(account.account_mode, "paper")
-        self.assertEqual(account.account_label, "alpaca-paper-default")
-        self.assertFalse(account.enabled)
-        self.assertFalse(account.autonomous_execution_enabled)
-
     def test_bootstrap_default_etoro_demo_account_is_disabled_and_capped(self) -> None:
         repo = BrokerAccountRepository(self.session)
 
@@ -54,18 +42,16 @@ class BrokerAccountRepositoryTests(unittest.TestCase):
         self.assertTrue(account.risk_settings["demo_only"])
         self.assertTrue(account.risk_settings["side_by_side_trial_required"])
 
-    def test_startup_bootstrap_ensures_default_alpaca_paper_account_idempotently(self) -> None:
+    def test_startup_bootstrap_ensures_default_etoro_demo_account_idempotently(self) -> None:
         first = ensure_default_broker_accounts(self.session)
         second = ensure_default_broker_accounts(self.session)
 
-        self.assertEqual(first["default_alpaca_paper_account_id"], "alpaca-paper-default")
-        self.assertEqual(second["default_alpaca_paper_account_id"], "alpaca-paper-default")
         self.assertEqual(first["default_etoro_demo_account_id"], "etoro-demo-main")
         self.assertEqual(second["default_etoro_demo_account_id"], "etoro-demo-main")
         accounts = BrokerAccountRepository(self.session).list_all()
         self.assertEqual(
             [account.broker_account_id for account in accounts],
-            ["alpaca-paper-default", "etoro-demo-main"],
+            ["etoro-demo-main"],
         )
         by_id = {account.broker_account_id: account for account in accounts}
         self.assertFalse(by_id["etoro-demo-main"].enabled)

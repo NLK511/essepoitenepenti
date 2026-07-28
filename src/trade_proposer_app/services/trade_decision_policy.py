@@ -41,7 +41,7 @@ class TradeDecisionPolicy:
     signal_gating: SignalGatingPolicy = field(default_factory=SignalGatingPolicy)
     plan_generation_config: dict[str, float] = field(default_factory=dict)
     plan_generation_config_version_id: int | None = None
-    order_execution_account_mode: str = "paper"
+    order_execution_account_mode: str = "demo"
 
     def effective_confidence_threshold(self) -> float:
         return max(0.0, min(100.0, self.confidence_threshold + self.signal_gating.threshold_offset))
@@ -53,7 +53,7 @@ class TradeDecisionPolicy:
 
     @property
     def is_paper_exploration_mode(self) -> bool:
-        return str(self.order_execution_account_mode or "").strip().lower() == "paper"
+        return str(self.order_execution_account_mode or "").strip().lower() in {"paper", "demo"}
 
     def setup_family_allowed(self, setup_family: str | None) -> bool:
         normalized = str(setup_family or "uncategorized").strip().lower() or "uncategorized"
@@ -118,7 +118,7 @@ class TradeDecisionPolicyService:
             ),
             plan_generation_config=normalize_plan_generation_tuning_config(plan_generation_config),
             plan_generation_config_version_id=config_version_id,
-            order_execution_account_mode=str(execution_settings.broker_order_execution.get("account_mode", "paper") or "paper").strip().lower(),
+            order_execution_account_mode=str(execution_settings.broker_order_execution.get("account_mode", "demo") or "demo").strip().lower(),
         )
 
     @staticmethod

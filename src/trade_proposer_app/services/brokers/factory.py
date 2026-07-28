@@ -40,8 +40,8 @@ class BrokerAdapterFactory:
         )
 
     def for_legacy_config(self, config: dict[str, object]) -> BrokerAdapter:
-        broker = str(config.get("broker") or "alpaca").strip().lower()
-        account_mode = str(config.get("account_mode") or "paper").strip().lower()
+        broker = str(config.get("broker") or "etoro").strip().lower()
+        account_mode = str(config.get("account_mode") or "demo").strip().lower()
         credentials = {}
         if broker == "alpaca":
             credential = self.settings.get_provider_credential_map().get("alpaca")

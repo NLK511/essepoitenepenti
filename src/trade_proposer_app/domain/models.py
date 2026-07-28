@@ -361,9 +361,9 @@ class BrokerDrawdownState(BaseModel):
 
 class BrokerOrderExecution(BaseModel):
     id: int | None = None
-    broker_account_id: str = "alpaca-paper-default"
-    broker: str = "alpaca"
-    account_mode: str = "paper"
+    broker_account_id: str = "etoro-demo-main"
+    broker: str = "etoro"
+    account_mode: str = "demo"
     recommendation_plan_id: int
     recommendation_plan_ticker: str = ""
     run_id: int | None = None
@@ -403,9 +403,9 @@ class RiskHaltEvent(BaseModel):
 
 class BrokerReconciliationSnapshot(BaseModel):
     id: int | None = None
-    broker_account_id: str = "alpaca-paper-default"
-    broker: str = "alpaca"
-    account_mode: str = "paper"
+    broker_account_id: str = "etoro-demo-main"
+    broker: str = "etoro"
+    account_mode: str = "demo"
     snapshot_type: str = "pre_submit"
     run_id: int | None = None
     job_id: int | None = None
@@ -436,9 +436,9 @@ BrokerRiskAssessment = AccountRiskState
 class BrokerPosition(BaseModel):
     id: int | None = None
     broker_order_execution_id: int
-    broker_account_id: str = "alpaca-paper-default"
-    broker: str = "alpaca"
-    account_mode: str = "paper"
+    broker_account_id: str = "etoro-demo-main"
+    broker: str = "etoro"
+    account_mode: str = "demo"
     recommendation_plan_id: int
     recommendation_plan_ticker: str = ""
     run_id: int | None = None

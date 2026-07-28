@@ -44,7 +44,7 @@ class BrokerAccountSafetyTests(unittest.TestCase):
         self.accounts = BrokerAccountRepository(self.session)
         self.executions = BrokerOrderExecutionRepository(self.session)
         self.safety = BrokerAccountSafetyRepository(self.session)
-        self.settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+        self.settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
         self.accounts.create(
             BrokerAccount(
                 broker_account_id="etoro-live-main",

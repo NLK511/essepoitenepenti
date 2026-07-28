@@ -209,8 +209,8 @@ class SettingsMutationService:
         self,
         *,
         enabled: str = "false",
-        broker: str = "alpaca",
-        account_mode: str = "paper",
+        broker: str = "etoro",
+        account_mode: str = "demo",
         notional_per_plan: str = "1000",
     ) -> dict[str, object]:
         try:

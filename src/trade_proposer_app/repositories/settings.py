@@ -28,8 +28,8 @@ DEFAULT_APP_SETTINGS = {
     "plan_generation_tuning_min_actionable_resolved": "20",
     "plan_generation_tuning_min_validation_resolved": "8",
     "order_execution_enabled": "false",
-    "order_execution_broker": "alpaca",
-    "order_execution_account_mode": "paper",
+    "order_execution_broker": "etoro",
+    "order_execution_account_mode": "demo",
     "order_execution_notional_per_plan": "1000",
     "broker_global_halt_enabled": "false",
     "broker_global_halt_reason": "",
@@ -386,10 +386,10 @@ class SettingsRepository:
         setting_map = self.get_setting_map()
         return {
             "enabled": self._get_bool(setting_map, "order_execution_enabled", False),
-            "broker": (setting_map.get("order_execution_broker", "alpaca") or "alpaca")
+            "broker": (setting_map.get("order_execution_broker", "etoro") or "etoro")
             .strip()
             .lower(),
-            "account_mode": (setting_map.get("order_execution_account_mode", "paper") or "paper")
+            "account_mode": (setting_map.get("order_execution_account_mode", "demo") or "demo")
             .strip()
             .lower(),
             "notional_per_plan": self._get_float(
@@ -641,15 +641,15 @@ class SettingsRepository:
         self,
         *,
         enabled: bool,
-        broker: str = "alpaca",
-        account_mode: str = "paper",
+        broker: str = "etoro",
+        account_mode: str = "demo",
         notional_per_plan: float = 1000.0,
     ) -> dict[str, object]:
         self.set_settings(
             {
                 "order_execution_enabled": str(bool(enabled)).lower(),
-                "order_execution_broker": broker.strip().lower() or "alpaca",
-                "order_execution_account_mode": account_mode.strip().lower() or "paper",
+                "order_execution_broker": broker.strip().lower() or "etoro",
+                "order_execution_account_mode": account_mode.strip().lower() or "demo",
                 "order_execution_notional_per_plan": f"{float(notional_per_plan):.4f}".rstrip(
                     "0"
                 ).rstrip("."),

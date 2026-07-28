@@ -284,7 +284,7 @@ export function BrokerOrdersPage() {
         actions={
           <div className="cluster">
             <button type="button" className="button-secondary" onClick={() => void refreshVisibleOrders()}>⟳ Statuses</button>
-            <HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=specs-alpaca-paper-order-execution-spec" />
+            <HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact request and response payloads returned by the active broker adapter." to="/docs?doc=specs-etoro-live-trading-integration-spec" />
           </div>
         }
       />
@@ -323,7 +323,6 @@ export function BrokerOrdersPage() {
             <select className="input" value={brokerFilter} onChange={(event) => updateFilter("broker", event.target.value)}>
               <option value="">All brokers</option>
               <option value="etoro">eToro</option>
-              <option value="alpaca">Alpaca</option>
             </select>
           </label>
           <label className="data-point">
@@ -332,7 +331,6 @@ export function BrokerOrdersPage() {
               <option value="">All modes</option>
               <option value="live">Live</option>
               <option value="demo">Demo</option>
-              <option value="paper">Paper</option>
             </select>
           </label>
           <label className="data-point">
@@ -433,7 +431,7 @@ export function BrokerOrdersPage() {
         <DisclosureCard
           kicker="Execution safety"
           title="Broker risk manager"
-          subtitle="Pre-trade guardrails used before Alpaca paper submissions and manual resubmits. Limits are edited in Settings."
+          subtitle="Pre-trade guardrails used before broker submissions and manual resubmits. Limits are edited in Settings."
           className="top-gap"
           defaultOpen
           actions={
@@ -550,7 +548,7 @@ export function BrokerOrdersPage() {
               {selectedOrder.error_message ? <div className="alert alert-warning">{selectedOrder.error_message}</div> : null}
               {selectedPosition ? (
                 <Card>
-                  <SectionTitle kicker="Position lifecycle" title="Broker-backed position" subtitle="Derived from the latest Alpaca bracket snapshot." />
+                  <SectionTitle kicker="Position lifecycle" title="Broker-backed position" subtitle="Derived from the latest broker reconciliation snapshot." />
                   <div className="data-points top-gap-small">
                     <div className="data-point"><span className="data-point-label">position status</span><span className="data-point-value"><Badge tone={brokerExecutionStatusTone(selectedPosition.status)}>{selectedPosition.status}</Badge></span></div>
                     <div className="data-point"><span className="data-point-label">current qty</span><span className="data-point-value">{selectedPosition.current_quantity}</span></div>
@@ -575,7 +573,7 @@ export function BrokerOrdersPage() {
                 ) : null}
               </div>
 
-              <DisclosureCard kicker="Request" title="Bracket order payload" subtitle="Exact JSON submitted to Alpaca paper trading.">
+              <DisclosureCard kicker="Request" title="Broker request payload" subtitle="Exact JSON submitted through the broker adapter.">
                 <pre className="code-block top-gap-small">{prettyPayload(selectedOrder.request_payload)}</pre>
               </DisclosureCard>
               <DisclosureCard kicker="Response" title="Broker response" subtitle="Exact JSON returned by the broker client.">

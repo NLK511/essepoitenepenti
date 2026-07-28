@@ -62,7 +62,7 @@ If eToro changes endpoint names, payload semantics, or permission behavior, impl
 
 ## Goal
 
-Trade Proposer App must support eToro demo as the first-class paper-trading broker alongside or instead of Alpaca paper trading, with enough safety controls to submit, reconcile, and audit broker activity without relying on broker UI inspection as the primary control.
+Trade Proposer App must support eToro demo as the first-class paper-trading broker, with enough safety controls to submit, reconcile, and audit broker activity without relying on broker UI inspection as the primary control. Startup defaults, legacy order-execution settings, and operator-facing execution controls must point to eToro demo. Alpaca paper may remain as explicit legacy adapter code for regression or rollback work, but it must not be auto-bootstrapped or presented as the default broker.
 
 The integration must allow an operator to:
 
@@ -203,7 +203,7 @@ If eToro supports both underlying assets and CFDs for a symbol, v1 demo must blo
 
 ## Settings
 
-eToro settings live inside one or more broker-account configs defined in `multi-broker-execution-risk-spec.md`. Multiple broker accounts may be enabled at the same time, including Alpaca paper plus eToro demo/live.
+eToro settings live inside one or more broker-account configs defined in `multi-broker-execution-risk-spec.md`. The default broker account is `etoro-demo-main`, disabled for autonomous execution until validation gates pass. Additional broker accounts may be configured explicitly, but Alpaca paper must not be created by startup as a default account.
 
 Required eToro broker-account settings:
 
@@ -357,7 +357,7 @@ Specs must be translated into tests before or alongside implementation. Required
 - untracked eToro positions/orders block new live submissions.
 - eToro daily and total drawdown limits block live submissions when equity falls beyond configured thresholds.
 - missing or stale eToro equity evidence blocks live submissions.
-- Alpaca paper behavior remains unchanged through the broker adapter.
+- Alpaca paper remains available only as explicit legacy adapter fallback; default execution, startup bootstrap, and Execution & Risk UI must be eToro demo oriented.
 
 ### Service/integration tests with fake eToro client
 

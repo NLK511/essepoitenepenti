@@ -124,8 +124,8 @@ class BrokerAccountRecord(Base, TimestampMixin):
     __tablename__ = "broker_accounts"
 
     broker_account_id: Mapped[str] = mapped_column(String(120), primary_key=True)
-    broker: Mapped[str] = mapped_column(String(64), default="alpaca", index=True)
-    account_mode: Mapped[str] = mapped_column(String(32), default="paper", index=True)
+    broker: Mapped[str] = mapped_column(String(64), default="etoro", index=True)
+    account_mode: Mapped[str] = mapped_column(String(32), default="demo", index=True)
     account_label: Mapped[str] = mapped_column(String(120), default="", index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     autonomous_execution_enabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -196,10 +196,10 @@ class BrokerOrderExecutionRecord(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     broker_account_id: Mapped[str] = mapped_column(
-        String(120), default="alpaca-paper-default", index=True
+        String(120), default="etoro-demo-main", index=True
     )
-    broker: Mapped[str] = mapped_column(String(64), default="alpaca", index=True)
-    account_mode: Mapped[str] = mapped_column(String(32), default="paper", index=True)
+    broker: Mapped[str] = mapped_column(String(64), default="etoro", index=True)
+    account_mode: Mapped[str] = mapped_column(String(32), default="demo", index=True)
     recommendation_plan_id: Mapped[int] = mapped_column(
         ForeignKey("recommendation_plans.id"), index=True
     )
@@ -247,10 +247,10 @@ class BrokerReconciliationSnapshotRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     broker_account_id: Mapped[str] = mapped_column(
-        String(120), default="alpaca-paper-default", index=True
+        String(120), default="etoro-demo-main", index=True
     )
-    broker: Mapped[str] = mapped_column(String(64), default="alpaca", index=True)
-    account_mode: Mapped[str] = mapped_column(String(32), default="paper", index=True)
+    broker: Mapped[str] = mapped_column(String(64), default="etoro", index=True)
+    account_mode: Mapped[str] = mapped_column(String(32), default="demo", index=True)
     snapshot_type: Mapped[str] = mapped_column(String(64), default="pre_submit", index=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
@@ -282,10 +282,10 @@ class BrokerPositionRecord(Base, TimestampMixin):
         ForeignKey("broker_order_executions.id"), index=True
     )
     broker_account_id: Mapped[str] = mapped_column(
-        String(120), default="alpaca-paper-default", index=True
+        String(120), default="etoro-demo-main", index=True
     )
-    broker: Mapped[str] = mapped_column(String(64), default="alpaca", index=True)
-    account_mode: Mapped[str] = mapped_column(String(32), default="paper", index=True)
+    broker: Mapped[str] = mapped_column(String(64), default="etoro", index=True)
+    account_mode: Mapped[str] = mapped_column(String(32), default="demo", index=True)
     recommendation_plan_id: Mapped[int] = mapped_column(
         ForeignKey("recommendation_plans.id"), index=True
     )
@@ -333,7 +333,7 @@ class BrokerSteeringDecisionRecord(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     broker_account_id: Mapped[str] = mapped_column(
-        String(120), default="alpaca-paper-default", index=True
+        String(120), default="etoro-demo-main", index=True
     )
     recommendation_plan_id: Mapped[int] = mapped_column(
         ForeignKey("recommendation_plans.id"), index=True

@@ -86,7 +86,7 @@ class MultiBrokerFanoutTests(unittest.TestCase):
         self.accounts = BrokerAccountRepository(self.session)
         self.executions = BrokerOrderExecutionRepository(self.session)
         self.factory = StaticAdapterFactory()
-        self.settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+        self.settings.set_order_execution_config(enabled=True, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
 
     def tearDown(self) -> None:
         self.session.close()
@@ -190,7 +190,7 @@ class MultiBrokerFanoutTests(unittest.TestCase):
         )
 
     def test_global_execution_disabled_skips_all_enabled_accounts(self) -> None:
-        self.settings.set_order_execution_config(enabled=False, notional_per_plan=1000.0)
+        self.settings.set_order_execution_config(enabled=False, broker="alpaca", account_mode="paper", notional_per_plan=1000.0)
         self._account("alpaca-paper-a")
         self._account("alpaca-paper-b")
         service = MultiBrokerExecutionService(

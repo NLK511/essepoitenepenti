@@ -45,7 +45,7 @@ A broker account has:
 - per-broker kill switch and reason
 - validation status and last validation evidence
 
-The legacy single `broker` setting must be replaced or wrapped by a list of configured broker accounts. Existing Alpaca paper behavior may be represented as one default broker account. App startup must idempotently ensure this default Alpaca paper account exists so upgraded deployments have a stable broker-account identity even before operators configure eToro.
+The legacy single `broker` setting must be replaced or wrapped by a list of configured broker accounts. eToro demo is the only broker account that startup may create by default. Alpaca paper is legacy fallback code only and must be explicitly configured if it is ever used for regression or rollback work.
 
 ## Execution fan-out rules
 
@@ -328,12 +328,12 @@ Risk API must return:
 
 ## Current behavior and target gates
 
-Canonical current behavior includes broker-account settings, default Alpaca paper bootstrap, account-scoped credentials, redacted broker-account APIs, per-broker risk/drawdown/circuit-breaker state, broker adapter contracts, Alpaca paper migration behind the adapter, broker-agnostic price normalization, multi-broker fan-out with per-account skips/submissions, broker-aware workbench APIs/UI, reconciliation evidence, and eToro read-only/demo-shadow/fail-closed adapter tests.
+Canonical current behavior includes broker-account settings, default eToro demo bootstrap, account-scoped credentials, redacted broker-account APIs, per-broker risk/drawdown/circuit-breaker state, broker adapter contracts, Alpaca paper retained only as an explicit legacy adapter fallback, broker-agnostic price normalization, multi-broker fan-out with per-account skips/submissions, broker-aware workbench APIs/UI, reconciliation evidence, and eToro read-only/demo-shadow/fail-closed adapter tests.
 
 Still target/gated:
 
 - eToro demo lifecycle against current external demo endpoints with operator-provided demo credentials
-- eToro demo as the default paper-trading path after side-by-side parity evidence
+- continued external eToro demo lifecycle evidence before autonomous demo execution is enabled
 - real eToro live mutation enablement; live adapter currently fails closed with `etoro_live_mutation_disabled`
 - production-grade external validation artifacts and release-readiness evidence before live micro-size rollout
 - measured broker-backed trading edge before increasing live scope or notional caps

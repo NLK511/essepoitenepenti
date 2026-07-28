@@ -1840,7 +1840,7 @@ class RepositoryTests(unittest.TestCase):
             policy = TradeDecisionPolicyService(session).active_policy()
 
             self.assertTrue(policy.is_paper_exploration_mode)
-            self.assertEqual(policy.order_execution_account_mode, "paper")
+            self.assertEqual(policy.order_execution_account_mode, "demo")
             self.assertEqual(policy.effective_confidence_threshold(), 65.0)
             self.assertEqual(policy.action_confidence_threshold(), 0.0)
         finally:
