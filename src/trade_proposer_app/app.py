@@ -11,6 +11,7 @@ from trade_proposer_app.security.auth import SingleUserAuthMiddleware
 from trade_proposer_app.services.default_jobs import (
     ensure_default_broker_accounts,
     ensure_default_broker_steering_job,
+    ensure_default_etoro_bar_shadow_comparison_job,
     ensure_default_fundamental_analysis_job,
     ensure_default_gating_severity_check_job,
     ensure_default_performance_assessment_job,
@@ -52,6 +53,7 @@ async def lifespan(_: FastAPI):
         ensure_default_fundamental_analysis_job(session)
         ensure_default_gating_severity_check_job(session)
         ensure_default_recommendation_calibration_refresh_job(session)
+        ensure_default_etoro_bar_shadow_comparison_job(session)
         heartbeat_thread = threading.Thread(
             target=_api_runtime_heartbeat_loop,
             args=(api_instance_id, stop_event),

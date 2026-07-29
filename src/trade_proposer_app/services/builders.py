@@ -24,12 +24,19 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient
+from trade_proposer_app.services.brokers.etoro import EtoroClient
 from trade_proposer_app.services.brokers.factory import BrokerAdapterFactory
 from trade_proposer_app.services.confidence_calibration_snapshots import (
     ConfidenceCalibrationSnapshotService,
 )
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
-from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
+from trade_proposer_app.services.etoro_bar_shadow_comparison import (
+    EtoroBarShadowComparisonService,
+)
+from trade_proposer_app.services.historical_market_data import (
+    EtoroHistoricalBarProvider,
+    HistoricalMarketDataService,
+)
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
@@ -95,6 +102,25 @@ def create_historical_replay_service(
         context_snapshots=ContextSnapshotRepository(session),
         fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
         input_access_policy=input_access_policy or settings.historical_replay_input_access_policy,
+    )
+
+
+def create_etoro_bar_shadow_comparison_service(session: Session) -> EtoroBarShadowComparisonService:
+    accounts = BrokerAccountRepository(session)
+    credentials = accounts.get_credentials("etoro-demo-main")
+    api_key = credentials.get("x_api_key") or credentials.get("api_key") or ""
+    user_key = credentials.get("x_user_key") or credentials.get("user_key") or ""
+    if not api_key or not user_key:
+        return EtoroBarShadowComparisonService(
+            repository=HistoricalMarketDataRepository(session),
+            etoro_provider=None,
+            unavailable_reason="etoro_credentials_missing",
+        )
+    return EtoroBarShadowComparisonService(
+        repository=HistoricalMarketDataRepository(session),
+        etoro_provider=EtoroHistoricalBarProvider(
+            client=EtoroClient(api_key=api_key, user_key=user_key)
+        ),
     )
 
 

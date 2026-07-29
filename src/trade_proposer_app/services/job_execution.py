@@ -33,6 +33,9 @@ from trade_proposer_app.services.confidence_calibration_snapshots import (
     ConfidenceCalibrationSnapshotService,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.etoro_bar_shadow_comparison import (
+    EtoroBarShadowComparisonService,
+)
 from trade_proposer_app.services.fundamental_analysis_refresh import (
     FundamentalAnalysisRefreshService,
 )
@@ -75,6 +78,7 @@ class JobExecutionService:
         order_execution: Any | None = None,
         historical_replay: HistoricalReplayService | None = None,
         bars_refresh: BarsRefreshService | None = None,
+        etoro_bar_shadow_comparison: EtoroBarShadowComparisonService | None = None,
         fundamental_analysis_refresh: FundamentalAnalysisRefreshService | None = None,
     ) -> None:
         self.jobs = jobs
@@ -91,6 +95,7 @@ class JobExecutionService:
         self.order_execution = order_execution
         self.historical_replay = historical_replay
         self.bars_refresh = bars_refresh
+        self.etoro_bar_shadow_comparison = etoro_bar_shadow_comparison
         self.fundamental_analysis_refresh = fundamental_analysis_refresh
         self.observability = (
             ObservabilityEventRepository(self.runs.session)
@@ -179,6 +184,8 @@ class JobExecutionService:
             return self._execute_historical_replay_run(run)
         if run.job_type == JobType.BARS_DATA_REFRESH:
             return self._execute_bars_data_refresh_run(run)
+        if run.job_type == JobType.ETORO_BAR_SHADOW_COMPARISON:
+            return self._execute_etoro_bar_shadow_comparison_run(run)
         if run.job_type == JobType.BROKER_STEERING:
             return self._execute_broker_steering_run(run)
         if run.job_type == JobType.FUNDAMENTAL_ANALYSIS_REFRESH:
@@ -1532,6 +1539,54 @@ class JobExecutionService:
             "refreshed_at": result.get("refreshed_at"),
             "warning_count": len(warnings),
             "warnings": warnings,
+        }
+        self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, result)
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+
+        final_status = (
+            RunStatus.COMPLETED_WITH_WARNINGS.value if warnings else RunStatus.COMPLETED.value
+        )
+        self._finalize_success(run.id or 0, final_status, timing, execution_started)
+        return [], timing
+
+    def _execute_etoro_bar_shadow_comparison_run(
+        self, run: Run
+    ) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.etoro_bar_shadow_comparison is None:
+            raise RuntimeError("eToro bar shadow comparison service is not configured")
+
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "resolve_tickers_seconds": 0.0,
+            "comparison_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+        resolve_started = perf_counter()
+        tickers = self.jobs.resolve_tickers(run.job_id)
+        timing["resolve_tickers_seconds"] = round(perf_counter() - resolve_started, 6)
+
+        comparison_started = perf_counter()
+        result = self.etoro_bar_shadow_comparison.compare(
+            tickers=tickers,
+            end_at=self._normalize_datetime(run.scheduled_for),
+        )
+        timing["comparison_seconds"] = round(perf_counter() - comparison_started, 6)
+
+        persistence_started = perf_counter()
+        warnings = result.get("warnings", [])
+        metrics = result.get("metrics") if isinstance(result.get("metrics"), dict) else {}
+        summary = {
+            "status": result.get("status"),
+            "candidate_provider": result.get("candidate_provider"),
+            "primary_provider": result.get("primary_provider"),
+            "timeframe": result.get("timeframe"),
+            "warning_count": len(warnings) if isinstance(warnings, list) else 0,
+            "warnings": warnings,
+            **metrics,
         }
         self.runs.set_summary(run.id or 0, summary)
         self.runs.set_artifact(run.id or 0, result)

@@ -21,6 +21,7 @@ class JobType(StrEnum):
     INDUSTRY_CONTEXT_REFRESH = "industry_context_refresh"
     HISTORICAL_REPLAY = "historical_replay"
     BARS_DATA_REFRESH = "bars_data_refresh"
+    ETORO_BAR_SHADOW_COMPARISON = "etoro_bar_shadow_comparison"
     BROKER_STEERING = "broker_steering"
     FUNDAMENTAL_ANALYSIS_REFRESH = "fundamental_analysis_refresh"
     GATING_SEVERITY_CHECK = "gating_severity_check"

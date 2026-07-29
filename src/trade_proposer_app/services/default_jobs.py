@@ -49,6 +49,15 @@ DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC = {
     "schedule_rationale": "Runs once per week on Saturday at 07:00 UTC to rescore the latest completed last-month replay batch across 40%-60% downstream actionability floors. It proposes paper-only tuning evidence and does not mutate live settings.",
 }
 
+DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC = {
+    "name": "Auto: eToro Bar Shadow Comparison Weekly",
+    "cron": "30 07 * * SAT",
+    "schedule_rationale": (
+        "Runs once per week on Saturday at 07:30 UTC to compare eToro candles "
+        "against the local Yahoo/YFinance cache without mutating canonical bars."
+    ),
+}
+
 DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC = {
     "name": "Auto: Performance Assessment",
     "cron": "0 0 * * *",
@@ -169,6 +178,18 @@ def ensure_default_actionability_floor_calibration_job(session) -> dict[str, str
         JobType.PLAN_GENERATION_TUNING,
     )
     return DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC
+
+
+def ensure_default_etoro_bar_shadow_comparison_job(session) -> dict[str, str]:
+    job_repo = JobRepository(session)
+    _ensure_job(
+        job_repo,
+        session,
+        DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC["name"],
+        DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC["cron"],
+        JobType.ETORO_BAR_SHADOW_COMPARISON,
+    )
+    return DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC
 
 
 def ensure_default_performance_assessment_job(session) -> dict[str, str]:

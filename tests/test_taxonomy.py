@@ -14,6 +14,7 @@ from scripts.deploy_watchlists import (
 from trade_proposer_app.services.default_jobs import (
     DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC,
     DEFAULT_BROKER_STEERING_JOB_SPEC,
+    DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC,
     DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS,
     DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC,
     DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC,
@@ -117,18 +118,19 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         app_default_job_count = (
             len(DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS)
             + len(DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS)
-            + 5
+            + 6
         )
 
         self.assertEqual(proposal_job_count, 20)
         self.assertEqual(support_job_count, 6)
-        self.assertEqual(app_default_job_count, 16)
-        self.assertEqual(proposal_job_count + support_job_count + app_default_job_count, 42)
-        self.assertEqual(len(_current_default_job_names()), 42)
+        self.assertEqual(app_default_job_count, 17)
+        self.assertEqual(proposal_job_count + support_job_count + app_default_job_count, 43)
+        self.assertEqual(len(_current_default_job_names()), 43)
         self.assertEqual(DEFAULT_BROKER_STEERING_JOB_SPEC["cron"], "*/30 * * * *")
         self.assertEqual(DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC["cron"], "00 05 * * SAT")
         self.assertEqual(DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["cron"], "30 06 * * SAT")
         self.assertEqual(DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC["cron"], "00 07 * * SAT")
+        self.assertEqual(DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC["cron"], "30 07 * * SAT")
         self.assertEqual(DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["cron"], "0 0 * * *")
 
     def test_split_taxonomy_files_exist_and_are_loaded(self) -> None:

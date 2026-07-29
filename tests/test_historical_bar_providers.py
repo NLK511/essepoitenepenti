@@ -5,9 +5,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import HistoricalMarketBar
-from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
+from trade_proposer_app.services.etoro_bar_shadow_comparison import (
+    EtoroBarShadowComparisonConfig,
+    EtoroBarShadowComparisonService,
+)
 from trade_proposer_app.services.historical_market_data import (
     EtoroHistoricalBarProvider,
     HistoricalBarFetchResult,
@@ -113,6 +117,38 @@ class StubIntradayProvider(HistoricalBarProvider):
                     volume=1000,
                     source="stub",
                     source_tier="test",
+                )
+            ],
+        )
+
+    def fetch_daily_bars(self, ticker, start_at, end_at):
+        raise NotImplementedError
+
+
+class StubComparisonProvider(HistoricalBarProvider):
+    provider_name = "etoro"
+    source_tier = "broker"
+    supported_timeframes = ("1m",)
+
+    def fetch_bars(self, ticker, timeframe, start_at, end_at):
+        bar_time = datetime(2026, 7, 25, 14, 30, tzinfo=timezone.utc)
+        return HistoricalBarFetchResult(
+            provider="etoro",
+            source_tier="broker",
+            timeframe=timeframe,
+            bars=[
+                HistoricalMarketBar(
+                    ticker=ticker,
+                    timeframe=timeframe,
+                    bar_time=bar_time,
+                    available_at=bar_time + timedelta(minutes=1),
+                    open_price=100.0,
+                    high_price=101.0,
+                    low_price=99.0,
+                    close_price=100.1,
+                    volume=0.0,
+                    source="etoro",
+                    source_tier="broker",
                 )
             ],
         )
@@ -265,6 +301,73 @@ class HistoricalBarProviderTests(unittest.TestCase):
             stored = repository.list_bars(ticker="AAPL", timeframe="1m", limit=5)
             self.assertEqual(1, len(stored))
             self.assertEqual("stub", stored[0].source)
+        finally:
+            session.close()
+
+    def test_etoro_shadow_comparison_uses_cache_without_persisting_candidate_bars(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            bar_time = datetime(2026, 7, 25, 14, 30, tzinfo=timezone.utc)
+            repository.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="AAPL",
+                    timeframe="1m",
+                    bar_time=bar_time,
+                    available_at=bar_time + timedelta(minutes=1),
+                    open_price=100.0,
+                    high_price=101.0,
+                    low_price=99.0,
+                    close_price=100.0,
+                    volume=1000,
+                    source="yfinance_refresh",
+                    source_tier="tier_a",
+                )
+            )
+            service = EtoroBarShadowComparisonService(
+                repository=repository,
+                etoro_provider=StubComparisonProvider(),
+                config=EtoroBarShadowComparisonConfig(
+                    max_tickers=10,
+                    max_median_abs_close_diff_bps=20.0,
+                ),
+            )
+
+            result = service.compare(
+                tickers=["AAPL"],
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual("passed", result["status"])
+            metrics = result["metrics"]
+            self.assertEqual(1, metrics["compared_ticker_count"])
+            self.assertEqual(1, metrics["overlap_bar_count"])
+            self.assertEqual(10.0, metrics["median_abs_close_diff_bps"])
+            stored_etoro = (
+                session.query(HistoricalMarketBarRecord)
+                .filter(HistoricalMarketBarRecord.source == "etoro")
+                .count()
+            )
+            self.assertEqual(0, stored_etoro)
+        finally:
+            session.close()
+
+    def test_etoro_shadow_comparison_fails_closed_when_provider_missing(self) -> None:
+        session = create_session()
+        try:
+            service = EtoroBarShadowComparisonService(
+                repository=HistoricalMarketDataRepository(session),
+                etoro_provider=None,
+                unavailable_reason="etoro_credentials_missing",
+            )
+
+            result = service.compare(
+                tickers=["AAPL"],
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual("failed", result["status"])
+            self.assertEqual(["etoro_credentials_missing"], result["warnings"])
         finally:
             session.close()
 

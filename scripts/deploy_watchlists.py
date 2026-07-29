@@ -29,6 +29,7 @@ try:
     from trade_proposer_app.services.default_jobs import (
         DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC,
         DEFAULT_BROKER_STEERING_JOB_SPEC,
+        DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC,
         DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS,
         DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC,
         DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC,
@@ -36,6 +37,7 @@ try:
         DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS,
         ensure_default_actionability_floor_calibration_job,
         ensure_default_broker_steering_job,
+        ensure_default_etoro_bar_shadow_comparison_job,
         ensure_default_fundamental_analysis_job,
         ensure_default_gating_severity_check_job,
         ensure_default_performance_assessment_job,
@@ -417,6 +419,7 @@ def main() -> None:
         ensure_default_gating_severity_check_job(session)
         ensure_default_recommendation_calibration_refresh_job(session)
         ensure_default_actionability_floor_calibration_job(session)
+        ensure_default_etoro_bar_shadow_comparison_job(session)
         ensure_default_performance_assessment_job(session)
 
     logging.info("Deployment complete")
@@ -456,6 +459,7 @@ def _current_default_job_names() -> set[str]:
     names.add(str(DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC["name"]))
     names.add(str(DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["name"]))
     names.add(str(DEFAULT_ACTIONABILITY_FLOOR_CALIBRATION_JOB_SPEC["name"]))
+    names.add(str(DEFAULT_ETORO_BAR_SHADOW_COMPARISON_JOB_SPEC["name"]))
     names.add(str(DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["name"]))
     return names
 

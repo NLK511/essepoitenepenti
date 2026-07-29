@@ -166,8 +166,11 @@ class JobRepository:
             tickers = [ticker for ticker in watchlist.tickers_csv.split(",") if ticker]
         else:
             tickers = [ticker for ticker in record.tickers_csv.split(",") if ticker]
-            if not tickers and JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value) == JobType.BARS_DATA_REFRESH:
+            job_type = JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value)
+            if not tickers and job_type == JobType.BARS_DATA_REFRESH:
                 tickers = self._resolve_region_bars_tickers(record.name)
+            if not tickers and job_type == JobType.ETORO_BAR_SHADOW_COMPARISON:
+                tickers = self._resolve_all_watchlist_tickers()
 
         if not tickers:
             raise ValueError("job has no effective tickers configured")
@@ -192,6 +195,20 @@ class JobRepository:
         for watchlist in rows:
             tickers.extend([ticker for ticker in watchlist.tickers_csv.split(",") if ticker])
         # Preserve first-seen order while removing duplicates.
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for ticker in tickers:
+            if ticker in seen:
+                continue
+            seen.add(ticker)
+            deduped.append(ticker)
+        return deduped
+
+    def _resolve_all_watchlist_tickers(self) -> list[str]:
+        rows = self.session.scalars(select(WatchlistRecord).order_by(WatchlistRecord.name)).all()
+        tickers: list[str] = []
+        for watchlist in rows:
+            tickers.extend([ticker for ticker in watchlist.tickers_csv.split(",") if ticker])
         deduped: list[str] = []
         seen: set[str] = set()
         for ticker in tickers:

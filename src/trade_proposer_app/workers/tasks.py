@@ -17,6 +17,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.builders import (
+    create_etoro_bar_shadow_comparison_service,
     create_historical_replay_service,
     create_industry_context_refresh_service,
     create_industry_context_service,
@@ -108,6 +109,7 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
             recommendation_plans=RecommendationPlanRepository(session),
             historical_replay=create_historical_replay_service(session),
             bars_refresh=BarsRefreshService(HistoricalMarketDataRepository(session)),
+            etoro_bar_shadow_comparison=create_etoro_bar_shadow_comparison_service(session),
         )
         try:
             run = service.runs.claim_next_queued_run(worker_id=worker_id)
