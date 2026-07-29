@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time as time_module
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta, timezone
 from math import ceil
@@ -12,8 +13,9 @@ from trade_proposer_app.repositories.historical_market_data import HistoricalMar
 from trade_proposer_app.services.brokers.etoro import (
     EtoroClient,
     EtoroClientError,
+    _etoro_list,
     etoro_candidate_symbol,
-    etoro_enriched_instrument_rows,
+    etoro_instrument_rows,
     etoro_symbol_aliases,
 )
 from trade_proposer_app.services.finite_numbers import finite_float, finite_ohlc, finite_or_default
@@ -184,7 +186,6 @@ class YahooHistoricalBarProvider(HistoricalBarProvider):
         start_at: datetime,
         end_at: datetime,
     ) -> list[HistoricalMarketBar]:
-        import pandas as pd
         import yfinance as yf
 
         normalized_start = self._normalize(start_at)
@@ -299,12 +300,22 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
         "1wk": ("OneWeek", timedelta(weeks=1)),
     }
 
-    def __init__(self, *, client: EtoroClient, timeout: float = 20.0) -> None:
+    def __init__(
+        self,
+        *,
+        client: EtoroClient,
+        timeout: float = 20.0,
+        request_pause_seconds: float = 0.0,
+        max_rate_limit_retries: int = 0,
+    ) -> None:
         super().__init__(timeout=timeout)
         self.client = client
+        self.request_pause_seconds = max(0.0, request_pause_seconds)
+        self.max_rate_limit_retries = max(0, max_rate_limit_retries)
         self.provider_name = "etoro"
         self.source_tier = "broker"
         self.supported_timeframes = tuple(self._INTERVALS)
+        self._resolution_cache: dict[str, tuple[int, dict[str, object]]] = {}
 
     def fetch_bars(
         self,
@@ -325,7 +336,8 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
             max(1, ceil((normalized_end - normalized_start).total_seconds() / interval_delta.total_seconds()) + 2),
         )
         try:
-            payload = self.client.get_instrument_candles(
+            payload = self._call_client(
+                self.client.get_instrument_candles,
                 instrument_id=instrument_id,
                 direction="asc",
                 interval=interval,
@@ -364,17 +376,20 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
 
     def resolve_instrument_id(self, ticker: str) -> tuple[int, dict[str, object]]:
         normalized = ticker.strip().upper()
+        cached = self._resolution_cache.get(normalized)
+        if cached is not None:
+            return cached
         aliases = etoro_symbol_aliases(normalized)
         rows: list[dict[str, object]] = []
         attempts: list[dict[str, object]] = []
         for alias in aliases:
             try:
-                payload = self.client.search_market_data(alias)
+                payload = self._call_client(self.client.search_market_data, alias)
             except EtoroClientError as exc:
                 attempts.append({"symbol": alias, "error": exc.payload})
                 continue
             attempts.append({"symbol": alias, "payload": payload})
-            rows.extend(etoro_enriched_instrument_rows(self.client, alias, payload))
+            rows.extend(self._enriched_instrument_rows(alias, payload))
         exact = self._dedupe_instrument_matches(
             [
                 row
@@ -392,7 +407,7 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
         row = exact[0]
         raw_instrument_id = row.get("instrumentId") or row.get("instrumentID")
         instrument_id = int(raw_instrument_id)
-        return instrument_id, {
+        resolution = {
             "ticker": normalized,
             "aliases": aliases,
             "status": "matched",
@@ -402,6 +417,53 @@ class EtoroHistoricalBarProvider(HistoricalBarProvider):
             "raw_symbol": etoro_candidate_symbol(row),
             "attempt_count": len(attempts),
         }
+        self._resolution_cache[normalized] = (instrument_id, resolution)
+        return instrument_id, resolution
+
+    def _enriched_instrument_rows(
+        self,
+        symbol: str,
+        payload: dict[str, object],
+    ) -> list[dict[str, object]]:
+        rows = etoro_instrument_rows(payload)
+        if any(etoro_candidate_symbol(row) for row in rows):
+            return rows
+        enriched: list[dict[str, object]] = []
+        for row in rows:
+            instrument_id = row.get("instrumentId") or row.get("instrumentID")
+            if not instrument_id:
+                continue
+            try:
+                display_payload = self._call_client(
+                    self.client.get_instrument_display_data,
+                    str(instrument_id),
+                )
+            except EtoroClientError:
+                continue
+            enriched.extend(_etoro_list(display_payload.get("instrumentDisplayDatas")))
+        return [
+            row
+            for row in enriched
+            if etoro_candidate_symbol(row) == symbol.strip().upper()
+        ] or enriched
+
+    def _call_client(self, method, *args, **kwargs):
+        last_error: EtoroClientError | None = None
+        for attempt in range(self.max_rate_limit_retries + 1):
+            if self.request_pause_seconds:
+                time_module.sleep(self.request_pause_seconds)
+            try:
+                return method(*args, **kwargs)
+            except EtoroClientError as exc:
+                last_error = exc
+                if exc.error_type != "rate_limited" or attempt >= self.max_rate_limit_retries:
+                    raise
+                retry_after = exc.retry_after_seconds
+                delay = retry_after if retry_after is not None else self.request_pause_seconds * 2
+                time_module.sleep(max(delay, self.request_pause_seconds))
+        if last_error is not None:
+            raise last_error
+        raise EtoroClientError("eToro request failed")
 
     @staticmethod
     def _dedupe_instrument_matches(rows: list[dict[str, object]]) -> list[dict[str, object]]:

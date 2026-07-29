@@ -14,10 +14,11 @@ from trade_proposer_app.services.input_access import stable_hash
 class EtoroBarShadowComparisonConfig:
     timeframe: str = "1m"
     lookback_days: int = 6
-    max_tickers: int = 50
+    max_tickers: int = 15
     min_compared_ticker_ratio: float = 0.8
     max_median_abs_close_diff_bps: float = 5.0
     max_p95_abs_close_diff_bps: float = 25.0
+    excluded_suffixes: tuple[str, ...] = (".AX", ".KS", ".SS", ".SZ")
 
 
 class EtoroBarShadowComparisonService:
@@ -45,7 +46,8 @@ class EtoroBarShadowComparisonService:
         universe = list(
             dict.fromkeys(ticker.strip().upper() for ticker in tickers if ticker.strip())
         )
-        sampled = self._sample_tickers(universe, seed=normalized_end)
+        eligible = self._eligible_tickers(universe)
+        sampled = self._sample_tickers(eligible, seed=normalized_end)
         if self.etoro_provider is None:
             return {
                 "status": "failed",
@@ -56,6 +58,8 @@ class EtoroBarShadowComparisonService:
                 "start_at": start_at.isoformat(),
                 "end_at": normalized_end.isoformat(),
                 "universe_ticker_count": len(universe),
+                "eligible_ticker_count": len(eligible),
+                "excluded_ticker_count": len(universe) - len(eligible),
                 "sampled_ticker_count": len(sampled),
                 "tickers": [],
                 "warnings": [self.unavailable_reason or "etoro_provider_unavailable"],
@@ -163,6 +167,8 @@ class EtoroBarShadowComparisonService:
 
         metrics = {
             "universe_ticker_count": len(universe),
+            "eligible_ticker_count": len(eligible),
+            "excluded_ticker_count": len(universe) - len(eligible),
             "sampled_ticker_count": len(sampled),
             "compared_ticker_count": compared_ticker_count,
             "primary_missing_count": primary_missing_count,
@@ -192,6 +198,7 @@ class EtoroBarShadowComparisonService:
             "config": {
                 "lookback_days": self.config.lookback_days,
                 "max_tickers": self.config.max_tickers,
+                "excluded_suffixes": list(self.config.excluded_suffixes),
                 "min_compared_ticker_ratio": self.config.min_compared_ticker_ratio,
                 "max_median_abs_close_diff_bps": self.config.max_median_abs_close_diff_bps,
                 "max_p95_abs_close_diff_bps": self.config.max_p95_abs_close_diff_bps,
@@ -226,6 +233,10 @@ class EtoroBarShadowComparisonService:
             tickers,
             key=lambda ticker: stable_hash(f"{seed_label}:{ticker}"),
         )[: self.config.max_tickers]
+
+    def _eligible_tickers(self, tickers: list[str]) -> list[str]:
+        suffixes = tuple(suffix.upper() for suffix in self.config.excluded_suffixes)
+        return [ticker for ticker in tickers if not ticker.endswith(suffixes)]
 
     @classmethod
     def _close_diff_bps(

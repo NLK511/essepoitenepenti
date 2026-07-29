@@ -81,6 +81,25 @@ class FakeEtoroClient:
         return self.candle_payload
 
 
+class RateLimitedOnceClient(FakeEtoroClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rate_limited = False
+
+    def search_market_data(self, symbol: str):
+        if not self.rate_limited:
+            from trade_proposer_app.services.brokers.etoro import EtoroClientError
+
+            self.rate_limited = True
+            raise EtoroClientError(
+                "rate limited",
+                status_code=429,
+                error_type="rate_limited",
+                retry_after_seconds=0,
+            )
+        return super().search_market_data(symbol)
+
+
 class StubIntradayProvider(HistoricalBarProvider):
     provider_name = "stub"
     source_tier = "test"
@@ -286,6 +305,19 @@ class HistoricalBarProviderTests(unittest.TestCase):
                 datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
             )
 
+    def test_etoro_provider_retries_rate_limited_resolution(self) -> None:
+        client = RateLimitedOnceClient()
+        provider = EtoroHistoricalBarProvider(  # type: ignore[arg-type]
+            client=client,
+            max_rate_limit_retries=1,
+        )
+
+        instrument_id, resolution = provider.resolve_instrument_id("AAPL")
+
+        self.assertEqual(1001, instrument_id)
+        self.assertEqual("matched", resolution["status"])
+        self.assertEqual(["AAPL"], client.search_calls)
+
     def test_bars_refresh_delegates_intraday_fetch_to_provider(self) -> None:
         session = create_session()
         try:
@@ -340,6 +372,8 @@ class HistoricalBarProviderTests(unittest.TestCase):
 
             self.assertEqual("passed", result["status"])
             metrics = result["metrics"]
+            self.assertEqual(1, metrics["eligible_ticker_count"])
+            self.assertEqual(0, metrics["excluded_ticker_count"])
             self.assertEqual(1, metrics["compared_ticker_count"])
             self.assertEqual(1, metrics["overlap_bar_count"])
             self.assertEqual(10.0, metrics["median_abs_close_diff_bps"])
@@ -368,6 +402,27 @@ class HistoricalBarProviderTests(unittest.TestCase):
 
             self.assertEqual("failed", result["status"])
             self.assertEqual(["etoro_credentials_missing"], result["warnings"])
+        finally:
+            session.close()
+
+    def test_etoro_shadow_comparison_excludes_known_unsupported_suffixes(self) -> None:
+        session = create_session()
+        try:
+            service = EtoroBarShadowComparisonService(
+                repository=HistoricalMarketDataRepository(session),
+                etoro_provider=None,
+                unavailable_reason="etoro_credentials_missing",
+            )
+
+            result = service.compare(
+                tickers=["AAPL", "RIO.AX", "005490.KS"],
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual(3, result["universe_ticker_count"])
+            self.assertEqual(1, result["eligible_ticker_count"])
+            self.assertEqual(2, result["excluded_ticker_count"])
+            self.assertEqual(1, result["sampled_ticker_count"])
         finally:
             session.close()
 

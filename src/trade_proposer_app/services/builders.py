@@ -119,7 +119,9 @@ def create_etoro_bar_shadow_comparison_service(session: Session) -> EtoroBarShad
     return EtoroBarShadowComparisonService(
         repository=HistoricalMarketDataRepository(session),
         etoro_provider=EtoroHistoricalBarProvider(
-            client=EtoroClient(api_key=api_key, user_key=user_key)
+            client=EtoroClient(api_key=api_key, user_key=user_key),
+            request_pause_seconds=0.35,
+            max_rate_limit_retries=2,
         ),
     )
 
