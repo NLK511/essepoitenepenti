@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -150,7 +150,7 @@ class StubComparisonProvider(HistoricalBarProvider):
     supported_timeframes = ("1m",)
 
     def fetch_bars(self, ticker, timeframe, start_at, end_at):
-        bar_time = datetime(2026, 7, 25, 14, 30, tzinfo=timezone.utc)
+        bar_time = datetime(2026, 7, 25, 14, 30, tzinfo=UTC)
         return HistoricalBarFetchResult(
             provider="etoro",
             source_tier="broker",
@@ -180,8 +180,8 @@ class HistoricalBarProviderTests(unittest.TestCase):
     def test_etoro_provider_normalizes_candle_payload(self) -> None:
         client = FakeEtoroClient()
         provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
-        start_at = datetime(2026, 7, 25, 14, 29, tzinfo=timezone.utc)
-        end_at = datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc)
+        start_at = datetime(2026, 7, 25, 14, 29, tzinfo=UTC)
+        end_at = datetime(2026, 7, 25, 14, 31, tzinfo=UTC)
 
         result = provider.fetch_bars("AAPL", "1m", start_at, end_at)
 
@@ -191,7 +191,7 @@ class HistoricalBarProviderTests(unittest.TestCase):
         bar = result.bars[0]
         self.assertEqual("AAPL", bar.ticker)
         self.assertEqual("1m", bar.timeframe)
-        self.assertEqual(datetime(2026, 7, 25, 14, 30, tzinfo=timezone.utc), bar.bar_time)
+        self.assertEqual(datetime(2026, 7, 25, 14, 30, tzinfo=UTC), bar.bar_time)
         self.assertEqual(100.5, bar.close_price)
         self.assertEqual("etoro", bar.source)
         self.assertEqual("broker", bar.source_tier)
@@ -225,8 +225,8 @@ class HistoricalBarProviderTests(unittest.TestCase):
         result = provider.fetch_bars(
             "AAPL",
             "1m",
-            datetime(2026, 7, 25, 14, 29, tzinfo=timezone.utc),
-            datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+            datetime(2026, 7, 25, 14, 29, tzinfo=UTC),
+            datetime(2026, 7, 25, 14, 31, tzinfo=UTC),
         )
 
         self.assertEqual([1001], [call["instrument_id"] for call in client.candle_calls])
@@ -285,6 +285,59 @@ class HistoricalBarProviderTests(unittest.TestCase):
         self.assertEqual("MAERSKB.CO", resolution["raw_symbol"])
         self.assertIn("MAERSKB.CO", resolution["aliases"])
 
+    def test_etoro_provider_resolves_exchange_suffix_alias(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={
+                "CSL.AX": {"items": []},
+                "CSL-AX": {"items": []},
+                "CSL.ASX": {"items": [{"instrumentId": 3338}]},
+            },
+            display_payloads={
+                "3338": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 3338,
+                            "symbolFull": "CSL.ASX",
+                            "instrumentDisplayName": "CSL Limited",
+                        }
+                    ]
+                }
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        instrument_id, resolution = provider.resolve_instrument_id("CSL.AX")
+
+        self.assertEqual(3338, instrument_id)
+        self.assertEqual("CSL.ASX", resolution["raw_symbol"])
+        self.assertEqual(["CSL.AX", "CSL-AX", "CSL.ASX"], client.search_calls)
+
+    def test_etoro_provider_resolves_explicit_us_suffix_alias(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={
+                "ADI": {"items": []},
+                "ADI.US": {"items": [{"instrumentId": 4264}]},
+            },
+            display_payloads={
+                "4264": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 4264,
+                            "symbolFull": "ADI.US",
+                            "instrumentDisplayName": "Analog Devices Inc",
+                        }
+                    ]
+                }
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        instrument_id, resolution = provider.resolve_instrument_id("ADI")
+
+        self.assertEqual(4264, instrument_id)
+        self.assertEqual("ADI.US", resolution["raw_symbol"])
+        self.assertEqual(["ADI", "ADI.US"], client.search_calls)
+
     def test_etoro_provider_rejects_ambiguous_instrument_resolution(self) -> None:
         provider = EtoroHistoricalBarProvider(
             client=FakeEtoroClient(  # type: ignore[arg-type]
@@ -301,8 +354,8 @@ class HistoricalBarProviderTests(unittest.TestCase):
             provider.fetch_bars(
                 "AAPL",
                 "1m",
-                datetime(2026, 7, 25, 14, 29, tzinfo=timezone.utc),
-                datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+                datetime(2026, 7, 25, 14, 29, tzinfo=UTC),
+                datetime(2026, 7, 25, 14, 31, tzinfo=UTC),
             )
 
     def test_etoro_provider_retries_rate_limited_resolution(self) -> None:
@@ -340,7 +393,7 @@ class HistoricalBarProviderTests(unittest.TestCase):
         session = create_session()
         try:
             repository = HistoricalMarketDataRepository(session)
-            bar_time = datetime(2026, 7, 25, 14, 30, tzinfo=timezone.utc)
+            bar_time = datetime(2026, 7, 25, 14, 30, tzinfo=UTC)
             repository.upsert_bar(
                 HistoricalMarketBar(
                     ticker="AAPL",
@@ -367,7 +420,7 @@ class HistoricalBarProviderTests(unittest.TestCase):
 
             result = service.compare(
                 tickers=["AAPL"],
-                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=UTC),
             )
 
             self.assertEqual("passed", result["status"])
@@ -386,6 +439,29 @@ class HistoricalBarProviderTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_etoro_shadow_comparison_default_suffix_filter_keeps_ax_and_excludes_tw(self) -> None:
+        session = create_session()
+        try:
+            service = EtoroBarShadowComparisonService(
+                repository=HistoricalMarketDataRepository(session),
+                etoro_provider=StubComparisonProvider(),
+            )
+
+            result = service.compare(
+                tickers=["CSL.AX", "2330.TW", "AAPL"],
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=UTC),
+            )
+
+            metrics = result["metrics"]
+            self.assertEqual(2, metrics["eligible_ticker_count"])
+            self.assertEqual(1, metrics["excluded_ticker_count"])
+            self.assertEqual(
+                [".KS", ".SS", ".SZ", ".TW"],
+                result["config"]["excluded_suffixes"],
+            )
+        finally:
+            session.close()
+
     def test_etoro_shadow_comparison_fails_closed_when_provider_missing(self) -> None:
         session = create_session()
         try:
@@ -397,7 +473,7 @@ class HistoricalBarProviderTests(unittest.TestCase):
 
             result = service.compare(
                 tickers=["AAPL"],
-                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=UTC),
             )
 
             self.assertEqual("failed", result["status"])
@@ -416,13 +492,13 @@ class HistoricalBarProviderTests(unittest.TestCase):
 
             result = service.compare(
                 tickers=["AAPL", "RIO.AX", "005490.KS"],
-                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=timezone.utc),
+                end_at=datetime(2026, 7, 25, 14, 31, tzinfo=UTC),
             )
 
             self.assertEqual(3, result["universe_ticker_count"])
-            self.assertEqual(1, result["eligible_ticker_count"])
-            self.assertEqual(2, result["excluded_ticker_count"])
-            self.assertEqual(1, result["sampled_ticker_count"])
+            self.assertEqual(2, result["eligible_ticker_count"])
+            self.assertEqual(1, result["excluded_ticker_count"])
+            self.assertEqual(2, result["sampled_ticker_count"])
         finally:
             session.close()
 

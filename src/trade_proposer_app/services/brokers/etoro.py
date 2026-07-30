@@ -247,16 +247,43 @@ class EtoroClient:
 def etoro_symbol_aliases(symbol: str) -> list[str]:
     normalized = symbol.strip().upper()
     aliases = [normalized]
+    aliases.extend(_explicit_etoro_symbol_aliases(normalized))
     if "-" in normalized:
         aliases.append(normalized.replace("-", "."))
     if "." in normalized:
         aliases.append(normalized.replace(".", "-"))
+    exchange_suffix_alias = _exchange_suffix_alias(normalized)
+    if exchange_suffix_alias:
+        aliases.append(exchange_suffix_alias)
     if normalized.endswith(".US"):
         aliases.append(normalized.removesuffix(".US"))
     suffix_alias = _class_share_suffix_alias(normalized)
     if suffix_alias:
         aliases.append(suffix_alias)
     return list(dict.fromkeys(alias for alias in aliases if alias))
+
+
+def _explicit_etoro_symbol_aliases(symbol: str) -> list[str]:
+    return {
+        "ADI": ["ADI.US"],
+        "BSX": ["BSX.US"],
+    }.get(symbol, [])
+
+
+def _exchange_suffix_alias(symbol: str) -> str | None:
+    if "." not in symbol:
+        return None
+    base, suffix = symbol.rsplit(".", 1)
+    suffix_map = {
+        "AS": "NV",
+        "AX": "ASX",
+        "LS": "LSB",
+        "SW": "ZU",
+    }
+    mapped_suffix = suffix_map.get(suffix)
+    if not mapped_suffix:
+        return None
+    return f"{base}.{mapped_suffix}"
 
 
 def _class_share_suffix_alias(symbol: str) -> str | None:

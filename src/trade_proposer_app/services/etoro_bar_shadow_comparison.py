@@ -18,7 +18,7 @@ class EtoroBarShadowComparisonConfig:
     min_compared_ticker_ratio: float = 0.8
     max_median_abs_close_diff_bps: float = 5.0
     max_p95_abs_close_diff_bps: float = 25.0
-    excluded_suffixes: tuple[str, ...] = (".AX", ".KS", ".SS", ".SZ")
+    excluded_suffixes: tuple[str, ...] = (".KS", ".SS", ".SZ", ".TW")
 
 
 class EtoroBarShadowComparisonService:
