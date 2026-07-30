@@ -338,6 +338,36 @@ class HistoricalBarProviderTests(unittest.TestCase):
         self.assertEqual("ADI.US", resolution["raw_symbol"])
         self.assertEqual(["ADI", "ADI.US"], client.search_calls)
 
+    def test_etoro_provider_resolves_explicit_same_exchange_symbol_alias(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={
+                "BT-A.L": {"items": []},
+                "BT.L": {"items": [{"instrumentId": 2022}]},
+                "BT.A.L": {"items": []},
+                "BT-A-L": {"items": []},
+                "BTA.L": {"items": []},
+            },
+            display_payloads={
+                "2022": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 2022,
+                            "symbolFull": "BT.L",
+                            "instrumentDisplayName": "BT Group",
+                            "priceSource": "LSE PLC",
+                        }
+                    ]
+                }
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        instrument_id, resolution = provider.resolve_instrument_id("BT-A.L")
+
+        self.assertEqual(2022, instrument_id)
+        self.assertEqual("BT.L", resolution["raw_symbol"])
+        self.assertEqual(["BT-A.L", "BT.L", "BT.A.L", "BT-A-L", "BTA.L"], client.search_calls)
+
     def test_etoro_provider_rejects_ambiguous_instrument_resolution(self) -> None:
         provider = EtoroHistoricalBarProvider(
             client=FakeEtoroClient(  # type: ignore[arg-type]

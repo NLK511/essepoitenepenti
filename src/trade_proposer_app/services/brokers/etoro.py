@@ -267,6 +267,9 @@ def _explicit_etoro_symbol_aliases(symbol: str) -> list[str]:
     return {
         "ADI": ["ADI.US"],
         "BSX": ["BSX.US"],
+        "BT-A.L": ["BT.L"],
+        "FRAS.L": ["FRAS"],
+        "NDA-FI.HE": ["NDA.HE"],
     }.get(symbol, [])
 
 
