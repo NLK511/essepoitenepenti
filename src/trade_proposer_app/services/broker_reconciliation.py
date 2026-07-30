@@ -178,7 +178,10 @@ class BrokerReconciliationService:
     def _sync_open_executions(self, *, limit: int):
         legacy_service = create_order_execution_service(self.session)
         adapter_factory = BrokerAdapterFactory(settings=self.settings, accounts=self.accounts)
-        orders = self.orders.list_all(limit=limit)
+        orders = self.orders.list_active(limit=limit)
+        enabled_account_ids = {
+            account.broker_account_id for account in self.accounts.list_enabled()
+        }
         synced_orders: list[BrokerOrderExecution] = []
         skipped = 0
         failed = 0
@@ -186,6 +189,9 @@ class BrokerReconciliationService:
         etoro_demo_adapters: dict[str, BrokerAdapter] = {}
         for order in orders:
             if order.broker_order_id is None or order.status in TERMINAL_EXECUTION_STATUSES:
+                skipped += 1
+                continue
+            if order.broker_account_id and order.broker_account_id not in enabled_account_ids:
                 skipped += 1
                 continue
             try:

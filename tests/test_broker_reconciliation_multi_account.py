@@ -1,12 +1,14 @@
 import unittest
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition
+from trade_proposer_app.domain.models import BrokerAccount, BrokerOrderExecution, BrokerPosition
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_account_safety import BrokerAccountSafetyRepository
+from trade_proposer_app.repositories.broker_accounts import BrokerAccountRepository
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
@@ -481,6 +483,48 @@ class BrokerReconciliationMultiAccountTests(unittest.TestCase):
         self.assertEqual(updated.status, "open")
         self.assertEqual(updated.current_quantity, 1)
         self.assertEqual(updated.current_unit_quantity, 0.190432)
+
+    def test_sync_open_orders_skips_disabled_broker_account_orders(self) -> None:
+        accounts = BrokerAccountRepository(self.session)
+        accounts.create(
+            BrokerAccount(
+                broker_account_id="alpaca-paper-default",
+                broker="alpaca",
+                account_mode="paper",
+                account_label="Alpaca Paper",
+                enabled=False,
+            )
+        )
+        self.orders.create(
+            BrokerOrderExecution(
+                broker_account_id="alpaca-paper-default",
+                broker="alpaca",
+                account_mode="paper",
+                recommendation_plan_id=10,
+                recommendation_plan_ticker="PYPL",
+                run_id=20,
+                job_id=30,
+                ticker="PYPL",
+                action="long",
+                side="buy",
+                order_type="market",
+                quantity=1,
+                notional_amount=25.0,
+                status="open",
+                broker_order_id="old-alpaca-order",
+                client_order_id="old-alpaca-client-order",
+            )
+        )
+
+        with patch(
+            "trade_proposer_app.services.broker_reconciliation.create_order_execution_service"
+        ) as legacy_factory:
+            outcome = BrokerReconciliationService(self.session).sync_open_orders()
+
+        legacy_factory.assert_called_once()
+        self.assertEqual(outcome.summary["synced_count"], 0)
+        self.assertEqual(outcome.summary["skipped_count"], 1)
+        self.assertEqual(outcome.summary["failed_count"], 0)
 
 
 class _EtoroLookupAdapter:
