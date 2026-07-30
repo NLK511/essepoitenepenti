@@ -348,13 +348,13 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         ]
         self.assertGreaterEqual(len(tickers_with_supply_chain_depth), 10)
 
-        tsm_relationships = service.get_ticker_relationships("2330.TW")
-        self.assertTrue(any(item["type"] == "supplier_to" and item["target"] == "ASML.AS" for item in tsm_relationships))
-        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "AAPL" for item in tsm_relationships))
+        tdk_relationships = service.get_ticker_relationships("6762.T")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "6971.T" for item in tdk_relationships))
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "AAPL" for item in tdk_relationships))
 
-        samsung_relationships = service.get_ticker_relationships("005930.KS")
-        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "000660.KS" for item in samsung_relationships))
-        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "AAPL" for item in samsung_relationships))
+        disco_relationships = service.get_ticker_relationships("6146.T")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "ASML.AS" for item in disco_relationships))
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "NVDA" for item in disco_relationships))
 
     def test_us_and_europe_mega_cap_relationship_depth_is_present(self) -> None:
         service = TickerTaxonomyService()

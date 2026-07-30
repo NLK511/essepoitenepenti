@@ -252,6 +252,9 @@ def etoro_symbol_aliases(symbol: str) -> list[str]:
         aliases.append(normalized.replace("-", "."))
     if "." in normalized:
         aliases.append(normalized.replace(".", "-"))
+    hk_padding_alias = _hong_kong_numeric_alias(normalized)
+    if hk_padding_alias:
+        aliases.append(hk_padding_alias)
     exchange_suffix_alias = _exchange_suffix_alias(normalized)
     if exchange_suffix_alias:
         aliases.append(exchange_suffix_alias)
@@ -271,6 +274,15 @@ def _explicit_etoro_symbol_aliases(symbol: str) -> list[str]:
         "FRAS.L": ["FRAS"],
         "NDA-FI.HE": ["NDA.HE"],
     }.get(symbol, [])
+
+
+def _hong_kong_numeric_alias(symbol: str) -> str | None:
+    if not symbol.endswith(".HK"):
+        return None
+    base = symbol.removesuffix(".HK")
+    if not base.isdigit() or len(base) >= 5:
+        return None
+    return f"{base.zfill(5)}.HK"
 
 
 def _exchange_suffix_alias(symbol: str) -> str | None:

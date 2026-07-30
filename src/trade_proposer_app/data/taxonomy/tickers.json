@@ -670,7 +670,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -1040,7 +1040,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -1210,7 +1210,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -3493,8 +3493,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "large_cap",
@@ -3820,6 +3819,131 @@
       "XIAOCAIYUAN"
     ]
   },
+  "1024.HK": {
+    "aliases": [
+      "1024.HK",
+      "Kuaishou Technology"
+    ],
+    "company_name": "Kuaishou Technology",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Kuaishou Technology",
+      "1024.HK"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6758.T",
+      "6501.T",
+      "8035.T",
+      "6954.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "1024.HK",
+      "$1024.HK",
+      "Kuaishou Technology"
+    ]
+  },
+  "1038.HK": {
+    "aliases": [
+      "1038.HK",
+      "CK Infrastructure Holdings Limited"
+    ],
+    "company_name": "CK Infrastructure Holdings Limited",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "CK Infrastructure Holdings Limited",
+      "1038.HK"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "1038.HK",
+      "$1038.HK",
+      "CK Infrastructure Holdings Limited"
+    ]
+  },
   "105560.KS": {
     "aliases": [
       "105560.KS",
@@ -4066,6 +4190,68 @@
       "CSPC Pharmaceutical Group Limited"
     ]
   },
+  "1099.HK": {
+    "aliases": [
+      "1099.HK",
+      "Sinopharm Group Co. Ltd."
+    ],
+    "company_name": "Sinopharm Group Co. Ltd.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Sinopharm Group Co. Ltd.",
+      "1099.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "1099.HK",
+      "$1099.HK",
+      "Sinopharm Group Co. Ltd."
+    ]
+  },
   "1101.TW": {
     "aliases": [
       "1101.TW",
@@ -4163,8 +4349,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "mega_cap",
@@ -4687,7 +4872,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -4774,7 +4959,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -4860,7 +5045,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -5150,6 +5335,68 @@
       "Livzon Pharmaceutical Group Inc.",
       "Livzon Pharmaceutical",
       "LIVZON PHARMA"
+    ]
+  },
+  "1530.HK": {
+    "aliases": [
+      "1530.HK",
+      "3SBio Inc."
+    ],
+    "company_name": "3SBio Inc.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "3SBio Inc.",
+      "1530.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "1530.HK",
+      "$1530.HK",
+      "3SBio Inc."
     ]
   },
   "1605.T": {
@@ -5590,6 +5837,130 @@
       "Xiaomi Corporation"
     ]
   },
+  "1833.HK": {
+    "aliases": [
+      "1833.HK",
+      "Ping An Healthcare and Technology Company Limited"
+    ],
+    "company_name": "Ping An Healthcare and Technology Company Limited",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Ping An Healthcare and Technology Company Limited",
+      "1833.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "1833.HK",
+      "$1833.HK",
+      "Ping An Healthcare and Technology Company Limited"
+    ]
+  },
+  "1873.HK": {
+    "aliases": [
+      "1873.HK",
+      "Viva Biotech Holdings"
+    ],
+    "company_name": "Viva Biotech Holdings",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Viva Biotech Holdings",
+      "1873.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "1873.HK",
+      "$1873.HK",
+      "Viva Biotech Holdings"
+    ]
+  },
   "1880.HK": {
     "aliases": [
       "China Tourism Group Duty Free Corporation Limited",
@@ -5836,7 +6207,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -6311,6 +6682,68 @@
       "$2269.HK",
       "WuXi Biologics (Cayman) Inc.",
       "WuXi Biologics (Cayman)"
+    ]
+  },
+  "2269.T": {
+    "aliases": [
+      "2269.T",
+      "Meiji Holdings Co., Ltd."
+    ],
+    "company_name": "Meiji Holdings Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Meiji Holdings Co., Ltd.",
+      "2269.T"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "2269.T",
+      "$2269.T",
+      "Meiji Holdings Co., Ltd."
     ]
   },
   "2303.TW": {
@@ -7792,7 +8225,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -7922,6 +8355,130 @@
       "China Life Insurance Company Limited",
       "China Life Insurance",
       "CHINA LIFE"
+    ]
+  },
+  "2801.T": {
+    "aliases": [
+      "2801.T",
+      "Kikkoman Corporation"
+    ],
+    "company_name": "Kikkoman Corporation",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Kikkoman Corporation",
+      "2801.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "2801.T",
+      "$2801.T",
+      "Kikkoman Corporation"
+    ]
+  },
+  "2802.T": {
+    "aliases": [
+      "2802.T",
+      "Ajinomoto Co., Inc."
+    ],
+    "company_name": "Ajinomoto Co., Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Ajinomoto Co., Inc.",
+      "2802.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "2802.T",
+      "$2802.T",
+      "Ajinomoto Co., Inc."
     ]
   },
   "2880.TW": {
@@ -8990,7 +9547,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -9782,6 +10339,130 @@
       "Novatek Microelectronics Corp."
     ]
   },
+  "3092.T": {
+    "aliases": [
+      "3092.T",
+      "ZOZO, Inc."
+    ],
+    "company_name": "ZOZO, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "ZOZO, Inc.",
+      "3092.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "3092.T",
+      "$3092.T",
+      "ZOZO, Inc."
+    ]
+  },
+  "3099.T": {
+    "aliases": [
+      "3099.T",
+      "Isetan Mitsukoshi Holdings Ltd."
+    ],
+    "company_name": "Isetan Mitsukoshi Holdings Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Isetan Mitsukoshi Holdings Ltd.",
+      "3099.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "3099.T",
+      "$3099.T",
+      "Isetan Mitsukoshi Holdings Ltd."
+    ]
+  },
   "3231.TW": {
     "aliases": [
       "3231.TW",
@@ -9936,6 +10617,68 @@
       "Bank of Communications Co., Ltd.",
       "Bank of Communications Co.,",
       "Bank of Communications Co."
+    ]
+  },
+  "3347.HK": {
+    "aliases": [
+      "3347.HK",
+      "Hangzhou Tigermed Consulting Co., Ltd."
+    ],
+    "company_name": "Hangzhou Tigermed Consulting Co., Ltd.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Hangzhou Tigermed Consulting Co., Ltd.",
+      "3347.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "3347.HK",
+      "$3347.HK",
+      "Hangzhou Tigermed Consulting Co., Ltd."
     ]
   },
   "3402.T": {
@@ -10130,6 +10873,68 @@
       "ASAHI KASEI CORP"
     ]
   },
+  "3659.T": {
+    "aliases": [
+      "3659.T",
+      "Nexon Co., Ltd."
+    ],
+    "company_name": "Nexon Co., Ltd.",
+    "customers": [
+      "7974.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Nexon Co., Ltd.",
+      "3659.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "7832.T",
+      "7974.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "3659.T",
+      "$3659.T",
+      "Nexon Co., Ltd."
+    ]
+  },
   "3690.HK": {
     "aliases": [
       "3690.HK",
@@ -10205,6 +11010,68 @@
       "3690.HK",
       "$3690.HK",
       "Meituan"
+    ]
+  },
+  "3692.HK": {
+    "aliases": [
+      "3692.HK",
+      "Hansoh Pharmaceutical Group Company Limited"
+    ],
+    "company_name": "Hansoh Pharmaceutical Group Company Limited",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Hansoh Pharmaceutical Group Company Limited",
+      "3692.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "3692.HK",
+      "$3692.HK",
+      "Hansoh Pharmaceutical Group Company Limited"
     ]
   },
   "3711.TW": {
@@ -10295,6 +11162,68 @@
       "ASE Technology Holding Co., Ltd.",
       "ASE Technology Holding Co.,",
       "ASE Technology Holding Co."
+    ]
+  },
+  "3759.HK": {
+    "aliases": [
+      "3759.HK",
+      "Pharmaron Beijing Co., Ltd."
+    ],
+    "company_name": "Pharmaron Beijing Co., Ltd.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Pharmaron Beijing Co., Ltd.",
+      "3759.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "3759.HK",
+      "$3759.HK",
+      "Pharmaron Beijing Co., Ltd."
     ]
   },
   "3888.HK": {
@@ -10541,6 +11470,70 @@
       "Bank of China Limited"
     ]
   },
+  "4005.T": {
+    "aliases": [
+      "4005.T",
+      "Sumitomo Chemical Co., Ltd."
+    ],
+    "company_name": "Sumitomo Chemical Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Sumitomo Chemical Co., Ltd.",
+      "4005.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "4005.T",
+      "$4005.T",
+      "Sumitomo Chemical Co., Ltd."
+    ]
+  },
   "4063.T": {
     "aliases": [
       "Shin-Etsu Chemical Co., Ltd.",
@@ -10594,7 +11587,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -10626,6 +11619,196 @@
       "Shin-Etsu Chemical Co., Ltd.",
       "Shin-Etsu Chemical",
       "SHIN-ETSU CHEMICAL CO"
+    ]
+  },
+  "4151.T": {
+    "aliases": [
+      "4151.T",
+      "Kyowa Kirin Co., Ltd."
+    ],
+    "company_name": "Kyowa Kirin Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Kyowa Kirin Co., Ltd.",
+      "4151.T"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "4151.T",
+      "$4151.T",
+      "Kyowa Kirin Co., Ltd."
+    ]
+  },
+  "4183.T": {
+    "aliases": [
+      "4183.T",
+      "Mitsui Chemicals, Inc."
+    ],
+    "company_name": "Mitsui Chemicals, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Mitsui Chemicals, Inc.",
+      "4183.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "4183.T",
+      "$4183.T",
+      "Mitsui Chemicals, Inc."
+    ]
+  },
+  "4188.T": {
+    "aliases": [
+      "4188.T",
+      "Mitsubishi Chemical Group Corporation"
+    ],
+    "company_name": "Mitsubishi Chemical Group Corporation",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Mitsubishi Chemical Group Corporation",
+      "4188.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "4188.T",
+      "$4188.T",
+      "Mitsubishi Chemical Group Corporation"
     ]
   },
   "4452.T": {
@@ -10952,6 +12135,68 @@
       "Astellas Pharma Inc.",
       "Astellas Pharma",
       "ASTELLAS PHARMA"
+    ]
+  },
+  "4506.T": {
+    "aliases": [
+      "4506.T",
+      "Sumitomo Pharma Co., Ltd."
+    ],
+    "company_name": "Sumitomo Pharma Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Sumitomo Pharma Co., Ltd.",
+      "4506.T"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "4506.T",
+      "$4506.T",
+      "Sumitomo Pharma Co., Ltd."
     ]
   },
   "4507.T": {
@@ -12328,7 +13573,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -12423,7 +13668,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -12455,6 +13700,196 @@
       "JFE Holdings, Inc.",
       "JFE",
       "JFE HOLDINGS INC"
+    ]
+  },
+  "5713.T": {
+    "aliases": [
+      "5713.T",
+      "Sumitomo Metal Mining Co., Ltd."
+    ],
+    "company_name": "Sumitomo Metal Mining Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Sumitomo Metal Mining Co., Ltd.",
+      "5713.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "5713.T",
+      "$5713.T",
+      "Sumitomo Metal Mining Co., Ltd."
+    ]
+  },
+  "5802.T": {
+    "aliases": [
+      "5802.T",
+      "Sumitomo Electric Industries, Ltd."
+    ],
+    "company_name": "Sumitomo Electric Industries, Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Sumitomo Electric Industries, Ltd.",
+      "5802.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "5802.T",
+      "$5802.T",
+      "Sumitomo Electric Industries, Ltd."
+    ]
+  },
+  "5831.T": {
+    "aliases": [
+      "5831.T",
+      "Shizuoka Financial Group, Inc."
+    ],
+    "company_name": "Shizuoka Financial Group, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Shizuoka Financial Group, Inc.",
+      "5831.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "5831.T",
+      "$5831.T",
+      "Shizuoka Financial Group, Inc."
     ]
   },
   "5880.TW": {
@@ -12650,6 +14085,70 @@
       "JIANGSU HENGRUI PHARMACEUTICALS"
     ]
   },
+  "6146.T": {
+    "aliases": [
+      "6146.T",
+      "Disco Corporation"
+    ],
+    "company_name": "Disco Corporation",
+    "customers": [
+      "NVDA",
+      "ASML.AS"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Disco Corporation",
+      "6146.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8035.T",
+      "7735.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6146.T",
+      "$6146.T",
+      "Disco Corporation"
+    ]
+  },
   "6160.HK": {
     "aliases": [
       "BeOne Medicines AG",
@@ -12738,6 +14237,68 @@
       "BeOne Medicines AG",
       "BeOne Medicines",
       "BEONE MEDICINES"
+    ]
+  },
+  "6185.HK": {
+    "aliases": [
+      "6185.HK",
+      "CanSino Biologics Inc."
+    ],
+    "company_name": "CanSino Biologics Inc.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "CanSino Biologics Inc.",
+      "6185.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "6185.HK",
+      "$6185.HK",
+      "CanSino Biologics Inc."
     ]
   },
   "6273.T": {
@@ -13339,6 +14900,70 @@
       "MITSUBISHI ELECTRIC CORP"
     ]
   },
+  "6506.T": {
+    "aliases": [
+      "6506.T",
+      "Yaskawa Electric Corporation"
+    ],
+    "company_name": "Yaskawa Electric Corporation",
+    "customers": [
+      "7203.T",
+      "6501.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Yaskawa Electric Corporation",
+      "6506.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6954.T",
+      "6645.T",
+      "6861.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6506.T",
+      "$6506.T",
+      "Yaskawa Electric Corporation"
+    ]
+  },
   "6618.HK": {
     "aliases": [
       "6618.HK",
@@ -13413,6 +15038,70 @@
       "$6618.HK",
       "JD Health International Inc.",
       "JD Health International"
+    ]
+  },
+  "6645.T": {
+    "aliases": [
+      "6645.T",
+      "Omron Corporation"
+    ],
+    "company_name": "Omron Corporation",
+    "customers": [
+      "7203.T",
+      "6501.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Omron Corporation",
+      "6645.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6861.T",
+      "6506.T",
+      "6954.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6645.T",
+      "$6645.T",
+      "Omron Corporation"
     ]
   },
   "6701.T": {
@@ -13735,6 +15424,70 @@
       "RENESAS ELECTRONICS CORP"
     ]
   },
+  "6724.T": {
+    "aliases": [
+      "6724.T",
+      "Seiko Epson Corporation"
+    ],
+    "company_name": "Seiko Epson Corporation",
+    "customers": [
+      "AAPL"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Seiko Epson Corporation",
+      "6724.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "7751.T",
+      "6758.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [
+      "6762.T"
+    ],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6724.T",
+      "$6724.T",
+      "Seiko Epson Corporation"
+    ]
+  },
   "6758.T": {
     "aliases": [
       "6758.T"
@@ -13819,6 +15572,69 @@
       "6758.T",
       "$6758.T",
       "Sony Group Corporation"
+    ]
+  },
+  "6762.T": {
+    "aliases": [
+      "6762.T",
+      "TDK Corporation"
+    ],
+    "company_name": "TDK Corporation",
+    "customers": [
+      "AAPL",
+      "7203.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "TDK Corporation",
+      "6762.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6971.T",
+      "6758.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6762.T",
+      "$6762.T",
+      "TDK Corporation"
     ]
   },
   "6857.T": {
@@ -13924,6 +15740,70 @@
       "Advantest Corporation",
       "Advantest",
       "ADVANTEST CORP"
+    ]
+  },
+  "6861.T": {
+    "aliases": [
+      "6861.T",
+      "Keyence Corporation"
+    ],
+    "company_name": "Keyence Corporation",
+    "customers": [
+      "7203.T",
+      "6758.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Keyence Corporation",
+      "6861.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6954.T",
+      "6645.T",
+      "6506.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6861.T",
+      "$6861.T",
+      "Keyence Corporation"
     ]
   },
   "6862.HK": {
@@ -14219,6 +16099,132 @@
       "Fanuc Corporation",
       "Fanuc",
       "FANUC CORPORATION"
+    ]
+  },
+  "6963.T": {
+    "aliases": [
+      "6963.T",
+      "ROHM Co., Ltd."
+    ],
+    "company_name": "ROHM Co., Ltd.",
+    "customers": [
+      "7203.T",
+      "7267.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "ROHM Co., Ltd.",
+      "6963.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6762.T",
+      "6971.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6963.T",
+      "$6963.T",
+      "ROHM Co., Ltd."
+    ]
+  },
+  "6971.T": {
+    "aliases": [
+      "6971.T",
+      "Kyocera Corporation"
+    ],
+    "company_name": "Kyocera Corporation",
+    "customers": [
+      "AAPL",
+      "6758.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Kyocera Corporation",
+      "6971.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6762.T",
+      "6963.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "6971.T",
+      "$6971.T",
+      "Kyocera Corporation"
     ]
   },
   "6976.T": {
@@ -14690,6 +16696,68 @@
       "IHI Corporation",
       "IHI",
       "IHI CORPORATION"
+    ]
+  },
+  "7186.T": {
+    "aliases": [
+      "7186.T",
+      "Concordia Financial Group, Ltd."
+    ],
+    "company_name": "Concordia Financial Group, Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Concordia Financial Group, Ltd.",
+      "7186.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "7186.T",
+      "$7186.T",
+      "Concordia Financial Group, Ltd."
     ]
   },
   "7201.T": {
@@ -15494,6 +17562,68 @@
       "YAMAHA MOTOR CO"
     ]
   },
+  "7731.T": {
+    "aliases": [
+      "7731.T",
+      "Nikon Corporation"
+    ],
+    "company_name": "Nikon Corporation",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Nikon Corporation",
+      "7731.T"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "7731.T",
+      "$7731.T",
+      "Nikon Corporation"
+    ]
+  },
   "7733.T": {
     "aliases": [
       "7733.T",
@@ -15569,6 +17699,70 @@
       "Olympus Corporation"
     ]
   },
+  "7735.T": {
+    "aliases": [
+      "7735.T",
+      "SCREEN Holdings Co., Ltd."
+    ],
+    "company_name": "SCREEN Holdings Co., Ltd.",
+    "customers": [
+      "ASML.AS",
+      "NVDA"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "SCREEN Holdings Co., Ltd.",
+      "7735.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8035.T",
+      "6146.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "7735.T",
+      "$7735.T",
+      "SCREEN Holdings Co., Ltd."
+    ]
+  },
   "7741.T": {
     "aliases": [
       "7741.T",
@@ -15642,6 +17836,195 @@
       "7741.T",
       "$7741.T",
       "HOYA Corporation"
+    ]
+  },
+  "7751.T": {
+    "aliases": [
+      "7751.T",
+      "Canon Inc."
+    ],
+    "company_name": "Canon Inc.",
+    "customers": [
+      "AAPL"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Canon Inc.",
+      "7751.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6758.T",
+      "6724.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [
+      "6762.T"
+    ],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "7751.T",
+      "$7751.T",
+      "Canon Inc."
+    ]
+  },
+  "7832.T": {
+    "aliases": [
+      "7832.T",
+      "Bandai Namco Holdings Inc."
+    ],
+    "company_name": "Bandai Namco Holdings Inc.",
+    "customers": [
+      "7974.T"
+    ],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Bandai Namco Holdings Inc.",
+      "7832.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "3659.T",
+      "7974.T",
+      "6758.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "7832.T",
+      "$7832.T",
+      "Bandai Namco Holdings Inc."
+    ]
+  },
+  "7951.T": {
+    "aliases": [
+      "7951.T",
+      "Yamaha Corporation"
+    ],
+    "company_name": "Yamaha Corporation",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Yamaha Corporation",
+      "7951.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "7951.T",
+      "$7951.T",
+      "Yamaha Corporation"
     ]
   },
   "7974.T": {
@@ -16288,6 +18671,130 @@
       "CREDIT SAISON CO"
     ]
   },
+  "8267.T": {
+    "aliases": [
+      "8267.T",
+      "Aeon Co., Ltd."
+    ],
+    "company_name": "Aeon Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Aeon Co., Ltd.",
+      "8267.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "8267.T",
+      "$8267.T",
+      "Aeon Co., Ltd."
+    ]
+  },
+  "8304.T": {
+    "aliases": [
+      "8304.T",
+      "Aozora Bank, Ltd."
+    ],
+    "company_name": "Aozora Bank, Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Aozora Bank, Ltd.",
+      "8304.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8304.T",
+      "$8304.T",
+      "Aozora Bank, Ltd."
+    ]
+  },
   "8306.T": {
     "aliases": [
       "8306.T",
@@ -16370,6 +18877,130 @@
       "Mitsubishi UFJ Financial Group"
     ]
   },
+  "8308.T": {
+    "aliases": [
+      "8308.T",
+      "Resona Holdings, Inc."
+    ],
+    "company_name": "Resona Holdings, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Resona Holdings, Inc.",
+      "8308.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8308.T",
+      "$8308.T",
+      "Resona Holdings, Inc."
+    ]
+  },
+  "8309.T": {
+    "aliases": [
+      "8309.T",
+      "Sumitomo Mitsui Trust Group, Inc."
+    ],
+    "company_name": "Sumitomo Mitsui Trust Group, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Sumitomo Mitsui Trust Group, Inc.",
+      "8309.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8309.T",
+      "$8309.T",
+      "Sumitomo Mitsui Trust Group, Inc."
+    ]
+  },
   "8316.T": {
     "aliases": [
       "8316.T",
@@ -16450,6 +19081,130 @@
       "Sumitomo Mitsui Financial Group, Inc.",
       "Sumitomo Mitsui Financial Group,",
       "Sumitomo Mitsui Financial Group"
+    ]
+  },
+  "8331.T": {
+    "aliases": [
+      "8331.T",
+      "Chiba Bank, Ltd."
+    ],
+    "company_name": "Chiba Bank, Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Chiba Bank, Ltd.",
+      "8331.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8331.T",
+      "$8331.T",
+      "Chiba Bank, Ltd."
+    ]
+  },
+  "8354.T": {
+    "aliases": [
+      "8354.T",
+      "Fukuoka Financial Group, Inc."
+    ],
+    "company_name": "Fukuoka Financial Group, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Fukuoka Financial Group, Inc.",
+      "8354.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8354.T",
+      "$8354.T",
+      "Fukuoka Financial Group, Inc."
     ]
   },
   "8411.T": {
@@ -16718,6 +19473,68 @@
       "ORIX CORPORATION"
     ]
   },
+  "8601.T": {
+    "aliases": [
+      "8601.T",
+      "Daiwa Securities Group Inc."
+    ],
+    "company_name": "Daiwa Securities Group Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Daiwa Securities Group Inc.",
+      "8601.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8601.T",
+      "$8601.T",
+      "Daiwa Securities Group Inc."
+    ]
+  },
   "8604.T": {
     "aliases": [
       "8604.T",
@@ -16881,6 +19698,68 @@
       "Sompo Holdings, Inc.",
       "Sompo Holdings,",
       "Sompo Holdings"
+    ]
+  },
+  "8697.T": {
+    "aliases": [
+      "8697.T",
+      "Japan Exchange Group, Inc."
+    ],
+    "company_name": "Japan Exchange Group, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Japan Exchange Group, Inc.",
+      "8697.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8697.T",
+      "$8697.T",
+      "Japan Exchange Group, Inc."
     ]
   },
   "8725.T": {
@@ -17165,6 +20044,68 @@
       "TOKIO MARINE HOLDINGS INC"
     ]
   },
+  "8795.T": {
+    "aliases": [
+      "8795.T",
+      "T&D Holdings, Inc."
+    ],
+    "company_name": "T&D Holdings, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "T&D Holdings, Inc.",
+      "8795.T"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "8795.T",
+      "$8795.T",
+      "T&D Holdings, Inc."
+    ]
+  },
   "9020.T": {
     "aliases": [
       "East Japan Railway Company",
@@ -17259,6 +20200,68 @@
       "East Japan Railway Company",
       "East Japan Railway",
       "EAST JAPAN RAILWAY CO"
+    ]
+  },
+  "9021.T": {
+    "aliases": [
+      "9021.T",
+      "West Japan Railway Company"
+    ],
+    "company_name": "West Japan Railway Company",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "West Japan Railway Company",
+      "9021.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "9021.T",
+      "$9021.T",
+      "West Japan Railway Company"
     ]
   },
   "9022.T": {
@@ -17914,6 +20917,388 @@
       "NTT"
     ]
   },
+  "9433.T": {
+    "aliases": [
+      "9433.T",
+      "KDDI Corporation"
+    ],
+    "company_name": "KDDI Corporation",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "KDDI Corporation",
+      "9433.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6758.T",
+      "6501.T",
+      "8035.T",
+      "6954.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "9433.T",
+      "$9433.T",
+      "KDDI Corporation"
+    ]
+  },
+  "9434.T": {
+    "aliases": [
+      "9434.T",
+      "SoftBank Corp."
+    ],
+    "company_name": "SoftBank Corp.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "SoftBank Corp.",
+      "9434.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6758.T",
+      "6501.T",
+      "8035.T",
+      "6954.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "9434.T",
+      "$9434.T",
+      "SoftBank Corp."
+    ]
+  },
+  "9501.T": {
+    "aliases": [
+      "9501.T",
+      "Tokyo Electric Power Company Holdings, Inc."
+    ],
+    "company_name": "Tokyo Electric Power Company Holdings, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Tokyo Electric Power Company Holdings, Inc.",
+      "9501.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "9501.T",
+      "$9501.T",
+      "Tokyo Electric Power Company Holdings, Inc."
+    ]
+  },
+  "9502.T": {
+    "aliases": [
+      "9502.T",
+      "Chubu Electric Power Company, Inc."
+    ],
+    "company_name": "Chubu Electric Power Company, Inc.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Chubu Electric Power Company, Inc.",
+      "9502.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "9502.T",
+      "$9502.T",
+      "Chubu Electric Power Company, Inc."
+    ]
+  },
+  "9531.T": {
+    "aliases": [
+      "9531.T",
+      "Tokyo Gas Co., Ltd."
+    ],
+    "company_name": "Tokyo Gas Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Tokyo Gas Co., Ltd.",
+      "9531.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "9531.T",
+      "$9531.T",
+      "Tokyo Gas Co., Ltd."
+    ]
+  },
+  "9532.T": {
+    "aliases": [
+      "9532.T",
+      "Osaka Gas Co., Ltd."
+    ],
+    "company_name": "Osaka Gas Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Osaka Gas Co., Ltd.",
+      "9532.T"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "9532.T",
+      "$9532.T",
+      "Osaka Gas Co., Ltd."
+    ]
+  },
   "9618.HK": {
     "aliases": [
       "9618.HK",
@@ -17992,6 +21377,131 @@
       "JD.com, Inc.",
       "JD.com,",
       "JD.com"
+    ]
+  },
+  "9626.HK": {
+    "aliases": [
+      "9626.HK",
+      "Bilibili Inc."
+    ],
+    "company_name": "Bilibili Inc.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Bilibili Inc.",
+      "9626.HK"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6758.T",
+      "6501.T",
+      "8035.T",
+      "6954.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "9626.HK",
+      "$9626.HK",
+      "Bilibili Inc."
+    ]
+  },
+  "9843.T": {
+    "aliases": [
+      "9843.T",
+      "Nitori Holdings Co., Ltd."
+    ],
+    "company_name": "Nitori Holdings Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Nitori Holdings Co., Ltd.",
+      "9843.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "9843.T",
+      "$9843.T",
+      "Nitori Holdings Co., Ltd."
     ]
   },
   "9866.HK": {
@@ -18277,6 +21787,68 @@
       "BIDU-SW"
     ]
   },
+  "9926.HK": {
+    "aliases": [
+      "9926.HK",
+      "Akeso, Inc."
+    ],
+    "company_name": "Akeso, Inc.",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Akeso, Inc.",
+      "9926.HK"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "9926.HK",
+      "$9926.HK",
+      "Akeso, Inc."
+    ]
+  },
   "9938.TW": {
     "aliases": [
       "Taiwan Paiho Limited",
@@ -18371,6 +21943,68 @@
       "Taiwan Paiho Limited",
       "Taiwan Paiho",
       "TAIWAN PAIHO"
+    ]
+  },
+  "9983.T": {
+    "aliases": [
+      "9983.T",
+      "Fast Retailing Co., Ltd."
+    ],
+    "company_name": "Fast Retailing Co., Ltd.",
+    "customers": [],
+    "domicile": "Japan",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Fast Retailing Co., Ltd.",
+      "9983.T"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "9983.T",
+      "$9983.T",
+      "Fast Retailing Co., Ltd."
     ]
   },
   "9984.T": {
@@ -18514,6 +22148,69 @@
       "9988.HK",
       "$9988.HK",
       "Alibaba Group Holding Limited"
+    ]
+  },
+  "9992.HK": {
+    "aliases": [
+      "9992.HK",
+      "Pop Mart International Group Limited"
+    ],
+    "company_name": "Pop Mart International Group Limited",
+    "customers": [],
+    "domicile": "Hong Kong",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "product_cycle",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Technology Hardware and Semiconductors",
+    "industry_keywords": [
+      "technology hardware",
+      "semiconductor demand",
+      "automation",
+      "consumer electronics",
+      "enterprise spending",
+      "Pop Mart International Group Limited",
+      "9992.HK"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "enterprise spend",
+      "consumer spending"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6758.T",
+      "6501.T",
+      "8035.T",
+      "6954.T",
+      "ASML.AS"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Information Technology",
+    "subindustry": "Technology Hardware",
+    "suppliers": [],
+    "themes": [
+      "consumer electronics",
+      "semiconductors",
+      "manufacturing",
+      "cloud",
+      "ai"
+    ],
+    "ticker_keywords": [
+      "9992.HK",
+      "$9992.HK",
+      "Pop Mart International Group Limited"
     ]
   },
   "A": {
@@ -22320,8 +26017,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "large_cap",
@@ -22964,7 +26660,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -23004,6 +26700,68 @@
       "Air Products and Chemicals, Inc.",
       "Air Products and Chemicals",
       "Air Products and Chemicals, Inc"
+    ]
+  },
+  "ARGX.BR": {
+    "aliases": [
+      "ARGX.BR",
+      "argenx SE"
+    ],
+    "company_name": "argenx SE",
+    "customers": [],
+    "domicile": "Belgium",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "argenx SE",
+      "ARGX.BR"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Europe",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "ARGX.BR",
+      "$ARGX.BR",
+      "argenx SE"
     ]
   },
   "ARM": {
@@ -23442,6 +27200,68 @@
       "ASML Holding"
     ]
   },
+  "ASX.AX": {
+    "aliases": [
+      "ASX.AX",
+      "ASX Limited"
+    ],
+    "company_name": "ASX Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "ASX Limited",
+      "ASX.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "ASX.AX",
+      "$ASX.AX",
+      "ASX Limited"
+    ]
+  },
   "ATO.PA": {
     "aliases": [
       "Atos SE",
@@ -23545,6 +27365,68 @@
       "Atos SE",
       "Atos",
       "ATOS"
+    ]
+  },
+  "AUB.AX": {
+    "aliases": [
+      "AUB.AX",
+      "AUB Group Limited"
+    ],
+    "company_name": "AUB Group Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "AUB Group Limited",
+      "AUB.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "AUB.AX",
+      "$AUB.AX",
+      "AUB Group Limited"
     ]
   },
   "AUTO.L": {
@@ -25421,6 +29303,68 @@
       "BEN ADE BK FPO [BEN]"
     ]
   },
+  "BFL.AX": {
+    "aliases": [
+      "BFL.AX",
+      "BSP Financial Group Limited"
+    ],
+    "company_name": "BSP Financial Group Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "BSP Financial Group Limited",
+      "BFL.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "BFL.AX",
+      "$BFL.AX",
+      "BSP Financial Group Limited"
+    ]
+  },
   "BHP.AX": {
     "aliases": [
       "BHP.AX",
@@ -26881,7 +30825,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -27588,6 +31532,70 @@
       "Bureau Veritas SA",
       "Bureau Veritas",
       "BUREAU VERITAS"
+    ]
+  },
+  "BXB.AX": {
+    "aliases": [
+      "BXB.AX",
+      "Brambles Limited"
+    ],
+    "company_name": "Brambles Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "orders",
+      "pricing",
+      "capex"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "global_growth",
+      "commodity_capex",
+      "infrastructure_spend"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Cyclical Industrials and Materials",
+    "industry_keywords": [
+      "industrial demand",
+      "commodity prices",
+      "utility demand",
+      "infrastructure spending",
+      "chemical margins",
+      "Brambles Limited",
+      "BXB.AX"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity prices",
+      "energy prices",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "6501.T",
+      "8053.T",
+      "CAT",
+      "BXB.AX",
+      "7011.T"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Industrials",
+    "subindustry": "Materials, Utilities and Industrials",
+    "suppliers": [],
+    "themes": [
+      "manufacturing",
+      "materials",
+      "utilities",
+      "infrastructure"
+    ],
+    "ticker_keywords": [
+      "BXB.AX",
+      "$BXB.AX",
+      "Brambles Limited"
     ]
   },
   "C": {
@@ -28495,8 +32503,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "large_cap",
@@ -28944,6 +32951,68 @@
       "$CFG",
       "Citizens Financial Group, Inc.",
       "Citizens Financial"
+    ]
+  },
+  "CGF.AX": {
+    "aliases": [
+      "CGF.AX",
+      "Challenger Limited"
+    ],
+    "company_name": "Challenger Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Challenger Limited",
+      "CGF.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "CGF.AX",
+      "$CGF.AX",
+      "Challenger Limited"
     ]
   },
   "CHK": {
@@ -29604,8 +33673,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "mid_cap",
@@ -30762,6 +34830,68 @@
       "CSX",
       "$CSX",
       "CSX Corporation"
+    ]
+  },
+  "CUV.AX": {
+    "aliases": [
+      "CUV.AX",
+      "Clinuvel Pharmaceuticals Limited"
+    ],
+    "company_name": "Clinuvel Pharmaceuticals Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Clinuvel Pharmaceuticals Limited",
+      "CUV.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "CUV.AX",
+      "$CUV.AX",
+      "Clinuvel Pharmaceuticals Limited"
     ]
   },
   "CVS": {
@@ -32813,6 +36943,68 @@
       "eBay"
     ]
   },
+  "EBO.AX": {
+    "aliases": [
+      "EBO.AX",
+      "EBOS Group Limited"
+    ],
+    "company_name": "EBOS Group Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "EBOS Group Limited",
+      "EBO.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "EBO.AX",
+      "$EBO.AX",
+      "EBOS Group Limited"
+    ]
+  },
   "ECL": {
     "aliases": [
       "Ecolab Inc.",
@@ -32864,7 +37056,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -34320,8 +38512,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "large_cap",
@@ -34922,7 +39113,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -38954,6 +43145,130 @@
       "HIKMA PHARMACEUTICALS PLC ORD S"
     ]
   },
+  "HLN.L": {
+    "aliases": [
+      "HLN.L",
+      "Haleon plc"
+    ],
+    "company_name": "Haleon plc",
+    "customers": [],
+    "domicile": "United Kingdom",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Haleon plc",
+      "HLN.L"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Europe",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "HLN.L",
+      "$HLN.L",
+      "Haleon plc"
+    ]
+  },
+  "HLS.AX": {
+    "aliases": [
+      "HLS.AX",
+      "Healius Limited"
+    ],
+    "company_name": "Healius Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Healius Limited",
+      "HLS.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "HLS.AX",
+      "$HLS.AX",
+      "Healius Limited"
+    ]
+  },
   "HLT": {
     "aliases": [
       "Hilton Worldwide Holdings Inc.",
@@ -39650,6 +43965,68 @@
       "$HSY",
       "The Hershey Company",
       "The Hershey"
+    ]
+  },
+  "HUB.AX": {
+    "aliases": [
+      "HUB.AX",
+      "HUB24 Limited"
+    ],
+    "company_name": "HUB24 Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "HUB24 Limited",
+      "HUB.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "HUB.AX",
+      "$HUB.AX",
+      "HUB24 Limited"
     ]
   },
   "HUM": {
@@ -40382,6 +44759,68 @@
       "IDP.MC",
       "$IDP.MC",
       "Healthcare"
+    ]
+  },
+  "IDX.AX": {
+    "aliases": [
+      "IDX.AX",
+      "Integral Diagnostics Limited"
+    ],
+    "company_name": "Integral Diagnostics Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Integral Diagnostics Limited",
+      "IDX.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "IDX.AX",
+      "$IDX.AX",
+      "Integral Diagnostics Limited"
     ]
   },
   "IDXX": {
@@ -41353,8 +45792,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "mid_cap",
@@ -42112,6 +46550,68 @@
       "$IWM",
       "iShares Russell 2000 ETF",
       "iShares Russell 2000"
+    ]
+  },
+  "JBH.AX": {
+    "aliases": [
+      "JBH.AX",
+      "JB Hi-Fi Limited"
+    ],
+    "company_name": "JB Hi-Fi Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "JB Hi-Fi Limited",
+      "JBH.AX"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "JBH.AX",
+      "$JBH.AX",
+      "JB Hi-Fi Limited"
     ]
   },
   "JD.L": {
@@ -43580,7 +48080,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -46040,7 +50540,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -46229,7 +50729,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -46736,6 +51236,68 @@
       "MPC",
       "$MPC",
       "Marathon Petroleum Corporation"
+    ]
+  },
+  "MPL.AX": {
+    "aliases": [
+      "MPL.AX",
+      "Medibank Private Limited"
+    ],
+    "company_name": "Medibank Private Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Medibank Private Limited",
+      "MPL.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "MPL.AX",
+      "$MPL.AX",
+      "Medibank Private Limited"
     ]
   },
   "MQG.AX": {
@@ -48373,6 +52935,68 @@
       "Cloudflare"
     ]
   },
+  "NEU.AX": {
+    "aliases": [
+      "NEU.AX",
+      "Neuren Pharmaceuticals Limited"
+    ],
+    "company_name": "Neuren Pharmaceuticals Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Neuren Pharmaceuticals Limited",
+      "NEU.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "NEU.AX",
+      "$NEU.AX",
+      "Neuren Pharmaceuticals Limited"
+    ]
+  },
   "NEWA-B.ST": {
     "aliases": [
       "New Wave Group AB (publ)",
@@ -48692,7 +53316,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -49498,7 +54122,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -49763,7 +54387,7 @@
     ],
     "macro_sensitivity": [
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices"
     ],
     "market_cap_bucket": "large_cap",
@@ -50003,6 +54627,68 @@
       "NWG.L",
       "$NWG.L",
       "NatWest Group plc"
+    ]
+  },
+  "NWL.AX": {
+    "aliases": [
+      "NWL.AX",
+      "Netwealth Group Limited"
+    ],
+    "company_name": "Netwealth Group Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Netwealth Group Limited",
+      "NWL.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "NWL.AX",
+      "$NWL.AX",
+      "Netwealth Group Limited"
     ]
   },
   "NXT.L": {
@@ -52790,6 +57476,68 @@
       "Pandora A/S"
     ]
   },
+  "PNV.AX": {
+    "aliases": [
+      "PNV.AX",
+      "Polynovo Limited"
+    ],
+    "company_name": "Polynovo Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Polynovo Limited",
+      "PNV.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "PNV.AX",
+      "$PNV.AX",
+      "Polynovo Limited"
+    ]
+  },
   "PODD": {
     "aliases": [
       "Insulet Corporation",
@@ -52895,6 +57643,68 @@
       "$PODD",
       "Insulet Corporation",
       "Insulet"
+    ]
+  },
+  "PPT.AX": {
+    "aliases": [
+      "PPT.AX",
+      "Perpetual Limited"
+    ],
+    "company_name": "Perpetual Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Perpetual Limited",
+      "PPT.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "PPT.AX",
+      "$PPT.AX",
+      "Perpetual Limited"
     ]
   },
   "PROX.BR": {
@@ -57358,8 +62168,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "mid_cap",
@@ -57558,6 +62367,68 @@
       "SCHW",
       "$SCHW",
       "The Charles Schwab Corporation"
+    ]
+  },
+  "SDF.AX": {
+    "aliases": [
+      "SDF.AX",
+      "Steadfast Group Limited"
+    ],
+    "company_name": "Steadfast Group Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Steadfast Group Limited",
+      "SDF.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "SDF.AX",
+      "$SDF.AX",
+      "Steadfast Group Limited"
     ]
   },
   "SEB-A.ST": {
@@ -57816,7 +62687,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -58376,7 +63247,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -58489,6 +63360,68 @@
       "SIEGY",
       "$SIEGY",
       "Siemens Aktiengesellschaft"
+    ]
+  },
+  "SIG.AX": {
+    "aliases": [
+      "SIG.AX",
+      "Sigma Healthcare Limited"
+    ],
+    "company_name": "Sigma Healthcare Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Sigma Healthcare Limited",
+      "SIG.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "SIG.AX",
+      "$SIG.AX",
+      "Sigma Healthcare Limited"
     ]
   },
   "SIKA.SW": {
@@ -59436,6 +64369,68 @@
       "Southern Company (The)"
     ]
   },
+  "SOBI.ST": {
+    "aliases": [
+      "SOBI.ST",
+      "Swedish Orphan Biovitrum AB"
+    ],
+    "company_name": "Swedish Orphan Biovitrum AB",
+    "customers": [],
+    "domicile": "Sweden",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Swedish Orphan Biovitrum AB",
+      "SOBI.ST"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Europe",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "SOBI.ST",
+      "$SOBI.ST",
+      "Swedish Orphan Biovitrum AB"
+    ]
+  },
   "SOI.PA": {
     "aliases": [
       "Soitec SA",
@@ -59539,6 +64534,68 @@
       "SOITEC"
     ]
   },
+  "SOL.AX": {
+    "aliases": [
+      "SOL.AX",
+      "Washington H. Soul Pattinson and Company Limited"
+    ],
+    "company_name": "Washington H. Soul Pattinson and Company Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "credit_quality",
+      "capital",
+      "loan_growth"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Financial Services",
+    "industry_keywords": [
+      "net interest income",
+      "credit quality",
+      "loan growth",
+      "capital markets",
+      "wealth flows",
+      "Washington H. Soul Pattinson and Company Limited",
+      "SOL.AX"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit quality",
+      "risk appetite"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "8306.T",
+      "8316.T",
+      "8411.T",
+      "CBA.AX",
+      "MQG.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Financials",
+    "subindustry": "Banks and Capital Markets",
+    "suppliers": [],
+    "themes": [
+      "banking",
+      "capital markets",
+      "wealth",
+      "payments"
+    ],
+    "ticker_keywords": [
+      "SOL.AX",
+      "$SOL.AX",
+      "Washington H. Soul Pattinson and Company Limited"
+    ]
+  },
   "SOLB.BR": {
     "aliases": [
       "Solvay SA",
@@ -59588,7 +64645,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -60203,7 +65260,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -62798,6 +67855,68 @@
       "iShares 20+ Year Treasury Bond ETF"
     ]
   },
+  "TLX.AX": {
+    "aliases": [
+      "TLX.AX",
+      "Telix Pharmaceuticals Limited"
+    ],
+    "company_name": "Telix Pharmaceuticals Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "trial_data",
+      "approval",
+      "pipeline"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Health Care",
+    "industry_keywords": [
+      "drug development",
+      "clinical trials",
+      "medical devices",
+      "healthcare demand",
+      "reimbursement",
+      "Telix Pharmaceuticals Limited",
+      "TLX.AX"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "healthcare_demand",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "4502.T",
+      "4519.T",
+      "4568.T",
+      "CSL.AX",
+      "NOVO-B.CO"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Health Care",
+    "subindustry": "Pharmaceuticals and Medical Devices",
+    "suppliers": [],
+    "themes": [
+      "pharma",
+      "biotech_readthrough",
+      "medical_costs"
+    ],
+    "ticker_keywords": [
+      "TLX.AX",
+      "$TLX.AX",
+      "Telix Pharmaceuticals Limited"
+    ]
+  },
   "TM": {
     "aliases": [
       "Toyota",
@@ -65107,8 +70226,7 @@
     "exclude_keywords": [],
     "exposure_channels": [
       "occupancy",
-      "housing_turnover",
-      "occupancy"
+      "housing_turnover"
     ],
     "factor_tags": [
       "mid_cap",
@@ -65647,7 +70765,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],
@@ -66714,6 +71832,68 @@
       "WDS.AX",
       "$WDS.AX",
       "Woodside Energy Group Ltd"
+    ]
+  },
+  "WEB.AX": {
+    "aliases": [
+      "WEB.AX",
+      "Web Travel Group Limited"
+    ],
+    "company_name": "Web Travel Group Limited",
+    "customers": [],
+    "domicile": "Australia",
+    "event_vocab": [
+      "earnings",
+      "guidance",
+      "sales",
+      "pricing",
+      "traffic"
+    ],
+    "exclude_keywords": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "pricing"
+    ],
+    "factor_tags": [
+      "large_cap"
+    ],
+    "industry": "Consumer Products and Services",
+    "industry_keywords": [
+      "consumer demand",
+      "same store sales",
+      "pricing",
+      "travel demand",
+      "brand demand",
+      "Web Travel Group Limited",
+      "WEB.AX"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "rates"
+    ],
+    "market_cap_bucket": "large_cap",
+    "peers": [
+      "9983.T",
+      "8267.T",
+      "9618.HK",
+      "JBH.AX",
+      "WEB.AX"
+    ],
+    "region": "Asia-Pacific",
+    "sector": "Consumer Discretionary",
+    "subindustry": "Retail and Consumer Brands",
+    "suppliers": [],
+    "themes": [
+      "retail",
+      "brand",
+      "travel",
+      "consumer_staples"
+    ],
+    "ticker_keywords": [
+      "WEB.AX",
+      "$WEB.AX",
+      "Web Travel Group Limited"
     ]
   },
   "WES.AX": {
@@ -68484,7 +73664,7 @@
       "global growth",
       "usd",
       "construction demand",
-      "industrial production",
+      "industrial_production",
       "scrap prices",
       "energy prices"
     ],

@@ -312,6 +312,33 @@ class HistoricalBarProviderTests(unittest.TestCase):
         self.assertEqual("CSL.ASX", resolution["raw_symbol"])
         self.assertEqual(["CSL.AX", "CSL-AX", "CSL.ASX"], client.search_calls)
 
+    def test_etoro_provider_resolves_hong_kong_zero_padding_alias(self) -> None:
+        client = FakeEtoroClient(
+            search_payload={
+                "1093.HK": {"items": []},
+                "1093-HK": {"items": []},
+                "01093.HK": {"items": [{"instrumentId": 1093}]},
+            },
+            display_payloads={
+                "1093": {
+                    "instrumentDisplayDatas": [
+                        {
+                            "instrumentID": 1093,
+                            "symbolFull": "01093.HK",
+                            "instrumentDisplayName": "CSPC Pharmaceutical Group Ltd",
+                        }
+                    ]
+                }
+            },
+        )
+        provider = EtoroHistoricalBarProvider(client=client)  # type: ignore[arg-type]
+
+        instrument_id, resolution = provider.resolve_instrument_id("1093.HK")
+
+        self.assertEqual(1093, instrument_id)
+        self.assertEqual("01093.HK", resolution["raw_symbol"])
+        self.assertEqual(["1093.HK", "1093-HK", "01093.HK"], client.search_calls)
+
     def test_etoro_provider_resolves_explicit_us_suffix_alias(self) -> None:
         client = FakeEtoroClient(
             search_payload={

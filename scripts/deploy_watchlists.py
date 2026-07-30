@@ -64,10 +64,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Runs at the Asia open; the default batch stays in the opening window and leaves 10 minutes before the next regional watchlist job.",
         "tickers": [
             "9988.HK", "0700.HK", "9618.HK", "3690.HK", "1810.HK", "9984.T", "6758.T", "6501.T", "8035.T", "7974.T",
-            "2330.TW", "2317.TW", "2454.TW", "2308.TW", "3711.TW", "3034.TW", "005930.KS", "000660.KS", "035420.KS", "035720.KS",
             "6701.T", "6702.T", "6723.T", "6857.T", "6981.T", "6976.T", "6954.T", "4689.T", "4755.T", "2413.T",
-            "9888.HK", "2015.HK", "9866.HK", "9868.HK", "0268.HK", "0762.HK", "0728.HK", "0941.HK", "2303.TW", "2382.TW",
-            "3231.TW", "2357.TW", "2379.TW", "3008.TW", "066570.KS", "018260.KS", "XRO.AX", "WTC.AX", "REA.AX", "TNE.AX"
+            "9888.HK", "2015.HK", "9866.HK", "9868.HK", "0268.HK", "0762.HK", "0728.HK", "0941.HK", "XRO.AX", "WTC.AX",
+            "REA.AX", "TNE.AX", "6861.T", "6146.T", "7751.T", "6762.T", "6971.T", "6963.T", "6724.T", "6645.T",
+            "6506.T", "7735.T", "3659.T", "7832.T", "9432.T", "9433.T", "9434.T", "1024.HK", "9626.HK", "9992.HK"
         ],
     },
     {
@@ -77,11 +77,11 @@ WATCHLIST_SPECS = [
         "cron": "10 00 * * MON-FRI",
         "schedule_rationale": "Follows the first Asia open with a 10-minute gap so rate-sensitive and bank-sensitive names are scored after the initial auction noise settles.",
         "tickers": [
-            "0005.HK", "1299.HK", "3988.HK", "1398.HK", "3328.HK", "8306.T", "8316.T", "8411.T", "8630.T", "8604.T",
-            "105560.KS", "086790.KS", "055550.KS", "2881.TW", "2882.TW", "2886.TW", "CBA.AX", "WBC.AX", "ANZ.AX", "NAB.AX",
-            "8591.T", "8766.T", "8725.T", "8750.T", "8253.T", "8473.T", "2318.HK", "2628.HK", "0939.HK", "1658.HK",
-            "3968.HK", "2891.TW", "2884.TW", "2885.TW", "5880.TW", "024110.KS", "003550.KS", "MQG.AX", "SUN.AX", "IAG.AX",
-            "QBE.AX", "AMP.AX", "BEN.AX", "BOQ.AX", "2890.TW", "2880.TW", "2883.TW", "2887.TW", "2892.TW", "032830.KS"
+            "1299.HK", "3988.HK", "1398.HK", "3328.HK", "8306.T", "8316.T", "8411.T", "8630.T", "8604.T", "CBA.AX",
+            "WBC.AX", "ANZ.AX", "NAB.AX", "8591.T", "8766.T", "8725.T", "8750.T", "8253.T", "2318.HK", "2628.HK",
+            "0939.HK", "1658.HK", "3968.HK", "MQG.AX", "SUN.AX", "IAG.AX", "QBE.AX", "AMP.AX", "BEN.AX", "BOQ.AX",
+            "8308.T", "8309.T", "8331.T", "8354.T", "8697.T", "8795.T", "ASX.AX", "MPL.AX", "SDF.AX", "SOL.AX",
+            "5831.T", "7186.T", "8304.T", "8601.T", "AUB.AX", "BFL.AX", "CGF.AX", "HUB.AX", "NWL.AX", "PPT.AX"
         ],
     },
     {
@@ -92,10 +92,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Stays inside the Asia opening window with a 10-minute gap after the prior job so defensive healthcare gets a cleaner read on session tone.",
         "tickers": [
             "4502.T", "4568.T", "4519.T", "4523.T", "4578.T", "4507.T", "4543.T", "7741.T", "7733.T", "4901.T",
-            "2269.HK", "1093.HK", "1177.HK", "207940.KS", "068270.KS", "CSL.AX", "RMD.AX", "COH.AX", "2359.HK", "6618.HK",
-            "4503.T", "4528.T", "4516.T", "4587.T", "4483.T", "1513.HK", "6160.HK", "0999.HK", "1801.HK", "2196.HK",
-            "300760.SZ", "300015.SZ", "600276.SS", "302440.KS", "128940.KS", "000100.KS", "1760.TW", "6446.TW", "9938.TW",
-            "FPH.AX", "SHL.AX", "ANN.AX", "RHC.AX", "REG.AX", "PME.AX", "006280.KS", "008930.KS", "300003.SZ", "300012.SZ"
+            "2269.HK", "1093.HK", "1177.HK", "CSL.AX", "RMD.AX", "COH.AX", "2359.HK", "6618.HK", "4503.T", "6160.HK",
+            "1801.HK", "2196.HK", "FPH.AX", "SHL.AX", "ANN.AX", "RHC.AX", "REG.AX", "PME.AX", "4151.T", "4506.T",
+            "3347.HK", "3759.HK", "9926.HK", "CUV.AX", "EBO.AX", "TLX.AX", "NEU.AX", "PNV.AX", "SIG.AX", "HLS.AX",
+            "IDX.AX", "1099.HK", "2269.T", "7731.T", "1530.HK", "1873.HK", "6185.HK", "1833.HK", "3692.HK"
         ],
     },
     {
@@ -105,11 +105,11 @@ WATCHLIST_SPECS = [
         "cron": "30 00 * * MON-FRI",
         "schedule_rationale": "Keeps the consumer and auto complex in the Asia opening window while preserving a 10-minute gap from neighboring jobs.",
         "tickers": [
-            "7203.T", "7267.T", "7269.T", "7211.T", "1211.HK", "2333.HK", "0175.HK", "005380.KS", "012330.KS", "000270.KS",
-            "2914.T", "2502.T", "2503.T", "4452.T", "4911.T", "WOW.AX", "COL.AX", "QAN.AX", "CAR.AX", "CPU.AX",
-            "7201.T", "7270.T", "7261.T", "6902.T", "7272.T", "9201.T", "9202.T", "9020.T", "9022.T", "4661.T",
-            "0291.HK", "0151.HK", "0322.HK", "1880.HK", "1928.HK", "0027.HK", "0960.HK", "1109.HK", "6862.HK", "2020.HK",
-            "2331.HK", "097950.KS", "033780.KS", "051900.KS", "139480.KS", "023530.KS", "WES.AX", "ALL.AX", "2501.T", "7202.T"
+            "7203.T", "7267.T", "7269.T", "7211.T", "1211.HK", "2333.HK", "0175.HK", "2914.T", "2502.T", "2503.T",
+            "4452.T", "4911.T", "WOW.AX", "COL.AX", "QAN.AX", "CAR.AX", "CPU.AX", "7201.T", "7270.T", "7261.T",
+            "6902.T", "7272.T", "9201.T", "9202.T", "9020.T", "9022.T", "4661.T", "0322.HK", "1880.HK", "1928.HK",
+            "0027.HK", "6862.HK", "2020.HK", "2331.HK", "WES.AX", "ALL.AX", "2501.T", "7202.T", "9983.T", "8267.T",
+            "3092.T", "3099.T", "9843.T", "2802.T", "2801.T", "7951.T", "9021.T", "1038.HK", "JBH.AX", "WEB.AX"
         ],
     },
     {
@@ -120,10 +120,11 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Runs late in the Asia opening window so commodity and heavy-industrial names can absorb overnight macro and early futures moves without overlapping other regions.",
         "tickers": [
             "BHP.AX", "RIO.AX", "FMG.AX", "WDS.AX", "STO.AX", "0883.HK", "0857.HK", "0386.HK", "1605.T", "5020.T",
-            "5019.T", "7011.T", "6367.T", "6273.T", "6301.T", "8001.T", "8002.T", "8053.T", "8058.T", "1101.TW",
+            "5019.T", "7011.T", "6367.T", "6273.T", "6301.T", "8001.T", "8002.T", "8053.T", "8058.T",
             "8031.T", "6503.T", "6305.T", "7012.T", "7013.T", "9101.T", "9104.T", "9107.T", "5401.T", "5411.T",
-            "3407.T", "3402.T", "4063.T", "1171.HK", "1088.HK", "2600.HK", "2899.HK", "2002.TW", "1301.TW", "1303.TW",
-            "1326.TW", "005490.KS", "011170.KS", "010130.KS", "010950.KS", "096770.KS", "MIN.AX", "NST.AX", "EVN.AX", "WHC.AX"
+            "3407.T", "3402.T", "4063.T", "1171.HK", "1088.HK", "2600.HK", "2899.HK", "MIN.AX", "NST.AX", "EVN.AX",
+            "WHC.AX", "5802.T", "5713.T", "4188.T", "4005.T", "4183.T", "9501.T", "9502.T", "9531.T", "9532.T",
+            "BXB.AX"
         ],
     },
     {
@@ -162,9 +163,9 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Healthcare is staggered after tech and banks because it is usually more useful to score once the market has revealed whether it wants defense, growth, or policy-sensitive rotation.",
         "tickers": [
             "NOVO-B.CO", "RO.SW", "NOVN.SW", "AZN.L", "GSK.L", "SAN.PA", "BAYN.DE", "ALC.SW", "UCB.BR", "FRE.DE",
-            "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "SRT3.DE", "PHIA.AS", "TEMN.SW", "ORNBV.HE", "PROX.BR",
+            "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "HLN.L", "PHIA.AS", "TEMN.SW", "ORNBV.HE", "PROX.BR",
             "AMBU-B.CO", "ZEAL.CO", "VIV.PA", "EVT.DE", "FME.DE", "EMEIS.PA", "IPN.PA", "ERF.PA", "VLA.PA", "BVI.PA",
-            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "OVH.PA", "ROVI.MC", "PHM.MC", "SKAN.SW",
+            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "ARGX.BR", "ROVI.MC", "PHM.MC", "SOBI.ST",
             "EKTA-B.ST", "VITR.ST", "REJL-B.ST", "SGL.DE", "VIRP.PA", "NEWA-B.ST", "DIM.PA", "BICO.ST", "GNS.L"
         ],
     },
