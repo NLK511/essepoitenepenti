@@ -1188,7 +1188,11 @@ class TickerDeepAnalysisService:
             flags.append("context_quality_blocked")
         elif quality_status == "degraded":
             flags.append("context_quality_degraded")
-        if str(context.get("macro_context_status", "")) == "warning" or str(context.get("industry_context_status", "")) == "warning":
+        quality_statuses = {
+            str(context.get("macro_context_quality_status", "")).strip().lower(),
+            str(context.get("industry_context_quality_status", "")).strip().lower(),
+        } - {""}
+        if len(quality_statuses) > 1:
             flags.append("context_quality_conflict")
         return list(dict.fromkeys(flags))
 

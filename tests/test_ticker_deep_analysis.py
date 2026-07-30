@@ -333,6 +333,49 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertLess(comps["data_quality_cap"], 100.0)
         self.assertEqual(self.service._context_quality_status(context), "blocked")
 
+    def test_warning_context_status_does_not_create_quality_conflict(self) -> None:
+        flags = TickerDeepAnalysisService._transmission_conflict_flags(
+            macro_score=0.4,
+            industry_score=0.3,
+            ticker_score=0.1,
+            catalyst_intensity=20.0,
+            alignment_percent=55.0,
+            bias="mixed",
+            direction=RecommendationDirection.LONG,
+            contradiction_count=0,
+            context={
+                "macro_context_status": "warning",
+                "industry_context_status": "warning",
+                "macro_context_quality_status": "usable",
+                "industry_context_quality_status": "usable",
+            },
+        )
+
+        self.assertNotIn("context_quality_conflict", flags)
+        self.assertNotIn("context_quality_degraded", flags)
+        self.assertNotIn("context_quality_blocked", flags)
+
+    def test_context_quality_mismatch_creates_quality_conflict(self) -> None:
+        flags = TickerDeepAnalysisService._transmission_conflict_flags(
+            macro_score=0.4,
+            industry_score=0.3,
+            ticker_score=0.1,
+            catalyst_intensity=20.0,
+            alignment_percent=55.0,
+            bias="mixed",
+            direction=RecommendationDirection.LONG,
+            contradiction_count=0,
+            context={
+                "macro_context_status": "ok",
+                "industry_context_status": "warning",
+                "macro_context_quality_status": "usable",
+                "industry_context_quality_status": "degraded",
+            },
+        )
+
+        self.assertIn("context_quality_conflict", flags)
+        self.assertIn("context_quality_degraded", flags)
+
     def test_build_confidence_components_reward_relative_strength_and_volume_confirmation(self) -> None:
         base = self.service._build_confidence_components(
             {"momentum_medium": 0.06, "momentum_short": 0.03, "rsi": 56, "price_above_sma50": 1, "price_above_sma200": 1},
