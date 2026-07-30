@@ -623,6 +623,26 @@ class BrokerSteeringService:
         correlation_id: str | None,
         normalized_now: datetime,
     ) -> str:
+        if decision.decision in {"keep_pending_order", "keep_position_exits"}:
+            self._record_no_action_decision(
+                saved_decision_id,
+                decision,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+            )
+            return "no_action"
+        if decision.decision == "manual_review_required":
+            self._record_manual_review_decision(
+                saved_decision_id,
+                decision,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+            )
+            return "manual_review"
         if self.order_execution is None:
             self.decision_repository.update_execution_result(
                 saved_decision_id,
@@ -959,6 +979,10 @@ class BrokerSteeringService:
             return "blocked"
         if all(status == "failed" for status in normalized):
             return "failed"
+        if all(status == "no_action" for status in normalized):
+            return "no_action"
+        if all(status in {"manual_review", "no_action"} for status in normalized):
+            return "manual_review"
         if any(status == "succeeded" for status in normalized):
             return "partial_success"
         if any(status == "failed" for status in normalized):
@@ -1068,6 +1092,64 @@ class BrokerSteeringService:
                 "ticker": decision.ticker,
                 "reason_codes": decision.reason_codes,
                 **payload,
+            },
+        )
+
+    def _record_no_action_decision(
+        self,
+        saved_decision_id: int,
+        decision: BrokerSteeringDecision,
+        *,
+        run_id: int | None,
+        job_id: int | None,
+        correlation_id: str | None,
+        normalized_now: datetime,
+    ) -> None:
+        self.decision_repository.update_execution_result(
+            saved_decision_id,
+            execution_status="no_action",
+            executed_at=normalized_now,
+        )
+        self.observability.record(
+            event_type="steering_broker_no_action",
+            message=decision.human_summary,
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            payload={
+                "decision": decision.decision,
+                "ticker": decision.ticker,
+                "reason_codes": decision.reason_codes,
+            },
+        )
+
+    def _record_manual_review_decision(
+        self,
+        saved_decision_id: int,
+        decision: BrokerSteeringDecision,
+        *,
+        run_id: int | None,
+        job_id: int | None,
+        correlation_id: str | None,
+        normalized_now: datetime,
+    ) -> None:
+        self.decision_repository.update_execution_result(
+            saved_decision_id,
+            execution_status="manual_review",
+            executed_at=normalized_now,
+            error_message="manual_review_required",
+        )
+        self.observability.record(
+            event_type="steering_broker_manual_review_required",
+            severity="warning",
+            message=decision.human_summary,
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            payload={
+                "decision": decision.decision,
+                "ticker": decision.ticker,
+                "reason_codes": decision.reason_codes,
             },
         )
 
