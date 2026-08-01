@@ -6,11 +6,11 @@ Weekly weekend and event-aware fundamental snapshots for monitored tickers.
 
 ## Current behavior
 
-Persistence, refresh jobs/routes, point-in-time lookup, ticker/plan integration, compact payloads, and initial validation-slice plumbing are implemented.
+Persistence, refresh jobs/routes, point-in-time lookup, ticker/plan integration, compact payloads, initial validation-slice plumbing, and a read-only monitored-ticker coverage health summary are implemented.
 
 ## Target behavior
 
-Dedicated stale-coverage UI/observability polish and any action-affecting positive contribution remain target behavior pending validation.
+Dedicated UI polish, richer refresh observability, and any action-affecting positive contribution remain target behavior pending validation.
 
 ## Goal
 
@@ -130,7 +130,7 @@ Implemented current behavior:
 
 3. Job and API
    - `fundamental_analysis_refresh` job type and default weekend refresh cadence
-   - manual/API refresh, due monitored ticker refresh, monitored ticker listing, and validation-slice summary
+   - manual/API refresh, due monitored ticker refresh, monitored ticker listing, monitored coverage health, and validation-slice summary
 
 4. Integration
    - latest point-in-time snapshot is injected into ticker deep analysis and watchlist plan framing
@@ -143,7 +143,7 @@ Implemented current behavior:
 
 Still target / gated:
 
-- dedicated stale-coverage UI and richer observability events
+- dedicated UI polish and richer observability events
 - expected-value/drawdown extensions for fundamental validation slices
 - action-affecting positive contribution or valuation-based caps, pending point-in-time walk-forward evidence
 

@@ -396,7 +396,7 @@ Before any real-money enablement in production:
 8. Verify untracked exposure detection blocks eToro submissions using a controlled fake/sandbox snapshot.
 9. Verify ambiguous live-submit simulation triggers circuit breaker and no automatic retry.
 10. Record the validation artifact in the app or deployment notes.
-11. Run `scripts/check_etoro_release_readiness.py`; for a real release it must fail closed unless read-only, demo lifecycle, and live-shadow artifact ids are provided. Use `--report-output` to preserve the release-readiness JSON artifact with validation command results and live micro-size defaults. The release checklist includes `scripts/check_broker_migration_backfill.py` and broker-account assertions inside `scripts/check_postgres_validation.py` to verify broker-account migration/backfill state before live rollout.
+11. Run `scripts/check_etoro_release_readiness.py`; for a real release it must fail closed unless read-only, demo lifecycle, and live-shadow artifact ids are provided. Use `--report-output` to preserve the release-readiness JSON artifact with validation command results, explicit remaining gates, and live micro-size defaults. The release checklist includes `scripts/check_broker_migration_backfill.py` and broker-account assertions inside `scripts/check_postgres_validation.py` to verify broker-account migration/backfill state before live rollout.
 
 ## Rollout phases
 

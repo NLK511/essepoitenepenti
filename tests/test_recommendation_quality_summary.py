@@ -195,6 +195,40 @@ class RecommendationQualityNextActionsTests(unittest.TestCase):
         self.assertIn("Maintain the current settings", actions[0])
 
 
+class RecommendationQualityEvidenceChecklistTests(unittest.TestCase):
+    svc = RecommendationQualitySummaryService
+
+    def test_checklist_marks_thin_calibration_and_tuning_as_deferred(self) -> None:
+        summary = {
+            "resolved_outcomes": 12,
+            "ready_for_expansion": False,
+            "walk_forward_promotion_recommended": False,
+            "calibration_report": {"brier_score": 0.20, "expected_calibration_error": 0.10},
+        }
+
+        checklist = self.svc._evidence_review_checklist(summary)
+
+        by_key = {item["key"]: item for item in checklist["items"]}
+        self.assertEqual(checklist["overall_status"], "needs_review")
+        self.assertEqual(by_key["calibration_behavior"]["status"], "defer_thin_evidence")
+        self.assertEqual(by_key["plan_generation_tuning"]["status"], "defer_thin_evidence")
+        self.assertEqual(by_key["cheap_scan_calibration"]["status"], "defer_pending_dataset")
+
+    def test_checklist_marks_calibration_as_keep_when_samples_and_errors_are_usable(self) -> None:
+        summary = {
+            "resolved_outcomes": 100,
+            "ready_for_expansion": True,
+            "walk_forward_promotion_recommended": True,
+            "calibration_report": {"brier_score": 0.20, "expected_calibration_error": 0.10},
+        }
+
+        checklist = self.svc._evidence_review_checklist(summary)
+
+        by_key = {item["key"]: item for item in checklist["items"]}
+        self.assertEqual(by_key["calibration_behavior"]["status"], "keep_current")
+        self.assertEqual(by_key["plan_generation_tuning"]["status"], "review_candidate")
+
+
 # ─── Integration Tests ────────────────────────────────────────────────────────
 
 
@@ -236,6 +270,7 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
             self.assertIn("entry_miss_diagnostics", payload)
             self.assertIn("simulated_entry_miss_diagnostics", payload)
             self.assertIn("reliability_report", payload)
+            self.assertIn("evidence_review_checklist", payload)
             self.assertIn("next_actions", payload)
             self.assertIn("entry_miss_diagnostics", payload["summary"])
             self.assertIn("simulated_entry_miss_diagnostics", payload["summary"])
@@ -269,6 +304,7 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
                 payload = response.json()
                 self.assertIn("summary", payload)
                 self.assertIn("windowed_summaries", payload)
+                self.assertIn("evidence_review_checklist", payload)
                 self.assertIn("entry_miss_diagnostics", payload)
                 self.assertIn("simulated_entry_miss_diagnostics", payload)
                 self.assertIn("reliability_report", payload)

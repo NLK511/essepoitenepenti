@@ -77,6 +77,22 @@ Current remaining gates:
   `--allow-missing-external-artifacts`.
 - Resolve or explicitly waive unrelated full-suite failures before any release/cutover.
 
+## Status review - 2026-08-01
+
+This plan is still active and not ready for cutover. The current implementation remains demo/live-shadow oriented, and real-money eToro mutation remains fail-closed.
+
+Out-of-date findings:
+
+- The remaining gates above are still valid; no plan text should imply release readiness.
+- Release-readiness artifacts now include explicit `remaining_gates` so missing external evidence and OpenAPI drift are visible in JSON reports.
+- The weekly performance report did not provide trading-edge evidence that would justify increasing broker autonomy.
+
+Current implementation focus:
+
+- Keep demo observation and reconciliation evidence accumulating.
+- Keep ticker alias failures auditable rather than guessing tradability.
+- Use release-readiness dry runs as local diagnostics only until all required external artifact ids exist.
+
 This plan turns the existing Alpaca-paper-first broker path into an eToro-demo-first path while preserving fail-closed real-money behavior. It follows the Aurelio development protocol: specs are updated before implementation, tests encode the specs, broker config and runtime state are not changed by implementation work unless a phase explicitly calls for an operator-approved rollout step.
 
 ## Current facts

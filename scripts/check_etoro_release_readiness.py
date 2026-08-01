@@ -95,6 +95,13 @@ def missing_artifacts(env: dict[str, str]) -> list[str]:
     return [name for name in REQUIRED_ARTIFACT_ENV_VARS if not env.get(name, "").strip()]
 
 
+def remaining_gates(*, missing: list[str], openapi_version: str) -> list[str]:
+    gates = [f"missing:{name}" for name in missing]
+    if openapi_version and openapi_version != EXPECTED_ETORO_OPENAPI_VERSION:
+        gates.append("openapi_version_drift")
+    return gates
+
+
 def run_command(command: ValidationCommand, *, env: dict[str, str]) -> int:
     print(f"+ {command.display()}", flush=True)
     return subprocess.call(command.command, cwd=command.cwd, env=env)
@@ -146,6 +153,7 @@ def build_release_report(
         },
         "required_artifacts": {name: env.get(name, "") for name in REQUIRED_ARTIFACT_ENV_VARS},
         "missing_artifacts": missing,
+        "remaining_gates": remaining_gates(missing=missing, openapi_version=openapi_version),
         "validations": [result.__dict__ for result in results],
         "live_micro_size_defaults": {
             "max_notional_usd": 25,

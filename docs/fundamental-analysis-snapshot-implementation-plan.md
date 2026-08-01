@@ -37,6 +37,15 @@ Conservative threshold raises, caps, or warnings based on fundamentals require a
 - validation slices include expected value, drawdown/loss-streak, false-positive, and no-entry behavior
 - any action-affecting use is explicit, conservative, auditable, and validated
 
+## Status review - 2026-08-01
+
+This plan is still active. Core passive snapshot behavior is shipped, and the next valid implementation path is visibility/reviewability rather than confidence boosts.
+
+Implementation update:
+
+- `GET /api/fundamentals/coverage-health` now summarizes monitored ticker coverage, missing snapshots, stale/due snapshots, degraded coverage, warnings, and missing inputs.
+- This closes the first read-only stale/sparse visibility slice, but dedicated UI polish and richer refresh observability remain open.
+
 ## Remaining workstreams
 
 ### 1. Stale and sparse coverage visibility

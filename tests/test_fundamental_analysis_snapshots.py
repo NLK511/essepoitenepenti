@@ -321,6 +321,58 @@ def test_fundamental_refresh_job_refreshes_due_and_event_window_tickers_only() -
     assert summary["skipped_fresh_count"] == 1
 
 
+def test_fundamental_coverage_health_summarizes_monitored_snapshot_gaps() -> None:
+    from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+        FundamentalAnalysisSnapshotRepository,
+    )
+    from trade_proposer_app.services.fundamental_coverage_health import (
+        FundamentalCoverageHealthService,
+    )
+
+    session = create_session()
+    WatchlistRepository(session).create(
+        "Core",
+        ["AAPL", "MSFT", "NVDA"],
+        default_horizon=StrategyHorizon.ONE_WEEK,
+        allow_shorts=True,
+    )
+    repo = FundamentalAnalysisSnapshotRepository(session)
+    now = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    repo.create_snapshot(
+        ticker="AAPL",
+        as_of=now - timedelta(days=3),
+        source_set=["fake"],
+        coverage_status="ok",
+        freshness_status="fresh",
+        payload={"feature_buckets": {"event_regime": "none_known"}},
+        warnings=[],
+        missing_inputs=[],
+    )
+    repo.create_snapshot(
+        ticker="MSFT",
+        as_of=now - timedelta(days=40),
+        source_set=["fake"],
+        coverage_status="degraded",
+        freshness_status="stale",
+        payload={"feature_buckets": {"event_regime": "none_known"}},
+        warnings=["fundamental provider returned sparse data"],
+        missing_inputs=["targetMeanPrice"],
+    )
+
+    report = FundamentalCoverageHealthService(session).summarize(as_of=now)
+
+    assert report["status"] == "needs_attention"
+    assert report["monitored_count"] == 3
+    assert report["snapshot_available_count"] == 2
+    assert report["missing_snapshot_count"] == 1
+    assert report["due_count"] == 2
+    assert report["coverage_status_counts"] == {"missing": 1, "degraded": 1, "ok": 1}
+    by_ticker = {item["ticker"]: item for item in report["tickers"]}
+    assert by_ticker["AAPL"]["health_status"] == "ok"
+    assert by_ticker["MSFT"]["due_reason"] == "monthly_stale"
+    assert by_ticker["NVDA"]["due_reason"] == "missing_snapshot"
+
+
 def test_plan_generation_uses_point_in_time_fundamental_snapshot_without_boosting() -> None:
     from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
         FundamentalAnalysisSnapshotRepository,

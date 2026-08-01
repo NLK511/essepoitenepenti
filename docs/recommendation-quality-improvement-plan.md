@@ -4,6 +4,8 @@
 
 This is the remaining active checklist for deciding whether recommendation-quality changes deserve production influence. The broad quality platform is already shipped; this document is now about repeatable review, evidence artifacts, and explicit keep/change/reject decisions.
 
+The summary API exposes this checklist as operator state through `GET /api/recommendation-quality/summary` under `evidence_review_checklist`. That payload is a review aid, not an automatic approval mechanism.
+
 ## Current stance
 
 - Confidence is a ranking and selection signal unless calibrated evidence supports stronger interpretation.
@@ -12,6 +14,15 @@ This is the remaining active checklist for deciding whether recommendation-quali
 - Cheap-scan confidence is an upstream recall/ranking score. Do not reuse recommendation-plan calibration for cheap scan.
 - Context, ontology, macro shortlist, industry context, and fundamental valuation may remain bounded/passive unless walk-forward evidence proves value.
 - Promotion must consider win rate, expected value, calibration, drawdown/loss streaks, selectivity, degraded-input behavior, and simple baselines.
+
+## Status review - 2026-08-01
+
+The checklist is current. The latest weekly prospective tag monitor reported `prospective_tags_accumulating`, with 11 tagged dates versus the 20-date review floor. That means the tuning checklist item remains `defer_thin_evidence`; no plan-generation threshold/config promotion is justified.
+
+Implementation update:
+
+- `GET /api/recommendation-quality/summary` now includes `evidence_review_checklist`, so operators can see checklist item status in the quality summary payload.
+- Checklist status is advisory and does not bypass the stricter tuning, edge-validation, or broker-safety gates.
 
 ## Evidence bundle for each review
 
@@ -212,6 +223,7 @@ APIs:
 - `GET /api/calibration/confidence`
 - `GET /api/signal-gating-tuning`
 - `GET /api/plan-generation-tuning`
+- `GET /api/recommendation-quality/summary` (`evidence_review_checklist`)
 
 Scripts:
 

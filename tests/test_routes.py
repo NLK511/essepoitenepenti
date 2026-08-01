@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.enums import JobType
+from trade_proposer_app.domain.enums import JobType, StrategyHorizon
 from trade_proposer_app.domain.models import (
     AppPreflightReport,
     BrokerOrderExecution,
@@ -184,6 +184,41 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["ticker"], "AAPL")
         self.assertEqual(payload["snapshot"]["id"], older["id"])
         self.assertEqual(payload["snapshot"]["payload"]["feature_buckets"]["valuation"], "high")
+
+    async def test_fundamental_coverage_health_route_exposes_monitored_snapshot_status(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            WatchlistRepository(session).create(
+                "Core",
+                ["AAPL", "MSFT"],
+                default_horizon=StrategyHorizon.ONE_WEEK,
+                allow_shorts=True,
+            )
+            FundamentalAnalysisSnapshotRepository(session).create_snapshot(
+                ticker="AAPL",
+                as_of=datetime(2026, 7, 31, tzinfo=timezone.utc),
+                source_set=["fake"],
+                coverage_status="ok",
+                freshness_status="fresh",
+                payload={"feature_buckets": {"event_regime": "none_known"}},
+                warnings=[],
+                missing_inputs=[],
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/fundamentals/coverage-health?as_of=2026-08-01T00:00:00Z")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "needs_attention")
+        self.assertEqual(payload["monitored_count"], 2)
+        self.assertEqual(payload["snapshot_available_count"], 1)
+        self.assertEqual(payload["missing_snapshot_count"], 1)
+        self.assertEqual(payload["tickers"][1]["ticker"], "MSFT")
+        self.assertEqual(payload["tickers"][1]["due_reason"], "missing_snapshot")
 
     async def test_observability_events_endpoint_filters_by_run(self) -> None:
         session = Session(bind=self.engine)

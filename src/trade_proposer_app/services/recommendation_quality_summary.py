@@ -117,6 +117,7 @@ class RecommendationQualitySummaryService:
         payload = {
             "summary": summary,
             "windowed_summaries": windowed_summaries,
+            "evidence_review_checklist": self._evidence_review_checklist(summary),
             "calibration": calibration.model_dump(mode="json"),
             "entry_miss_diagnostics": self.outcomes.summarize_entry_miss_diagnostics(
                 evaluated_after=now - timedelta(days=30),
@@ -222,7 +223,8 @@ class RecommendationQualitySummaryService:
             evaluated_after = computed_after
             calibration = RecommendationPlanCalibrationService(self.effective_outcomes).summarize(
                 mode="execution_plus_simulation",
-                limit=self.METRIC_SAMPLE_LIMIT, evaluated_after=evaluated_after
+                limit=self.METRIC_SAMPLE_LIMIT,
+                evaluated_after=evaluated_after,
             )
             baselines = RecommendationPlanBaselineService(self.plans).summarize(
                 limit=self.METRIC_SAMPLE_LIMIT, computed_after=computed_after
@@ -450,3 +452,94 @@ class RecommendationQualitySummaryService:
                 "Maintain the current settings and watch for drift in family or horizon slices."
             )
         return actions
+
+    @staticmethod
+    def _evidence_review_checklist(summary: dict[str, object]) -> dict[str, object]:
+        resolved_outcomes = int(summary.get("resolved_outcomes") or 0)
+        calibration_report = (
+            summary.get("calibration_report")
+            if isinstance(summary.get("calibration_report"), dict)
+            else {}
+        )
+        brier = calibration_report.get("brier_score")
+        ece = calibration_report.get("expected_calibration_error")
+        calibration_usable = (
+            resolved_outcomes >= 20
+            and (brier is None or float(brier) <= 0.35)
+            and (ece is None or float(ece) <= 0.20)
+        )
+        ready_for_expansion = bool(summary.get("ready_for_expansion"))
+        walk_forward_promotion = bool(summary.get("walk_forward_promotion_recommended"))
+        items = [
+            {
+                "key": "calibration_behavior",
+                "status": "keep_current" if calibration_usable else "defer_thin_evidence",
+                "reason": (
+                    "Execution-plus-simulation calibration has enough sample and usable error."
+                    if calibration_usable
+                    else (
+                        "Calibration remains thin or has elevated error; "
+                        "keep live confidence conservative."
+                    )
+                ),
+            },
+            {
+                "key": "context_ontology_macro_industry",
+                "status": "keep_bounded" if ready_for_expansion else "defer_thin_evidence",
+                "reason": (
+                    (
+                        "Cohort evidence is ready for operator review, but positive "
+                        "influence still needs explicit validation."
+                    )
+                    if ready_for_expansion
+                    else (
+                        "No stable outperforming cohorts are visible enough to widen "
+                        "context influence."
+                    )
+                ),
+            },
+            {
+                "key": "fundamental_valuation",
+                "status": "passive_context",
+                "reason": (
+                    "Fundamentals remain passive until point-in-time walk-forward slices "
+                    "prove action-affecting value."
+                ),
+            },
+            {
+                "key": "plan_generation_tuning",
+                "status": "review_candidate"
+                if walk_forward_promotion and resolved_outcomes >= 20
+                else "defer_thin_evidence",
+                "reason": (
+                    (
+                        "Walk-forward promotion signal is present; candidate still needs "
+                        "normal promotion review."
+                    )
+                    if walk_forward_promotion and resolved_outcomes >= 20
+                    else "Walk-forward or sample gates do not support a tuning promotion."
+                ),
+            },
+            {
+                "key": "degraded_input_penalties",
+                "status": "needs_review",
+                "reason": (
+                    "Review actionable degraded rows before changing penalties or hiding "
+                    "degraded evidence."
+                ),
+            },
+            {
+                "key": "cheap_scan_calibration",
+                "status": "defer_pending_dataset",
+                "reason": (
+                    "Cheap-scan calibration needs shortlisted and non-shortlisted labels "
+                    "before implementation."
+                ),
+            },
+        ]
+        open_items = [item for item in items if item["status"] not in {"keep_current"}]
+        return {
+            "schema_version": "recommendation-quality-evidence-review-v1",
+            "overall_status": "needs_review" if open_items else "complete",
+            "items": items,
+        }

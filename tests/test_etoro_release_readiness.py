@@ -92,10 +92,9 @@ def test_release_report_contains_artifacts_validation_results_and_micro_size_def
         "version_matches_expected": True,
     }
     assert report["required_artifacts"]["ETORO_DEMO_VALIDATION_ARTIFACT_ID"] == "demo-1"
-    assert (
-        report["required_artifacts"]["ETORO_DEMO_LIFECYCLE_ARTIFACT_ID"] == "lifecycle-1"
-    )
+    assert report["required_artifacts"]["ETORO_DEMO_LIFECYCLE_ARTIFACT_ID"] == "lifecycle-1"
     assert report["validations"][0]["status"] == "passed"
+    assert report["remaining_gates"] == []
     assert report["live_micro_size_defaults"] == {
         "max_notional_usd": 25,
         "max_daily_order_count": 1,
@@ -129,4 +128,22 @@ def test_dry_run_writes_release_report(tmp_path, monkeypatch) -> None:
     assert payload["status"] == "dry_run"
     assert payload["openapi"]["observed_version"] == "v1.311.0"
     assert payload["missing_artifacts"] == list(readiness.REQUIRED_ARTIFACT_ENV_VARS)
+    assert "missing:ETORO_LIVE_SHADOW_EVIDENCE_ID" in payload["remaining_gates"]
     assert payload["validations"][0]["status"] == "dry_run"
+
+
+def test_release_report_flags_openapi_version_drift_as_remaining_gate() -> None:
+    report = readiness.build_release_report(
+        env={
+            "ETORO_READONLY_VALIDATION_ARTIFACT_ID": "readonly-1",
+            "ETORO_DEMO_VALIDATION_ARTIFACT_ID": "demo-1",
+            "ETORO_DEMO_LIFECYCLE_ARTIFACT_ID": "lifecycle-1",
+            "ETORO_LIVE_SHADOW_EVIDENCE_ID": "shadow-1",
+        },
+        missing=[],
+        results=[],
+        status="dry_run",
+        openapi_version="v1.400.0",
+    )
+
+    assert "openapi_version_drift" in report["remaining_gates"]
