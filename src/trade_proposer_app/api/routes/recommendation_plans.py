@@ -14,6 +14,7 @@ from trade_proposer_app.services.recommendation_plan_baselines import Recommenda
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 
 router = APIRouter(prefix="/recommendation-plans", tags=["recommendation-plans"])
+MAX_RECOMMENDATION_PLAN_LIST_LIMIT = 500
 
 
 @router.get("/stats")
@@ -66,7 +67,7 @@ async def list_recommendation_plans(
     ticker: str | None = Query(default=None),
     action: str | None = Query(default=None),
     setup_family: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=10000),
+    limit: int = Query(default=50, ge=1, le=MAX_RECOMMENDATION_PLAN_LIST_LIMIT),
     offset: int = Query(default=0, ge=0),
     run_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),

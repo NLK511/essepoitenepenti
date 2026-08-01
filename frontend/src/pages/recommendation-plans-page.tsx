@@ -21,9 +21,22 @@ import type {
 } from "../types";
 import { biasTone, calibrationReviewStatusLabel, contextProvenanceLabel, contextSummaryError, detailLabel, directionTone, extractDisplayLabels, formatDate, normalizeReviewWindow, reviewWindowStartIso, REVIEW_WINDOW_OPTIONS, reviewWindowLabel, yahooFinanceUrl } from "../utils";
 
+const MAX_RECOMMENDATION_PLAN_PAGE_SIZE = 500;
+const RECOMMENDATION_PLAN_PAGE_SIZE_OPTIONS = ["25", "50", "100", "200", "500"];
+
+function normalizePageSize(value: string | null | undefined): number {
+  const parsed = Math.max(1, Number(value ?? "100") || 100);
+  return Math.min(parsed, MAX_RECOMMENDATION_PLAN_PAGE_SIZE);
+}
+
+function pageSizeSelectValue(value: string | null | undefined): string {
+  const normalized = String(normalizePageSize(value));
+  return RECOMMENDATION_PLAN_PAGE_SIZE_OPTIONS.includes(normalized) ? normalized : "100";
+}
+
 function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null): string {
   const query = new URLSearchParams(searchParams);
-  const limit = Math.max(1, Number(query.get("limit") ?? "100") || 100);
+  const limit = normalizePageSize(query.get("limit"));
   const page = Math.max(1, Number(query.get("page") ?? "1") || 1);
   query.set("limit", String(limit));
   query.set("offset", String((page - 1) * limit));
@@ -120,7 +133,7 @@ export function RecommendationPlansPage() {
   const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
   const [expandedPlanRows, setExpandedPlanRows] = useState<Record<string, boolean>>({});
   const [pageMode, setPageMode] = useState<"review" | "analytics">("review");
-  const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "100") || 100);
+  const pageSize = normalizePageSize(searchParams.get("limit"));
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
   const plans = plansResponse?.items ?? null;
   const planTotal = plansResponse?.total ?? 0;
@@ -349,7 +362,7 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
           <label className="form-field"><span>Outcome</span><select name="outcome" defaultValue={searchParams.get("outcome") ?? ""}><option value="">All</option><option value="win">win</option><option value="loss">loss</option><option value="expired">expired</option></select></label>
-          <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="10000">All</option></select></label>
+          <label className="form-field"><span>Limit</span><select name="limit" defaultValue={pageSizeSelectValue(searchParams.get("limit"))}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option></select></label>
           <details className="top-gap-small" style={{ gridColumn: "1 / -1" }}>
             <summary>Advanced filters</summary>
             <div className="form-grid top-gap-small">

@@ -1,144 +1,206 @@
-# Recommendation quality and edge-validation backlog
+# Recommendation quality evidence-review checklist
 
-**Status:** active plan
+**Status:** active evidence-review checklist
 
-This is the remaining active backlog for improving recommendation quality, calibration, and reviewability.
-
-The broad quality platform is already in place. This document now focuses on unresolved evidence questions and promotion discipline rather than re-listing shipped infrastructure.
-
-## Current shipped baseline
-
-Implemented quality infrastructure includes:
-
-- broker-preferred effective outcomes for execution-aware truth
-- outcome summaries, setup-family reviews, evidence-concentration reviews, and baseline comparisons
-- decision samples for actionable, near-miss, degraded, and rejected cases
-- walk-forward validation for plan-generation tuning
-- guarded promotion checks for plan-generation thresholds
-- large-search evaluation artifacts and rejection of unsafe candidates
-- EV-expansion lane separated from precision/win-rate promotion
-- configurable calibration reports for execution-only, phantom-only, combined, and side-by-side modes
-- weekly persisted execution-only calibration snapshots for live plan generation
-- calibration-aware confidence/actionability in the orchestration path when a snapshot exists
-- dashboard/research surfaces for recommendation quality review
+This is the remaining active checklist for deciding whether recommendation-quality changes deserve production influence. The broad quality platform is already shipped; this document is now about repeatable review, evidence artifacts, and explicit keep/change/reject decisions.
 
 ## Current stance
 
-Confidence remains a ranking and selection signal unless calibrated evidence supports stronger interpretation.
+- Confidence is a ranking and selection signal unless calibrated evidence supports stronger interpretation.
+- Live/autonomous confidence calibration uses execution-only outcomes by default.
+- Phantom outcomes are research/operator context and must not silently affect live execution confidence.
+- Cheap-scan confidence is an upstream recall/ranking score. Do not reuse recommendation-plan calibration for cheap scan.
+- Context, ontology, macro shortlist, industry context, and fundamental valuation may remain bounded/passive unless walk-forward evidence proves value.
+- Promotion must consider win rate, expected value, calibration, drawdown/loss streaks, selectivity, degraded-input behavior, and simple baselines.
 
-Live/autonomous confidence calibration uses execution-only outcomes by default. Phantom outcomes are research/operator context and must not silently affect live execution confidence.
+## Evidence bundle for each review
 
-Do not reuse plan-outcome calibration for cheap-scan confidence. Cheap scan is an upstream recall mechanism and needs its own calibration design if it becomes calibrated later.
+Every quality review should produce an artifact directory or saved notes with:
 
-Do not promote large-search winners or new context features solely because they improve pooled expected value. Promotion needs walk-forward, slice stability, drawdown/loss-streak review, and baseline comparison.
+- review date, git commit, database/source window, and reviewer;
+- commands/API endpoints used;
+- sample counts and thin-slice warnings;
+- before/after settings or candidate policy;
+- baseline comparison;
+- decision: `keep_current`, `promote_candidate`, `defer_thin_evidence`, `reject_candidate`, or `disable_or_tighten`;
+- follow-up issue/checklist item if evidence is inconclusive.
 
-## North-star metrics
+Minimum gates unless a stricter spec applies:
 
-Track before and after each quality change:
+- no production promotion from pooled-only results;
+- no promotion when key slices are too thin to interpret;
+- no positive boost from degraded/missing evidence;
+- no change that materially worsens drawdown/loss-streak behavior without an explicit experimental cap;
+- no silent live recalculation fallback for calibration.
 
-1. **Actionable win rate** — long/short plans only, compared with simple baselines.
-2. **Expected value** — per resolved actionable plan with consistent cost/friction assumptions where available.
-3. **Calibration quality** — Brier score, expected calibration error, and reliability by confidence bucket.
-4. **Coverage/selectivity** — candidate, shortlist, deep-analysis, actionable, and no-action rates.
-5. **Degradation discipline** — degraded vs healthy row performance and degraded rows that still pass gates.
-6. **Slice stability** — setup family, horizon, transmission/ontology condition, context regime, market regime, and confidence bucket.
+## Checklist 1 — Calibration behavior
 
-## Remaining active backlog
+Goal: verify execution-only calibration is honest and not hurting selection quality.
 
-### 1. Validate current calibration behavior over time
+Run/review:
 
-Tasks:
+- `GET /api/calibration/confidence?mode=execution_only`
+- `GET /api/calibration/confidence?mode=side_by_side`
+- `GET /api/recommendation-outcomes/calibration-report`
+- latest persisted weekly calibration snapshot/run detail
 
-- review weekly execution-only calibration snapshots after enough new outcomes accumulate
-- compare raw vs calibrated confidence by bucket and horizon
-- keep thin buckets visibly thin
-- detect whether calibration improves Brier/ECE without hurting selection quality
-- preserve side-by-side phantom reporting for research only
+Record:
 
-Promotion rule:
+- execution-only sample count by confidence bucket and horizon;
+- raw vs calibrated Brier score and expected calibration error;
+- actionable win rate and EV before/after calibration;
+- thin buckets and whether they remain visibly thin;
+- whether phantom-only differs materially from execution-only.
 
-- calibration remains live only through persisted scheduled snapshots; no silent per-run recalculation fallback
+Decision rule:
 
-### 2. Validate ontology and transmission usefulness
+- **Keep current** if calibration is not materially worse and no hidden regression appears.
+- **Promote/adjust** only through persisted scheduled calibration snapshots.
+- **Disable/tighten** if calibration worsens Brier/ECE or selection quality on meaningful slices.
+- **Defer** if execution-only samples remain too thin.
 
-Tasks:
+## Checklist 2 — Context, ontology, and transmission usefulness
 
-- run fresh ontology-enabled plan generation
-- measure ontology context presence and matched exposure rate
-- compare outcomes for tailwind/headwind/mixed/neutral transmission states
-- compare curated vs template-generated ontology profiles
-- measure whether ontology reduces mixed-bias or false-positive rates
+Goal: decide whether mapped context, ontology, and transmission signals should remain bounded or gain/lose influence.
 
-Promotion rule:
+Run/review:
 
-- ontology may become stronger in gating/confidence only after walk-forward evidence shows benefit over taxonomy-only/transmission baseline
+- fresh ontology-enabled watchlist/plan run or replay slice;
+- `scripts/report_context_scoring_impact.py` for `normal`, `forced_neutral`, `quality_only`, `adverse_only`, and `mapped_exposure` modes;
+- `scripts/report_industry_context_quality.py`;
+- outcome slices by transmission bias, context regime, matched exposure, macro shortlist lane, and degraded/missing context.
 
-### 3. Validate fundamental valuation context passively
+Record:
 
-Tasks:
+- matched exposure rate and unmapped-context rate;
+- tailwind/headwind/mixed/neutral outcomes;
+- macro shortlist lane count and outcomes;
+- industry decision-usable rate and top neutral/degraded reasons;
+- curated vs template/implicit ontology profile performance where available;
+- false positives reduced or introduced by context influence.
 
-- backfill/evaluate enough point-in-time fundamental valuation contexts
-- compare valuation, quality, growth, balance-sheet, and event-regime slices
-- measure false-positive reduction, EV, drawdown/loss-streak behavior, and no-entry behavior
-- keep sparse provider payloads visibly degraded
+Decision rule:
 
-Promotion rule:
+- **Keep bounded** unless walk-forward evidence beats taxonomy/transmission baseline across meaningful slices.
+- **Tighten** if degraded/missing context is associated with false positives that pass gates.
+- **Do not widen** positive context/macro influence from pooled EV alone.
+- **Archive/neutralize** any context path that adds complexity without measurable value.
 
-- no positive fundamental confidence boost until point-in-time walk-forward evidence beats baseline without worsening drawdown/loss streaks
-- conservative caps or threshold raises require a separate explicit policy decision
+## Checklist 3 — Fundamental valuation passive validation
 
-### 4. Continue tuning with promotion discipline
+Goal: determine whether fundamental valuation should remain passive, tighten risk, or later gain bounded influence.
 
-Tasks:
+Run/review:
 
-- use walk-forward comparisons rather than pooled-only winners
-- compare candidates against baseline and current production settings
-- review actionability expansion, not just EV
-- inspect false positives, skipped wins, and selectivity before accepting a change
-- keep EV-expansion candidates separate from precision promotion
+- point-in-time fundamental snapshot coverage/backfill status;
+- outcome slices for valuation, profitability/quality, growth, balance-sheet risk, cash flow, analyst context, and event-regime buckets;
+- comparison against plans without usable fundamental snapshots.
 
-Promotion rule:
+Record:
 
-- reject candidates that improve EV only by greatly expanding actionability or materially worsening win rate unless explicitly treated as experimental and capped
+- snapshot coverage, stale coverage, degraded/sparse provider rows;
+- false-positive reduction by valuation/risk bucket;
+- EV, win rate, drawdown/loss streak, and no-entry behavior;
+- lost true-positive cost if any conservative cap is proposed.
 
-### 5. Keep degraded-input penalties honest
+Decision rule:
 
-Tasks:
+- **No positive fundamental confidence boost** until point-in-time walk-forward evidence beats baseline without worsening drawdown/loss streaks.
+- **Tightening/caps** require explicit policy notes and false-positive-vs-lost-winner review.
+- **Defer** if snapshots are sparse, stale, or not point-in-time reliable.
 
-- review degraded plans that pass gates
-- identify specific degraded conditions that deserve stronger penalties
-- distinguish missing required evidence from missing optional evidence
-- ensure warnings are visible in operator surfaces and persisted payloads
+## Checklist 4 — Plan-generation tuning promotion discipline
 
-Promotion rule:
+Goal: ensure threshold/config changes are promoted only from robust walk-forward evidence.
 
-- degraded-input changes should be measured by false-positive reduction and lost true-positive cost, not just fewer actions
+Run/review:
 
-### 6. Decide cheap-scan calibration separately
+- candidate tuning artifacts from `GET /api/plan-generation-tuning` or saved tuning run artifacts;
+- walk-forward comparison against current production settings and simple baselines;
+- actionability expansion vs precision/win-rate behavior;
+- false positives, skipped wins, selectivity, and degraded-input pass-through.
 
-Tasks:
+Record:
 
-- define a cheap-scan outcome dataset that includes non-shortlisted decision samples
-- include missed-opportunity benchmarks and clean rejects
-- avoid training only on shortlisted or plan-generated rows
+- baseline vs candidate metrics by window;
+- actionable count, no-action count, shortlist/deep-analysis conversion;
+- EV and win rate with friction assumptions noted;
+- loss streak/drawdown behavior;
+- whether the candidate is precision promotion or EV-expansion only.
 
-Promotion rule:
+Decision rule:
 
-- do not apply recommendation-plan calibration directly to cheap-scan scores
+- **Promote** only if walk-forward evidence is stable and baseline comparison is acceptable.
+- **Reject** candidates that improve EV only by greatly expanding actionability or materially worsening win rate, unless explicitly capped as experimental.
+- **Keep EV-expansion candidates separate** from precision/win-rate promotion.
 
-## Data sources and APIs
+## Checklist 5 — Degraded-input penalties
 
-Primary data:
+Goal: keep degraded evidence visible and prevent degraded rows from producing false confidence.
+
+Run/review:
+
+- degraded plans that passed gates;
+- warning/degraded fields in plan details, signal snapshots, context snapshots, and dashboard/research surfaces;
+- outcome slices for missing bars, stale prices, missing context, degraded context, sparse fundamentals, provider failures, and summary fallbacks.
+
+Record:
+
+- degraded rows that became actionable;
+- false positives by degraded condition;
+- lost true positives if a stronger penalty/cap is proposed;
+- operator visibility gaps.
+
+Decision rule:
+
+- **Tighten** only when false-positive reduction exceeds lost true-positive cost or safety requires it.
+- **Do not hide** degraded rows by blending them into neutral/healthy buckets.
+- **Distinguish required vs optional missing evidence** before changing gates.
+
+## Checklist 6 — Cheap-scan calibration readiness
+
+Goal: decide whether cheap-scan calibration is ready for design work. It is not currently production-calibrated.
+
+Required dataset before implementation:
+
+- shortlisted and non-shortlisted decision samples;
+- missed-opportunity benchmarks;
+- clean rejects;
+- cheap-scan-only rows without full plan rows;
+- enough resolved future returns to avoid training only on plan-generated/actionable cases.
+
+Decision rule:
+
+- **Do not implement cheap-scan calibration** until the dataset above exists and is documented.
+- **Do not apply recommendation-plan calibration** to cheap-scan scores.
+- **Proceed to a separate spec** only after dataset coverage and label policy are clear.
+
+## Completion criteria for this active checklist
+
+This checklist can be archived only when:
+
+- calibration review has enough execution-only samples and an explicit keep/change decision;
+- context/ontology/macro/industry usefulness has a recorded bounded/expand/tighten decision;
+- fundamental valuation has a passive/tighten/boost decision based on point-in-time evidence;
+- the current tuning promotion candidate, if any, has a walk-forward promote/reject/defer decision;
+- degraded-input penalties have been reviewed for actionable false positives;
+- cheap-scan calibration is either explicitly deferred or moved to a separate dataset/spec plan.
+
+## Primary data sources and APIs
+
+Data:
 
 - `RecommendationPlanOutcome`
 - broker-preferred effective outcomes
 - `RecommendationDecisionSample`
 - `RecommendationPlan`
+- ticker signal snapshots
+- macro/industry context snapshots
+- fundamental analysis snapshots
 - calibration snapshots and reports
-- baseline services
 - plan-generation tuning runs and artifacts
 
-Primary APIs:
+APIs:
 
 - `GET /api/recommendation-outcomes`
 - `GET /api/recommendation-outcomes/summary`
@@ -151,23 +213,22 @@ Primary APIs:
 - `GET /api/signal-gating-tuning`
 - `GET /api/plan-generation-tuning`
 
-## Success criteria
+Scripts:
 
-Quality work is successful when:
-
-- calibration is more honest without hidden regressions
-- one or more cohorts improve without major degradation elsewhere
-- walk-forward checks support the change
-- simple baselines are not ignored
-- degraded inputs are visible and penalized appropriately
-- operators can explain why a threshold, cap, calibration curve, or context policy changed
+- `scripts/report_context_scoring_impact.py`
+- `scripts/report_industry_context_quality.py`
+- `scripts/report_steering_dry_run_quality.py`
+- replay/tuning scripts listed in `operational-scripts-reference.md`
 
 ## See also
 
 - `recommendation-methodology.md`
+- `decision-sample-tuning-guide.md`
 - `specs/confidence-calibration-spec.md`
 - `specs/edge-validation-standard.md`
 - `specs/plan-generation-tuning-spec.md`
 - `specs/large-parameter-search-spec.md`
+- `specs/context-scoring-spec.md`
+- `specs/macro-context-shortlist-spec.md`
 - `specs/ticker-exposure-ontology-spec.md`
 - `specs/fundamental-valuation-integration-spec.md`

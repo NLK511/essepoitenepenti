@@ -2292,6 +2292,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(plans.json()["items"][0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(plans.json()["items"][0]["latest_outcome"]["context_regime_label"], "context + catalyst")
         self.assertEqual(plans.json()["items"][0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
+
+    async def test_recommendation_plan_list_rejects_oversized_limit(self) -> None:
+        self.seed_context_and_recommendation_plan_data()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            oversized = await client.get("/api/recommendation-plans", params={"limit": 501})
+
+        self.assertEqual(oversized.status_code, 422)
+
     async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         self.seed_context_and_recommendation_plan_data(run_id=run_id)
