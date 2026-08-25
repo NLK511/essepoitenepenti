@@ -160,6 +160,20 @@ Hydrates the local database with historical Daily OHLCV bars from Yahoo! Finance
   ```
   *(Note: The current script uses a fixed `as_of` date and hydrates tickers from watchlists with 100 tickers or fewer; edit the script to change scope.)*
 
+### `scripts/validate_bar_provider_quality.py`
+Compares a candidate historical bar provider against the current Yahoo provider without writing canonical `historical_market_bars` rows.
+
+- **Use case:** Weekly eToro bar-provider shadow validation. The script is read-only with respect to canonical bar storage.
+- **Credential sources:** Prefer `ETORO_API_KEY` and `ETORO_USER_KEY` when they are present. If they are absent, the script falls back to the encrypted broker-account credential store using `--broker-account-id`, defaulting to `etoro-demo-main`.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/validate_bar_provider_quality.py \
+    --tickers LRCX,CDNS,SNPS,AMAT,CRWD,PANW,FTNT,ZS,MDB,OKTA,TEAM,MTTR,SNOW,ADSK,PLTR,CVX,COP,OXY,SLB,HAL \
+    --timeframe 1m \
+    --days 5 \
+    --artifact artifacts/etoro-vs-yahoo-1m.json
+  ```
+
 ## Regression Testing and Release Validation
 
 ### `scripts/check_broker_migration_backfill.py`

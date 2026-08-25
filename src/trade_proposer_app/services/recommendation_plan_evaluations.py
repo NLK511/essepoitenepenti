@@ -47,9 +47,7 @@ class RecommendationPlanEvaluationService:
     _near_entry_miss_threshold_percent = 0.25
     _market_open_time = time(9, 30)
     _market_close_time = time(16, 0)
-    DEFAULT_UNSCOPED_BATCH_SIZE = 250
     MEMORY_SOFT_LIMIT_ENV = "RECOMMENDATION_EVALUATION_MEMORY_SOFT_LIMIT_MB"
-    BATCH_SIZE_ENV = "RECOMMENDATION_EVALUATION_BATCH_SIZE"
     _market_timezone_by_region = {
         "US": "America/New_York",
         "USA": "America/New_York",
@@ -217,7 +215,6 @@ class RecommendationPlanEvaluationService:
             (RecommendationPlanRecord.id.not_in(outcome_plan_ids), 0),
             else_=1,
         )
-        limit = self._unscoped_batch_size()
         rows = list(
             self.session.scalars(
                 query.where(RecommendationPlanRecord.action.in_({"long", "short", "no_action", "watchlist"}))
@@ -227,12 +224,8 @@ class RecommendationPlanEvaluationService:
                     RecommendationPlanRecord.computed_at.asc(),
                     RecommendationPlanRecord.id.asc(),
                 )
-                .limit(limit + 1)
             ).all()
         )
-        if len(rows) > limit:
-            self._last_unscoped_batch_limited = True
-            rows = rows[:limit]
         return [self.plans._to_model(row) for row in rows]
 
     def _prepare_price_histories(
@@ -1216,16 +1209,6 @@ class RecommendationPlanEvaluationService:
                 for ts in normalized_index
             ]
         return frame
-
-    @classmethod
-    def _unscoped_batch_size(cls) -> int:
-        raw = os.environ.get(cls.BATCH_SIZE_ENV)
-        if raw:
-            try:
-                return max(1, int(raw))
-            except ValueError:
-                logger.warning("invalid %s value: %s", cls.BATCH_SIZE_ENV, raw)
-        return cls.DEFAULT_UNSCOPED_BATCH_SIZE
 
     @classmethod
     def _memory_soft_limit_mb(cls) -> float | None:

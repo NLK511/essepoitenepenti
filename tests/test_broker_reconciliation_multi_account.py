@@ -425,6 +425,145 @@ class BrokerReconciliationMultiAccountTests(unittest.TestCase):
         self.assertIn("portfolio_absent", updated.error_message or "")
         self.assertIsNone(updated.realized_pnl)
 
+    def test_etoro_portfolio_absence_uses_trade_history_pnl_when_matched(self) -> None:
+        order = self.orders.create(
+            BrokerOrderExecution(
+                broker_account_id="etoro-demo-main",
+                broker="etoro",
+                account_mode="demo",
+                recommendation_plan_id=10,
+                recommendation_plan_ticker="PYPL",
+                run_id=20,
+                job_id=30,
+                ticker="PYPL",
+                action="long",
+                side="buy",
+                order_type="market",
+                quantity=0,
+                notional_amount=25.0,
+                status="filled",
+                broker_order_id="368528997",
+                client_order_id="client-pypl",
+            )
+        )
+        position = self.positions.create(
+            BrokerPosition(
+                broker_order_execution_id=order.id or 0,
+                broker_account_id="etoro-demo-main",
+                broker="etoro",
+                account_mode="demo",
+                recommendation_plan_id=10,
+                recommendation_plan_ticker="PYPL",
+                run_id=20,
+                job_id=30,
+                ticker="PYPL",
+                action="long",
+                side="buy",
+                quantity=1,
+                current_quantity=1,
+                unit_quantity=0.444919,
+                current_unit_quantity=0.444919,
+                status="open",
+                entry_order_id="3567506772",
+                entry_avg_price=56.18,
+                stop_loss_order_price=55.4,
+                raw_broker_payload={
+                    "position_execution": {"initialExposureAccountCurrency": 24.99554942}
+                },
+            )
+        )
+        adapter = _EtoroLookupAdapter(
+            {},
+            open_positions=[],
+            trade_history=[
+                {
+                    "positionID": 3567506772,
+                    "closeDateTime": "2026-08-13T19:29:59.000Z",
+                    "closeRate": 58.4,
+                    "closedUnits": 0.444919,
+                    "netProfit": 0.98,
+                }
+            ],
+        )
+
+        summary = (
+            BrokerReconciliationService(self.session)._sync_etoro_demo_positions_from_portfolio(
+                "etoro-demo-main", adapter
+            )
+        )
+        updated = self.positions.get(position.id or 0)
+
+        self.assertEqual(summary["closed_with_history_pnl"], 1)
+        self.assertEqual(summary["closed_without_confirmed_pnl"], 0)
+        self.assertEqual(updated.status, "win")
+        self.assertEqual(updated.current_quantity, 0)
+        self.assertEqual(updated.current_unit_quantity, 0.0)
+        self.assertEqual(updated.realized_pnl, 0.98)
+        self.assertEqual(updated.exit_avg_price, 58.4)
+        self.assertEqual(
+            updated.exit_filled_at,
+            datetime(2026, 8, 13, 19, 29, 59, tzinfo=UTC),
+        )
+        self.assertIsNotNone(updated.realized_return_pct)
+        self.assertIn("trade_history_position", updated.raw_broker_payload)
+
+    def test_etoro_trade_history_is_not_matched_by_ticker_only(self) -> None:
+        order = self.orders.create(
+            BrokerOrderExecution(
+                broker_account_id="etoro-demo-main",
+                broker="etoro",
+                account_mode="demo",
+                recommendation_plan_id=10,
+                recommendation_plan_ticker="PYPL",
+                run_id=20,
+                job_id=30,
+                ticker="PYPL",
+                action="long",
+                side="buy",
+                order_type="market",
+                quantity=0,
+                notional_amount=25.0,
+                status="filled",
+                broker_order_id="368528997",
+                client_order_id="client-pypl",
+            )
+        )
+        position = self.positions.create(
+            BrokerPosition(
+                broker_order_execution_id=order.id or 0,
+                broker_account_id="etoro-demo-main",
+                broker="etoro",
+                account_mode="demo",
+                recommendation_plan_id=10,
+                recommendation_plan_ticker="PYPL",
+                run_id=20,
+                job_id=30,
+                ticker="PYPL",
+                action="long",
+                side="buy",
+                quantity=1,
+                current_quantity=1,
+                unit_quantity=0.444919,
+                current_unit_quantity=0.444919,
+                status="open",
+                entry_order_id="3567506772",
+                entry_avg_price=56.18,
+            )
+        )
+        adapter = _EtoroLookupAdapter(
+            {},
+            open_positions=[],
+            trade_history=[{"symbol": "PYPL", "netProfit": 9.99}],
+        )
+
+        BrokerReconciliationService(self.session)._sync_etoro_demo_positions_from_portfolio(
+            "etoro-demo-main", adapter
+        )
+        updated = self.positions.get(position.id or 0)
+
+        self.assertEqual(updated.status, "needs_review")
+        self.assertIsNone(updated.realized_pnl)
+
     def test_etoro_sparse_portfolio_row_does_not_clear_known_units(self) -> None:
         order = self.orders.create(
             BrokerOrderExecution(
@@ -534,11 +673,13 @@ class _EtoroLookupAdapter:
         *,
         close_order_payload: dict[str, object] | None = None,
         open_positions: list[dict[str, object]] | None = None,
+        trade_history: list[dict[str, object]] | None = None,
         trade_history_status: BrokerAdapterResultStatus = BrokerAdapterResultStatus.SUCCESS,
     ) -> None:
         self.payload = payload
         self.close_order_payload = close_order_payload or {}
         self.open_positions = open_positions or []
+        self.trade_history = trade_history or []
         self.trade_history_status = trade_history_status
 
     def lookup_order(self, order_id=None, client_order_id=None):
@@ -570,7 +711,7 @@ class _EtoroLookupAdapter:
             status=self.trade_history_status,
             operation="get_trade_history",
             client_request_id="history",
-            trades=[],
+            trades=self.trade_history,
             message="history unavailable" if self.trade_history_status else "",
         )
 

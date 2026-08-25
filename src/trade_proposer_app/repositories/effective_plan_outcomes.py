@@ -168,7 +168,7 @@ class EffectivePlanOutcomeRepository:
         simulated: RecommendationOutcomeRecord | None,
     ) -> RecommendationPlanOutcome:
         broker = self._preferred_broker_position(broker_positions)
-        if broker is not None and broker.status in self.BROKER_RESOLVED:
+        if broker is not None and self._has_resolved_broker_performance(broker):
             return self._from_broker(plan, broker)
         if simulated is not None:
             return self._from_simulation(plan, simulated)
@@ -177,10 +177,17 @@ class EffectivePlanOutcomeRepository:
         return self._from_plan(plan)
 
     def _preferred_broker_position(self, positions: list[BrokerPositionRecord]) -> BrokerPositionRecord | None:
-        closed = [position for position in positions if position.status in self.BROKER_RESOLVED]
+        closed = [
+            position
+            for position in positions
+            if self._has_resolved_broker_performance(position)
+        ]
         if closed:
             return sorted(closed, key=lambda item: item.exit_filled_at or item.updated_at or datetime.min, reverse=True)[0]
         return positions[0] if positions else None
+
+    def _has_resolved_broker_performance(self, broker: BrokerPositionRecord) -> bool:
+        return broker.status in self.BROKER_RESOLVED and broker.realized_pnl is not None
 
     def _from_broker(self, plan: RecommendationPlanRecord, broker: BrokerPositionRecord) -> RecommendationPlanOutcome:
         outcome = broker.status if broker.status in self.BROKER_RESOLVED else TradeOutcome.OPEN.value

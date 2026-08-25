@@ -336,8 +336,10 @@ class BrokerReconciliationService:
         )
         history = adapter.get_trade_history()
         history_available = history.status == BrokerAdapterResultStatus.SUCCESS
+        history_by_position_id = self._etoro_trade_history_by_position_id(history.trades)
         updated_count = 0
         closed_without_confirmed_pnl = 0
+        closed_with_history_pnl = 0
         close_order_synced = 0
         for position in local_positions:
             if position.exit_order_id:
@@ -364,6 +366,12 @@ class BrokerReconciliationService:
                 updated_count += 1
                 continue
             if position.status in {"submitted", "open", "closing", "needs_review"}:
+                history_row = history_by_position_id.get(entry_id)
+                if history_row is not None:
+                    self._sync_etoro_demo_history_trade(position, history_row)
+                    closed_with_history_pnl += 1
+                    updated_count += 1
+                    continue
                 payload = dict(position.raw_broker_payload or {})
                 payload["portfolio_absence_reconciled_at"] = datetime.now(UTC).isoformat()
                 payload["trade_history_available"] = history_available
@@ -384,6 +392,7 @@ class BrokerReconciliationService:
             "portfolio_open_positions": len(open_by_position_id),
             "updated_count": updated_count,
             "close_order_synced": close_order_synced,
+            "closed_with_history_pnl": closed_with_history_pnl,
             "closed_without_confirmed_pnl": closed_without_confirmed_pnl,
             "history_available": history_available,
             "history_message": "" if history_available else history.message,
@@ -441,6 +450,54 @@ class BrokerReconciliationService:
             )
         else:
             position.status = "needs_review"
+        position.raw_broker_payload = raw_payload
+        return self.positions.update(position)
+
+    def _sync_etoro_demo_history_trade(
+        self, position: BrokerPosition, row: dict[str, object]
+    ) -> BrokerPosition:
+        realized_pnl = self._etoro_realized_pnl({}, row)
+        exit_price = self._float(
+            row.get("closeRate")
+            or row.get("close_rate")
+            or row.get("closedRate")
+            or row.get("rate")
+            or row.get("avgPrice")
+        )
+        exit_time = (
+            self._parse_etoro_datetime(row.get("closeDateTime"))
+            or self._parse_etoro_datetime(row.get("closeTime"))
+            or self._parse_etoro_datetime(row.get("closedAt"))
+            or self._parse_etoro_datetime(row.get("executionTime"))
+            or self._parse_etoro_datetime(row.get("occurred"))
+            or datetime.now(UTC)
+        )
+        closed_units = self._float(
+            row.get("closedUnits")
+            or row.get("units")
+            or row.get("closedContracts")
+            or row.get("contracts")
+        )
+        raw_payload = dict(position.raw_broker_payload or {})
+        raw_payload["trade_history_position"] = redacted_payload(row)
+        position.current_quantity = 0
+        position.current_unit_quantity = 0.0
+        position.exit_avg_price = exit_price
+        position.exit_filled_at = exit_time
+        if closed_units is not None and position.unit_quantity is None:
+            position.unit_quantity = closed_units
+        if realized_pnl is not None:
+            position.realized_pnl = realized_pnl
+            position.status = (
+                "win" if realized_pnl > 0 else "loss" if realized_pnl < 0 else "needs_review"
+            )
+            self._set_etoro_realized_derived_metrics(position)
+        else:
+            position.status = "needs_review"
+            position.error_message = self._append_evidence_message(
+                position.error_message,
+                "etoro_trade_history_without_confirmed_pnl",
+            )
         position.raw_broker_payload = raw_payload
         return self.positions.update(position)
 
@@ -517,6 +574,38 @@ class BrokerReconciliationService:
         )
 
     @classmethod
+    def _etoro_trade_history_by_position_id(
+        cls, rows: list[dict[str, object]]
+    ) -> dict[str, dict[str, object]]:
+        by_id: dict[str, dict[str, object]] = {}
+        for row in rows:
+            for position_id in cls._etoro_trade_history_position_ids(row):
+                by_id.setdefault(position_id, row)
+        return by_id
+
+    @classmethod
+    def _etoro_trade_history_position_ids(cls, row: dict[str, object]) -> list[str]:
+        ids: list[str] = []
+        for key in (
+            "positionID",
+            "positionId",
+            "position_id",
+            "openPositionID",
+            "openPositionId",
+            "parentPositionID",
+            "parentPositionId",
+            "id",
+        ):
+            value = row.get(key)
+            if value is not None:
+                ids.append(str(value))
+        for nested_key in ("position", "trade", "openingData", "open"):
+            nested = row.get(nested_key)
+            if isinstance(nested, dict):
+                ids.extend(cls._etoro_trade_history_position_ids(nested))
+        return list(dict.fromkeys(ids))
+
+    @classmethod
     def _etoro_realized_pnl(
         cls, payload: dict[str, object], row: dict[str, object]
     ) -> float | None:
@@ -531,6 +620,42 @@ class BrokerReconciliationService:
             parsed = cls._float(value)
             if parsed is not None:
                 return parsed
+        return None
+
+    @classmethod
+    def _set_etoro_realized_derived_metrics(cls, position: BrokerPosition) -> None:
+        if position.realized_pnl is None:
+            return
+        basis = cls._etoro_position_basis(position)
+        if basis:
+            position.realized_return_pct = round((float(position.realized_pnl) / basis) * 100.0, 4)
+        risk_distance = None
+        if position.entry_avg_price is not None and position.stop_loss_order_price is not None:
+            risk_distance = abs(float(position.entry_avg_price) - float(position.stop_loss_order_price))
+        units = position.unit_quantity
+        if units is None:
+            units = position.current_unit_quantity
+        if risk_distance and units:
+            risk_amount = risk_distance * abs(float(units))
+            if risk_amount:
+                position.realized_r_multiple = round(float(position.realized_pnl) / risk_amount, 4)
+
+    @classmethod
+    def _etoro_position_basis(cls, position: BrokerPosition) -> float | None:
+        payload = position.raw_broker_payload if isinstance(position.raw_broker_payload, dict) else {}
+        execution = payload.get("position_execution") if isinstance(payload, dict) else {}
+        if isinstance(execution, dict):
+            for key in (
+                "initialExposureAccountCurrency",
+                "marginAccountCurrency",
+                "investedAmountCurrency",
+            ):
+                value = cls._float(execution.get(key))
+                if value:
+                    return abs(value)
+        units = position.unit_quantity or position.current_unit_quantity
+        if position.entry_avg_price is not None and units:
+            return abs(float(position.entry_avg_price) * float(units))
         return None
 
     @staticmethod

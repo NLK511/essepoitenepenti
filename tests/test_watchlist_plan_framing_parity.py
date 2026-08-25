@@ -327,6 +327,39 @@ def test_actionable_short_plan_framing_payload_contract_is_stable() -> None:
     assert contract["signal"]["deep_analysis_confidence_percent"] == 74.0
 
 
+def test_minimum_stop_distance_widens_stop_and_records_resize_metadata() -> None:
+    service = _service(
+        plan_generation_tuning_config={"global.minimum_stop_loss_distance_percent": 2.0}
+    )
+
+    plan = service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(stop_loss=99.0, take_profit=106.0),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    assert plan.action == "long"
+    assert plan.stop_loss == 98.0
+    assert plan.risk_reward_ratio == 3.36
+    assert "stop_loss_widened_for_minimum_distance" in plan.warnings
+    assert plan.signal_breakdown["position_size_multiplier"] == 0.425
+    assert plan.signal_breakdown["stop_loss_distance_policy"] == {
+        "minimum_stop_loss_distance_percent": 2.0,
+        "stop_loss_widened": True,
+        "entry_reference": 100.0,
+        "original_stop_loss": 99.15,
+        "adjusted_stop_loss": 98.0,
+        "original_risk_distance": 0.85,
+        "adjusted_risk_distance": 2.0,
+        "position_size_multiplier": 0.425,
+    }
+
+
 def test_non_finite_trade_levels_are_not_execution_eligible() -> None:
     service = _service()
 

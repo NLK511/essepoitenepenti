@@ -307,6 +307,36 @@ class MultiBrokerFanoutTests(unittest.TestCase):
         self.assertEqual(order.notional_amount, 25.0)
         self.assertEqual(adapter.submitted_requests[0].notional_amount, 25.0)
 
+    def test_etoro_demo_amount_sizing_uses_plan_resize_multiplier(self) -> None:
+        account_id = "etoro-demo-main"
+        self.accounts.create(
+            BrokerAccount(
+                broker_account_id=account_id,
+                broker="etoro",
+                account_mode="demo",
+                account_label=account_id,
+                enabled=True,
+                autonomous_execution_enabled=True,
+                notional_cap_usd=250.0,
+            )
+        )
+        adapter = CapturingEtoroDemoAdapter()
+        self.factory.adapters[account_id] = adapter
+        service = MultiBrokerExecutionService(
+            settings=self.settings,
+            accounts=self.accounts,
+            executions=self.executions,
+            adapter_factory=self.factory,
+        )
+        plan = self._plan()
+        plan.signal_breakdown = {"position_size_multiplier": 0.4}
+
+        outcome = service.execute_plans([plan], run_id=1, job_id=2)
+
+        order = outcome.orders[0]
+        self.assertEqual(order.notional_amount, 100.0)
+        self.assertEqual(adapter.submitted_requests[0].notional_amount, 100.0)
+
     def test_etoro_demo_ambiguous_instrument_is_auditable_skip(self) -> None:
         account_id = "etoro-demo-main"
         self.accounts.create(

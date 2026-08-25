@@ -132,7 +132,8 @@ class BrokerRiskManager:
             position
             for position in positions
             if position.status in CLOSED_STATUSES
-            and (position.exit_filled_at or position.updated_at).astimezone(timezone.utc).date() == today
+            and position.exit_filled_at is not None
+            and position.exit_filled_at.astimezone(timezone.utc).date() == today
         ]
         open_ticker_counts: dict[str, int] = {}
         open_notional = 0.0
@@ -161,7 +162,7 @@ class BrokerRiskManager:
         wins = sum(1 for position in closed_today if position.status == TradeOutcome.WIN.value)
         losses = sum(1 for position in closed_today if position.status == TradeOutcome.LOSS.value)
         consecutive_losses = 0
-        for position in sorted(closed_today, key=lambda item: item.exit_filled_at or item.updated_at, reverse=True):
+        for position in sorted(closed_today, key=lambda item: item.exit_filled_at, reverse=True):
             if position.status != TradeOutcome.LOSS.value:
                 break
             consecutive_losses += 1

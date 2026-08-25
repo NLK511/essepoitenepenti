@@ -14,6 +14,7 @@ class ExecutionCandidate:
     stop_loss: float
     take_profit: float
     quantity: int
+    notional_amount: float
     client_order_id: str
 
     @property
@@ -75,7 +76,8 @@ class ExecutionCandidateBuilder:
                 stop_loss=stop_loss,
                 take_profit=take_profit,
             )
-        quantity = int(math.floor(float(notional_per_plan) / float(entry_price)))
+        adjusted_notional = self.adjusted_notional_amount(plan, notional_per_plan)
+        quantity = int(math.floor(float(adjusted_notional) / float(entry_price)))
         if quantity < 1 and not allow_amount_sizing:
             return ExecutionCandidateResult(
                 skip_reason="quantity_below_minimum",
@@ -90,6 +92,7 @@ class ExecutionCandidateBuilder:
                 stop_loss=float(stop_loss),
                 take_profit=take_profit,
                 quantity=max(0, quantity),
+                notional_amount=round(float(adjusted_notional), 4),
                 client_order_id=self.client_order_id(plan, run_id=run_id),
             ),
             entry_price=entry_price,
@@ -135,6 +138,18 @@ class ExecutionCandidateBuilder:
         if action == "short":
             return take_profit < entry_price < stop_loss
         return False
+
+    @staticmethod
+    def adjusted_notional_amount(plan: RecommendationPlan, notional_per_plan: float) -> float:
+        multiplier = 1.0
+        breakdown = plan.signal_breakdown
+        if hasattr(breakdown, "get"):
+            try:
+                multiplier = float(breakdown.get("position_size_multiplier"))
+            except (TypeError, ValueError):
+                multiplier = 1.0
+        multiplier = max(0.0, min(1.0, multiplier))
+        return max(0.0, float(notional_per_plan) * multiplier)
 
     @staticmethod
     def client_order_id(plan: RecommendationPlan, *, run_id: int | None) -> str:

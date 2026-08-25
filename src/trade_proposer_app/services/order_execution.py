@@ -203,7 +203,7 @@ class OrderExecutionService:
             candidate.stop_loss,
             candidate.take_profit,
         )
-        notional_amount = round(candidate.quantity * entry_price, 4)
+        notional_amount = round(candidate.notional_amount, 4)
         risk_assessment = self._risk_manager().assess(
             TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
             live_broker_snapshot=self._live_broker_snapshot(

@@ -275,6 +275,26 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         validation_depth_reason="Stop geometry changes require regenerating plans and resolving outcomes against reused local outcome bars.",
     ),
     PlanGenerationTuningParameterDefinition(
+        key="global.minimum_stop_loss_distance_percent",
+        label="Minimum stop-loss distance from entry",
+        default=2.0,
+        minimum=0.0,
+        maximum=20.0,
+        exploration_min=1.0,
+        exploration_max=5.0,
+        step=0.5,
+        category="risk",
+        description=(
+            "Widens generated stops that are too close to entry and records the "
+            "position-size reduction required to preserve risk."
+        ),
+        validation_depth="frozen_input_plan_regeneration",
+        validation_depth_reason=(
+            "Minimum stop-distance enforcement changes generated stop levels and risk "
+            "sizing metadata."
+        ),
+    ),
+    PlanGenerationTuningParameterDefinition(
         key="setup_family.breakout.stop_distance_multiplier",
         label="Breakout stop distance multiplier",
         default=0.85,

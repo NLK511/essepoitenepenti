@@ -1367,8 +1367,31 @@ class RepositoryTests(unittest.TestCase):
         assert result.candidate is not None
         self.assertEqual(result.candidate.entry_price, 100.0)
         self.assertEqual(result.candidate.quantity, 10)
+        self.assertEqual(result.candidate.notional_amount, 1000.0)
         self.assertEqual(result.candidate.client_order_id, "tp-run-7-plan-42-aapl")
         self.assertEqual(result.candidate.side, "buy")
+
+    def test_execution_candidate_builder_applies_plan_position_size_multiplier(self) -> None:
+        plan = RecommendationPlan(
+            id=42,
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=98.0,
+            take_profit=110.0,
+            thesis_summary="Resized candidate",
+            signal_breakdown={"position_size_multiplier": 0.425},
+        )
+
+        result = ExecutionCandidateBuilder().build(plan, notional_per_plan=1000.0, run_id=7)
+
+        self.assertTrue(result.is_candidate)
+        assert result.candidate is not None
+        self.assertEqual(result.candidate.quantity, 4)
+        self.assertEqual(result.candidate.notional_amount, 425.0)
 
     def test_execution_candidate_builder_returns_skip_reason_for_invalid_plan(self) -> None:
         plan = RecommendationPlan(
@@ -1495,6 +1518,54 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(assessment.metrics["projected_open_position_count"], 2)
             self.assertEqual(assessment.metrics["projected_open_notional_usd"], 250.0)
             self.assertEqual(assessment.metrics["open_ticker_counts"]["AAPL"], 1)
+        finally:
+            session.close()
+
+    def test_risk_manager_daily_closed_metrics_use_exit_timestamp_not_update_time(self) -> None:
+        session = create_session()
+        try:
+            now = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
+            yesterday = now - timedelta(days=1)
+            repository = BrokerPositionRepository(session)
+            repository.create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    quantity=1,
+                    current_quantity=0,
+                    status="loss",
+                    entry_avg_price=100.0,
+                    exit_avg_price=95.0,
+                    exit_filled_at=yesterday,
+                    realized_pnl=-5.0,
+                )
+            )
+            repository.create(
+                BrokerPosition(
+                    broker_order_execution_id=2,
+                    recommendation_plan_id=2,
+                    recommendation_plan_ticker="MSFT",
+                    ticker="MSFT",
+                    action="long",
+                    side="buy",
+                    quantity=1,
+                    current_quantity=0,
+                    status="loss",
+                    entry_avg_price=100.0,
+                    exit_avg_price=90.0,
+                    realized_pnl=-10.0,
+                )
+            )
+
+            assessment = BrokerRiskManager(SettingsRepository(session), repository).assess(now=now)
+
+            self.assertEqual(assessment.metrics["today_loss_count"], 0)
+            self.assertEqual(assessment.metrics["today_realized_pnl_usd"], 0.0)
+            self.assertEqual(assessment.metrics["today_consecutive_losses"], 0)
         finally:
             session.close()
 
@@ -1935,6 +2006,71 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(effective.broker_outcomes, 2)
             self.assertEqual(effective.simulation_outcomes, 1)
             self.assertEqual(effective.win_rate_percent, 66.7)
+        finally:
+            session.close()
+
+    def test_broker_performance_ignores_resolved_status_without_realized_pnl(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="NOPNL",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=70.0,
+                    thesis_summary="Broker status without realized pnl",
+                    signal_breakdown={"setup_family": "continuation"},
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker="NOPNL",
+                    ticker="NOPNL",
+                    action="long",
+                    side="buy",
+                    quantity=1,
+                    current_quantity=0,
+                    status="win",
+                    exit_filled_at=datetime.now(timezone.utc),
+                    realized_pnl=None,
+                    realized_return_pct=None,
+                    realized_r_multiple=None,
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="NOPNL",
+                    action="long",
+                    outcome="loss",
+                    status="resolved",
+                    confidence_bucket="65_to_79",
+                    setup_family="continuation",
+                    realized_pnl=-3.0,
+                )
+            )
+
+            service = TradingPerformanceMetricsService(session)
+            broker = service.summarize_broker_closed_positions()
+            effective = service.summarize_effective_outcomes()
+            effective_outcomes = EffectivePlanOutcomeRepository(session).list_outcomes(limit=10)
+
+            self.assertEqual(broker.closed_positions, 0)
+            self.assertEqual(broker.wins, 0)
+            self.assertEqual(broker.losses, 0)
+            self.assertIsNone(broker.win_rate_percent)
+            self.assertEqual(broker.realized_pnl, 0)
+            self.assertEqual(effective.resolved_outcomes, 1)
+            self.assertEqual(effective.broker_resolved_outcomes, 0)
+            self.assertEqual(effective.simulation_resolved_outcomes, 1)
+            self.assertEqual(effective.win_rate_percent, 0.0)
+            self.assertEqual(effective.realized_pnl, 0.0)
+            self.assertEqual(effective_outcomes[0].outcome_source, "simulation")
         finally:
             session.close()
 

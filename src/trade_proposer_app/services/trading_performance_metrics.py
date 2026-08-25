@@ -99,7 +99,10 @@ class TradingPerformanceMetricsService:
         evaluated_before: datetime | None = None,
     ) -> BrokerClosedPositionSummary:
         before = self._normalize_datetime(evaluated_before) if evaluated_before is not None else datetime.now(timezone.utc)
-        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(BROKER_RESOLVED_POSITION_STATUSES))
+        query = select(BrokerPositionRecord).where(
+            BrokerPositionRecord.status.in_(BROKER_RESOLVED_POSITION_STATUSES),
+            BrokerPositionRecord.realized_pnl.is_not(None),
+        )
         if evaluated_after is not None:
             query = query.where(BrokerPositionRecord.exit_filled_at >= self._normalize_datetime(evaluated_after))
         query = query.where(BrokerPositionRecord.exit_filled_at <= before)

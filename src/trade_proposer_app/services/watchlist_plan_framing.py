@@ -24,6 +24,13 @@ class _PlanFramingContext:
     shortlist_rank: int | None
 
 
+@dataclass(frozen=True)
+class _StopLossDistancePolicyResult:
+    stop_loss: float | None
+    risk_reward_ratio: float | None
+    metadata: dict[str, object]
+
+
 class WatchlistPlanFramingService:
     """Build persisted recommendation-plan payloads for watchlist orchestration.
 
@@ -128,6 +135,19 @@ class WatchlistPlanFramingService:
         stop_loss = finite_float(stop_loss)
         take_profit = finite_float(take_profit)
         risk_reward_ratio = finite_float(risk_reward_ratio)
+        stop_distance_policy = self._apply_minimum_stop_loss_distance(
+            intended_action,
+            entry_price_low,
+            entry_price_high,
+            stop_loss,
+            take_profit,
+            risk_reward_ratio,
+        )
+        stop_loss = stop_distance_policy.stop_loss
+        risk_reward_ratio = stop_distance_policy.risk_reward_ratio
+        stop_policy_metadata = stop_distance_policy.metadata.get("stop_loss_distance_policy")
+        if isinstance(stop_policy_metadata, dict) and stop_policy_metadata.get("stop_loss_widened"):
+            warnings.append("stop_loss_widened_for_minimum_distance")
 
         action, action_reason = self._resolve_action(
             watchlist,
@@ -178,11 +198,17 @@ class WatchlistPlanFramingService:
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._with_decision_tier(
-                    o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                    self._with_stop_loss_policy(
+                        o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                        stop_distance_policy.metadata,
+                    ),
                     decision_metadata,
                 ),
                 signal_breakdown=self._with_decision_tier(
-                    o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                    self._with_stop_loss_policy(
+                        o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                        stop_distance_policy.metadata,
+                    ),
                     decision_metadata,
                 ),
                 computed_at=signal.computed_at,
@@ -219,11 +245,17 @@ class WatchlistPlanFramingService:
             risks=o._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._with_decision_tier(
-                o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                self._with_stop_loss_policy(
+                    o._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                    stop_distance_policy.metadata,
+                ),
                 decision_metadata,
             ),
             signal_breakdown=self._with_decision_tier(
-                o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                self._with_stop_loss_policy(
+                    o._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
+                    stop_distance_policy.metadata,
+                ),
                 decision_metadata,
             ),
             computed_at=signal.computed_at,
@@ -369,6 +401,95 @@ class WatchlistPlanFramingService:
             return "invalid_trade_levels"
         return None
 
+    def _apply_minimum_stop_loss_distance(
+        self,
+        intended_action: str | None,
+        entry_price_low: float | None,
+        entry_price_high: float | None,
+        stop_loss: float | None,
+        take_profit: float | None,
+        risk_reward_ratio: float | None,
+    ) -> _StopLossDistancePolicyResult:
+        if intended_action not in {"long", "short"} or stop_loss is None:
+            return _StopLossDistancePolicyResult(stop_loss, risk_reward_ratio, {})
+        entry = self._entry_reference(entry_price_low, entry_price_high)
+        if entry is None or entry <= 0:
+            return _StopLossDistancePolicyResult(stop_loss, risk_reward_ratio, {})
+        min_distance_pct = max(
+            0.0,
+            self._orchestration._plan_generation_tuning_value(
+                "global.minimum_stop_loss_distance_percent", 2.0
+            ),
+        )
+        if min_distance_pct <= 0:
+            return _StopLossDistancePolicyResult(stop_loss, risk_reward_ratio, {})
+        original_risk_distance = abs(entry - stop_loss)
+        minimum_risk_distance = entry * (min_distance_pct / 100.0)
+        if original_risk_distance >= minimum_risk_distance:
+            return _StopLossDistancePolicyResult(
+                stop_loss,
+                risk_reward_ratio,
+                {
+                    "stop_loss_distance_policy": {
+                        "minimum_stop_loss_distance_percent": round(min_distance_pct, 4),
+                        "stop_loss_widened": False,
+                        "entry_reference": round(entry, 4),
+                        "risk_distance": round(original_risk_distance, 4),
+                    }
+                },
+            )
+
+        adjusted_stop = round(
+            entry - minimum_risk_distance
+            if intended_action == "long"
+            else entry + minimum_risk_distance,
+            4,
+        )
+        adjusted_risk_distance = abs(entry - adjusted_stop)
+        position_size_multiplier = (
+            original_risk_distance / adjusted_risk_distance
+            if adjusted_risk_distance > 0
+            else 1.0
+        )
+        position_size_multiplier = max(0.0, min(1.0, position_size_multiplier))
+        metadata = {
+            "stop_loss_distance_policy": {
+                "minimum_stop_loss_distance_percent": round(min_distance_pct, 4),
+                "stop_loss_widened": True,
+                "entry_reference": round(entry, 4),
+                "original_stop_loss": round(stop_loss, 4),
+                "adjusted_stop_loss": adjusted_stop,
+                "original_risk_distance": round(original_risk_distance, 4),
+                "adjusted_risk_distance": round(adjusted_risk_distance, 4),
+                "position_size_multiplier": round(position_size_multiplier, 6),
+            },
+            "position_size_multiplier": round(position_size_multiplier, 6),
+        }
+        return _StopLossDistancePolicyResult(
+            adjusted_stop,
+            self._recompute_risk_reward_ratio(entry, adjusted_stop, take_profit),
+            metadata,
+        )
+
+    @staticmethod
+    def _entry_reference(
+        entry_price_low: float | None, entry_price_high: float | None
+    ) -> float | None:
+        if entry_price_low is not None and entry_price_high is not None:
+            return (entry_price_low + entry_price_high) / 2.0
+        return entry_price_low if entry_price_low is not None else entry_price_high
+
+    @staticmethod
+    def _recompute_risk_reward_ratio(
+        entry: float, stop_loss: float | None, take_profit: float | None
+    ) -> float | None:
+        if stop_loss is None or take_profit is None:
+            return None
+        risk = abs(entry - stop_loss)
+        if risk <= 0:
+            return None
+        return round(abs(take_profit - entry) / risk, 4)
+
     def _preferred_non_execution_tier(
         self,
         *,
@@ -446,6 +567,16 @@ class WatchlistPlanFramingService:
             thresholds["research_floor_percent"] = decision_metadata["research_floor_percent"]
             thresholds["shadow_tracking_floor_percent"] = decision_metadata["shadow_tracking_floor_percent"]
             enriched["decision_thresholds"] = thresholds
+        return enriched
+
+    @staticmethod
+    def _with_stop_loss_policy(
+        payload: dict[str, object], metadata: dict[str, object]
+    ) -> dict[str, object]:
+        if not metadata:
+            return payload
+        enriched = dict(payload)
+        enriched.update(metadata)
         return enriched
 
     def build_no_action_plan(

@@ -183,6 +183,7 @@ class MultiBrokerExecutionService:
             config=config,
             quantity=candidate.quantity,
             entry_price=entry_price,
+            adjusted_notional_amount=candidate.notional_amount,
         )
         order = BrokerOrderExecution(
             broker_account_id=account.broker_account_id,
@@ -499,7 +500,7 @@ class MultiBrokerExecutionService:
         candidate = getattr(candidate_result, "candidate", None)
         if candidate is None:
             return 0.0
-        return round(float(candidate.quantity) * float(candidate.entry_price), 4)
+        return round(float(candidate.notional_amount), 4)
 
     @classmethod
     def _candidate_notional_for_account(
@@ -509,7 +510,7 @@ class MultiBrokerExecutionService:
         candidate_result: object,
     ) -> float:
         if account.broker == "etoro" and account.account_mode == "demo":
-            return cls._notional_for_account(account, config)
+            return cls._candidate_notional(candidate_result)
         return cls._candidate_notional(candidate_result)
 
     @staticmethod
@@ -526,9 +527,15 @@ class MultiBrokerExecutionService:
         config: dict[str, object],
         quantity: int,
         entry_price: float,
+        adjusted_notional_amount: float | None = None,
     ) -> float:
         if account.broker == "etoro" and account.account_mode == "demo":
-            return round(cls._notional_for_account(account, config), 4)
+            return round(
+                float(adjusted_notional_amount)
+                if adjusted_notional_amount is not None
+                else cls._notional_for_account(account, config),
+                4,
+            )
         return round(quantity * entry_price, 4)
 
     def _store_skip(
