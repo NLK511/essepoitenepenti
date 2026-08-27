@@ -3,10 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.statuses import BROKER_RESOLVED_POSITION_STATUSES, OutcomeStatus, TradeOutcome
+from trade_proposer_app.domain.statuses import (
+    BROKER_RESOLVED_POSITION_STATUSES,
+    OutcomeStatus,
+    TradeOutcome,
+)
 from trade_proposer_app.persistence.models import BrokerPositionRecord
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 
@@ -88,7 +92,9 @@ class EffectiveOutcomeSummary:
 class TradingPerformanceMetricsService:
     """Shared performance metric definitions for broker and effective outcomes."""
 
-    def __init__(self, session: Session, effective_outcomes: EffectivePlanOutcomeRepository | None = None) -> None:
+    def __init__(
+        self, session: Session, effective_outcomes: EffectivePlanOutcomeRepository | None = None
+    ) -> None:
         self.session = session
         self.effective_outcomes = effective_outcomes or EffectivePlanOutcomeRepository(session)
 
@@ -98,26 +104,52 @@ class TradingPerformanceMetricsService:
         evaluated_after: datetime | None = None,
         evaluated_before: datetime | None = None,
     ) -> BrokerClosedPositionSummary:
-        before = self._normalize_datetime(evaluated_before) if evaluated_before is not None else datetime.now(timezone.utc)
+        before = (
+            self._normalize_datetime(evaluated_before)
+            if evaluated_before is not None
+            else datetime.now(timezone.utc)
+        )
+        closed_at = func.coalesce(
+            BrokerPositionRecord.exit_filled_at, BrokerPositionRecord.updated_at
+        )
         query = select(BrokerPositionRecord).where(
-            BrokerPositionRecord.status.in_(BROKER_RESOLVED_POSITION_STATUSES),
-            BrokerPositionRecord.realized_pnl.is_not(None),
+            or_(
+                (
+                    BrokerPositionRecord.status.in_(BROKER_RESOLVED_POSITION_STATUSES)
+                    & BrokerPositionRecord.realized_pnl.is_not(None)
+                ),
+                (
+                    (BrokerPositionRecord.status == OutcomeStatus.NEEDS_REVIEW.value)
+                    & (BrokerPositionRecord.current_quantity == 0)
+                ),
+            ),
         )
         if evaluated_after is not None:
-            query = query.where(BrokerPositionRecord.exit_filled_at >= self._normalize_datetime(evaluated_after))
-        query = query.where(BrokerPositionRecord.exit_filled_at <= before)
+            query = query.where(closed_at >= self._normalize_datetime(evaluated_after))
+        query = query.where(closed_at <= before)
         positions = self.session.scalars(query).all()
         wins = sum(1 for position in positions if position.status == TradeOutcome.WIN.value)
         losses = sum(1 for position in positions if position.status == TradeOutcome.LOSS.value)
-        closed = wins + losses
-        returns = [float(position.realized_return_pct) for position in positions if position.realized_return_pct is not None]
-        r_multiples = [float(position.realized_r_multiple) for position in positions if position.realized_r_multiple is not None]
+        scored = wins + losses
+        closed = len(positions)
+        returns = [
+            float(position.realized_return_pct)
+            for position in positions
+            if position.realized_return_pct is not None
+        ]
+        r_multiples = [
+            float(position.realized_r_multiple)
+            for position in positions
+            if position.realized_r_multiple is not None
+        ]
         return BrokerClosedPositionSummary(
             closed_positions=closed,
             wins=wins,
             losses=losses,
-            win_rate_percent=self._percentage(wins, closed),
-            realized_pnl=round(sum(float(position.realized_pnl or 0.0) for position in positions), 4),
+            win_rate_percent=self._percentage(wins, scored),
+            realized_pnl=round(
+                sum(float(position.realized_pnl or 0.0) for position in positions), 4
+            ),
             average_return_percent=self._average(returns, digits=2),
             average_r_multiple=self._average(r_multiples, digits=4),
         )
@@ -134,19 +166,48 @@ class TradingPerformanceMetricsService:
             evaluated_before=evaluated_before,
             limit=limit,
         )
-        resolved = [item for item in outcomes if item.status == OutcomeStatus.RESOLVED.value and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
+        resolved = [
+            item
+            for item in outcomes
+            if item.status == OutcomeStatus.RESOLVED.value
+            and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
+        ]
         wins = sum(1 for item in resolved if item.outcome == TradeOutcome.WIN.value)
         losses = sum(1 for item in resolved if item.outcome == TradeOutcome.LOSS.value)
-        returns = [float(item.realized_return_pct) for item in resolved if item.realized_return_pct is not None]
-        r_multiples = [float(item.realized_r_multiple) for item in resolved if item.realized_r_multiple is not None]
+        returns = [
+            float(item.realized_return_pct)
+            for item in resolved
+            if item.realized_return_pct is not None
+        ]
+        r_multiples = [
+            float(item.realized_r_multiple)
+            for item in resolved
+            if item.realized_r_multiple is not None
+        ]
         broker_resolved = [item for item in resolved if item.outcome_source == "broker"]
         simulation_resolved = [item for item in resolved if item.outcome_source == "simulation"]
         plan_resolved = [item for item in resolved if item.outcome_source == "plan"]
-        broker_returns = [float(item.realized_return_pct) for item in broker_resolved if item.realized_return_pct is not None]
-        simulation_returns = [float(item.realized_return_pct) for item in simulation_resolved if item.realized_return_pct is not None]
-        plan_returns = [float(item.realized_return_pct) for item in plan_resolved if item.realized_return_pct is not None]
-        broker_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in broker_resolved), 4)
-        simulation_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in simulation_resolved), 4)
+        broker_returns = [
+            float(item.realized_return_pct)
+            for item in broker_resolved
+            if item.realized_return_pct is not None
+        ]
+        simulation_returns = [
+            float(item.realized_return_pct)
+            for item in simulation_resolved
+            if item.realized_return_pct is not None
+        ]
+        plan_returns = [
+            float(item.realized_return_pct)
+            for item in plan_resolved
+            if item.realized_return_pct is not None
+        ]
+        broker_realized_pnl = round(
+            sum(float(item.realized_pnl or 0.0) for item in broker_resolved), 4
+        )
+        simulation_realized_pnl = round(
+            sum(float(item.realized_pnl or 0.0) for item in simulation_resolved), 4
+        )
         plan_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in plan_resolved), 4)
         realized_pnl = round(broker_realized_pnl + simulation_realized_pnl + plan_realized_pnl, 4)
         resolved_outcomes = len(resolved)
@@ -154,7 +215,9 @@ class TradingPerformanceMetricsService:
         return EffectiveOutcomeSummary(
             total_outcomes=len(outcomes),
             resolved_outcomes=resolved_outcomes,
-            open_outcomes=sum(1 for item in outcomes if item.status != OutcomeStatus.RESOLVED.value),
+            open_outcomes=sum(
+                1 for item in outcomes if item.status != OutcomeStatus.RESOLVED.value
+            ),
             wins=wins,
             losses=losses,
             win_rate_percent=self._percentage(wins, resolved_outcomes),

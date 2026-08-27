@@ -2074,6 +2074,50 @@ class RepositoryTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_broker_performance_counts_unscored_needs_review_closures(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="UNSCORED",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=70.0,
+                    thesis_summary="Broker closure without confirmed pnl",
+                    signal_breakdown={"setup_family": "continuation"},
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    broker="etoro",
+                    account_mode="demo",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker="UNSCORED",
+                    ticker="UNSCORED",
+                    action="long",
+                    side="buy",
+                    quantity=1,
+                    current_quantity=0,
+                    status="needs_review",
+                    realized_pnl=None,
+                    realized_return_pct=None,
+                    realized_r_multiple=None,
+                )
+            )
+
+            service = TradingPerformanceMetricsService(session)
+            broker = service.summarize_broker_closed_positions()
+
+            self.assertEqual(broker.closed_positions, 1)
+            self.assertEqual(broker.wins, 0)
+            self.assertEqual(broker.losses, 0)
+            self.assertIsNone(broker.win_rate_percent)
+            self.assertEqual(broker.realized_pnl, 0)
+        finally:
+            session.close()
+
     def test_recommendation_plan_repository_counts_closed_broker_orders_as_resolved(self) -> None:
         session = create_session()
         plan_repository = RecommendationPlanRepository(session)

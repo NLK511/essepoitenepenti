@@ -170,6 +170,9 @@ class DashboardTrendService:
             "effective_closed_positions": effective_summary["resolved_outcomes"],
             "effective_wins": effective_summary["wins"],
             "effective_losses": effective_summary["losses"],
+            "broker_closed_positions": broker_summary["closed_positions"],
+            "broker_wins": broker_summary["wins"],
+            "broker_losses": broker_summary["losses"],
             "total_profit": effective_summary["realized_pnl"],
             "average_profit_percent": effective_summary["average_return_percent"],
             "broker_realized_pnl": broker_summary["realized_pnl"],
@@ -216,8 +219,7 @@ class DashboardTrendService:
     def _aggregate_dashboard_summaries(
         self, snapshots: list[dict[str, object]]
     ) -> dict[str, object]:
-        summaries = [snapshot.get("dashboard_summary") for snapshot in snapshots]
-        rows = [summary for summary in summaries if isinstance(summary, dict)]
+        rows = [self._combined_summary_row(snapshot) for snapshot in snapshots]
         plan_amount = self._sum(rows, "plan_amount")
         signals_amount = self._sum(rows, "signals_amount")
         shortlisted_plans = self._sum(rows, "shortlisted_plans")
@@ -276,6 +278,17 @@ class DashboardTrendService:
             "watchlist_outcomes": self._sum(rows, "watchlist_outcomes"),
             "aggregate_source": "daily_snapshots_plus_today",
         }
+
+    @staticmethod
+    def _combined_summary_row(snapshot: dict[str, object]) -> dict[str, object]:
+        technical_summary = snapshot.get("technical_summary")
+        dashboard_summary = snapshot.get("dashboard_summary")
+        row: dict[str, object] = {}
+        if isinstance(technical_summary, dict):
+            row.update(technical_summary)
+        if isinstance(dashboard_summary, dict):
+            row.update(dashboard_summary)
+        return row
 
     def _aggregate_technical_summaries(
         self, snapshots: list[dict[str, object]]
@@ -360,7 +373,9 @@ class DashboardTrendService:
             query = query.where(column < computed_before)
         return int(self.session.scalar(query) or 0)
 
-    def _count_news_processed(self, computed_after: datetime | None, computed_before: datetime | None) -> int:
+    def _count_news_processed(
+        self, computed_after: datetime | None, computed_before: datetime | None
+    ) -> int:
         processed_at = func.coalesce(
             HistoricalNewsRecord.ingested_at,
             HistoricalNewsRecord.created_at,

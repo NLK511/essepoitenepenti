@@ -128,6 +128,9 @@ class DashboardTrendServiceTests(unittest.TestCase):
         self.assertNotEqual(summary["total_profit"], summary["profit_percent"])
         self.assertEqual(summary["broker_realized_pnl"], 125.5)
         self.assertEqual(summary["broker_average_profit_percent"], 3.25)
+        self.assertEqual(summary["broker_closed_positions"], 3)
+        self.assertEqual(summary["broker_wins"], 2)
+        self.assertEqual(summary["broker_losses"], 1)
         self.assertEqual(summary["simulated_average_profit_percent"], 1.5)
         self.assertEqual(technical["broker_realized_pnl"], 125.5)
 
@@ -223,10 +226,66 @@ class DashboardTrendServiceTests(unittest.TestCase):
         self.assertEqual(payload["dashboard_summary"]["plan_amount"], 15)
         self.assertEqual(payload["dashboard_summary"]["shortlist_rate_percent"], 50.0)
         self.assertEqual(payload["dashboard_summary"]["overall_win_rate_percent"], 60.0)
+        self.assertEqual(payload["dashboard_summary"]["broker_win_rate_percent"], 66.7)
         self.assertEqual(payload["dashboard_summary"]["total_profit"], 90.0)
         self.assertEqual(payload["dashboard_summary"]["average_profit_percent"], 1.4)
         self.assertEqual(payload["technical_summary"]["news_processed"], 10)
         self.assertEqual(payload["technical_summary"]["orders_placed"], 3)
+
+    def test_cached_window_metrics_recovers_broker_counts_from_legacy_snapshots(self) -> None:
+        service = DashboardTrendService(self.session)
+        old_day = date(2026, 5, 1)
+        today = date(2026, 5, 2)
+        legacy_snapshot = {
+            "snapshot_date": old_day.isoformat(),
+            "computed_at": datetime(2026, 5, 2, 0, 0, tzinfo=UTC).isoformat(),
+            "dashboard_summary": {
+                "plan_amount": 10,
+                "signals_amount": 20,
+                "effective_closed_positions": 4,
+                "effective_wins": 2,
+                "total_profit": 100.0,
+                "average_profit_percent": 2.0,
+                "broker_win_rate_percent": None,
+                "broker_realized_pnl": 30.0,
+                "broker_average_profit_percent": 1.5,
+            },
+            "technical_summary": {
+                "broker_closed_positions": 2,
+                "broker_wins": 1,
+                "broker_losses": 1,
+            },
+        }
+        today_snapshot = {
+            "snapshot_date": today.isoformat(),
+            "computed_at": datetime(2026, 5, 2, 12, 0, tzinfo=UTC).isoformat(),
+            "dashboard_summary": {
+                "plan_amount": 5,
+                "signals_amount": 10,
+                "effective_closed_positions": 1,
+                "effective_wins": 1,
+                "total_profit": 20.0,
+                "average_profit_percent": 3.0,
+                "broker_realized_pnl": 12.0,
+                "broker_average_profit_percent": 2.0,
+            },
+            "technical_summary": {
+                "broker_closed_positions": 1,
+                "broker_wins": 1,
+                "broker_losses": 0,
+            },
+        }
+        service._ensure_daily_snapshot = lambda snapshot_date: legacy_snapshot
+        service._compute_partial_day_snapshot = lambda snapshot_date, now: today_snapshot
+
+        payload = service.build_cached_window_metrics(
+            now=datetime(2026, 5, 2, 12, 0, tzinfo=UTC), days=2
+        )
+
+        self.assertEqual(payload["dashboard_summary"]["broker_win_rate_percent"], 66.7)
+        self.assertEqual(payload["technical_summary"]["broker_closed_positions"], 3)
+        self.assertEqual(payload["technical_summary"]["broker_wins"], 2)
+        self.assertEqual(payload["technical_summary"]["broker_losses"], 1)
 
     def test_build_trends_keeps_total_profit_and_average_profit_series_distinct(self) -> None:
         service = DashboardTrendService(self.session)
