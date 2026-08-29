@@ -66,7 +66,10 @@ def run_audit(
             and str(row.replay.resolution_source or "").strip().lower() == "intraday"
             and str(row.replay.outcome or "").strip().lower() in {"phantom_win", "phantom_loss"}
         ]
-        replay_labeled_tagged_plans = [
+        outcome_labeled_tagged_plans = [
+            row for row in tagged_plans if evidence_by_plan_id.get(int(row.id)) is not None
+        ]
+        historical_replay_labeled_tagged_plans = [
             row
             for row in tagged_plans
             if (evidence_by_plan_id.get(int(row.id)) is not None)
@@ -82,8 +85,11 @@ def run_audit(
             "current_replay_artifact_versions": current_versions,
             "populations": {
                 "prospective_tagged_plans": _plan_population_payload(tagged_plans),
-                "replay_labeled_tagged_plans": _plan_population_payload(
-                    replay_labeled_tagged_plans
+                "outcome_labeled_tagged_plans": _plan_population_payload(
+                    outcome_labeled_tagged_plans
+                ),
+                "historical_replay_labeled_tagged_plans": _plan_population_payload(
+                    historical_replay_labeled_tagged_plans
                 ),
                 "all_replay_eligibility_rows": _replay_population_payload(replay_rows),
                 "current_version_replay_eligibility_rows": _replay_population_payload(
@@ -224,15 +230,18 @@ def _artifact_version_mix(
 
 def _freshness_alignment(populations: dict[str, object]) -> dict[str, object]:
     tagged = populations["prospective_tagged_plans"]
-    labeled = populations["replay_labeled_tagged_plans"]
+    labeled = populations["outcome_labeled_tagged_plans"]
+    replay_labeled = populations["historical_replay_labeled_tagged_plans"]
     phantom = populations["current_version_phantom_selectivity_replay_eligible_rows"]
     raw_phantom = populations["phantom_selectivity_replay_eligible_rows"]
     assert isinstance(tagged, dict)
     assert isinstance(labeled, dict)
+    assert isinstance(replay_labeled, dict)
     assert isinstance(phantom, dict)
     assert isinstance(raw_phantom, dict)
     tagged_latest = _parse_date((tagged["date_range"] or {}).get("end"))
     labeled_latest = _parse_date((labeled["date_range"] or {}).get("end"))
+    replay_labeled_latest = _parse_date((replay_labeled["date_range"] or {}).get("end"))
     phantom_latest = _parse_date((phantom["date_range"] or {}).get("end"))
     raw_phantom_latest = _parse_date((raw_phantom["date_range"] or {}).get("end"))
     lag_days = (
@@ -253,7 +262,10 @@ def _freshness_alignment(populations: dict[str, object]) -> dict[str, object]:
     return {
         "verdict": verdict,
         "latest_prospective_tag_date": tagged_latest.isoformat() if tagged_latest else None,
-        "latest_replay_labeled_tag_date": labeled_latest.isoformat() if labeled_latest else None,
+        "latest_outcome_labeled_tag_date": labeled_latest.isoformat() if labeled_latest else None,
+        "latest_historical_replay_labeled_tag_date": (
+            replay_labeled_latest.isoformat() if replay_labeled_latest else None
+        ),
         "latest_phantom_selectivity_eligible_date": (
             phantom_latest.isoformat() if phantom_latest else None
         ),

@@ -35,7 +35,7 @@ The weekly report must include:
 
 - tag monitor verdict and top blockers;
 - whether prospective tags are absent, accumulating, or ready for review;
-- evidence date-window alignment: prospective tagged plans, replay-labeled tagged plans, phantom-selectivity eligible records, and candidate replay discovery/selection windows;
+- evidence date-window alignment: prospective tagged plans, outcome-labeled tagged plans, historical-replay-labeled tagged plans, phantom-selectivity eligible records, and candidate replay discovery/selection windows;
 - replay freshness status, including whether newer tagged plans are flowing into phantom-selectivity replay eligibility;
 - candidate replay split math: total eligible dates, selection fraction, current selection date count, promotion date gate, and estimated total eligible dates needed;
 - phantom separability verdict if run;
@@ -188,7 +188,8 @@ Read:
 
 - `freshness_alignment.verdict`
 - latest prospective tag date
-- latest replay-labeled tag date
+- latest outcome-labeled tag date
+- latest historical-replay-labeled tag date
 - latest phantom-selectivity eligible date
 - lag in calendar days
 - artifact-version pass/fail counts
