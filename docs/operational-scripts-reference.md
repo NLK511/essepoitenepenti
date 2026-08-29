@@ -25,6 +25,18 @@ Monitors prospectively emitted `signal_breakdown.upstream_signal_quality_drivers
   ```
 - **Read first:** `docs/evidence-and-tuning-operations-runbook.md`.
 
+### `scripts/audit_evidence_lineage.py`
+Compares prospective tag freshness with replay eligibility freshness.
+
+- **Use case:** Explain whether new tagged plans are entering the phantom-selectivity replay path, or whether replay eligibility is stale, filtered, or missing.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/audit_evidence_lineage.py \
+    --replay-tier tier_a \
+    --artifact /app/.prod-run/workers/artifacts/evidence-lineage-latest.json'
+  ```
+- **Read first:** `docs/evidence-and-tuning-operations-runbook.md`.
+
 ### `scripts/recover_recommendation_plan_evaluations.py`
 Recovers missing recommendation plan outcome rows through explicit, bounded chunks.
 

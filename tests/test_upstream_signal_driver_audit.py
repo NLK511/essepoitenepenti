@@ -153,8 +153,41 @@ def test_prospective_signal_driver_tag_monitor_marks_review_ready_tag() -> None:
     assert report["verdict"] == "prospective_tags_ready_for_review"
     tag = report["tags"][0]
     assert tag["tag_verdict"] == "promotion_watchable"
+    assert tag["maturity_verdict"] == "coverage_ready_for_review"
+    assert tag["performance_verdict"] == "positive_phantom_evidence"
     assert tag["phantom_outcome_metrics"]["win_rate_percent"] == 80.0
     assert tag["phantom_outcome_metrics"]["expected_value_per_observation"] == 5.6
+
+
+def test_tag_monitor_separates_maturity_from_negative_performance() -> None:
+    start = date(2026, 1, 1)
+    rows: list[ProspectiveSignalDriverTagObservation] = []
+    for index in range(20):
+        for ticker in ("PANW", "HUM"):
+            rows.append(
+                _tagged_obs(
+                    day=start + timedelta(days=index),
+                    ticker=ticker,
+                    outcome="phantom_loss",
+                )
+            )
+
+    report = build_prospective_signal_driver_tag_monitor_report(
+        rows,
+        gates=ProspectiveSignalDriverTagMonitorGates(
+            min_tagged_rows=30,
+            min_tagged_dates=5,
+            min_replay_labeled_rows=30,
+            min_replay_labeled_dates=5,
+            promotion_watch_date_floor=20,
+        ),
+    )
+
+    tag = report["tags"][0]
+    assert tag["tag_verdict"] == "promotion_watchable"
+    assert tag["maturity_verdict"] == "coverage_ready_for_review"
+    assert tag["performance_verdict"] == "not_positive_phantom_evidence"
+    assert "phantom_expected_value_not_positive" in tag["performance_warnings"]
 
 
 def test_prospective_signal_driver_tag_monitor_reports_label_source_mix() -> None:

@@ -35,8 +35,13 @@ The weekly report must include:
 
 - tag monitor verdict and top blockers;
 - whether prospective tags are absent, accumulating, or ready for review;
+- evidence date-window alignment: prospective tagged plans, replay-labeled tagged plans, phantom-selectivity eligible records, and candidate replay discovery/selection windows;
+- replay freshness status, including whether newer tagged plans are flowing into phantom-selectivity replay eligibility;
+- candidate replay split math: total eligible dates, selection fraction, current selection date count, promotion date gate, and estimated total eligible dates needed;
 - phantom separability verdict if run;
 - candidate replay verdict if run;
+- candidate replay concentration cautions, split into broad reusable feature candidates and ticker-specific candidates;
+- discovery-vs-selection baseline drift cautions;
 - upstream audit/drilldown verdicts if run;
 - performance read: what improved, what weakened, what is still unproven;
 - concrete improvement proposals;
@@ -115,6 +120,8 @@ Decisions:
 
 Do not change scoring from tag monitor output alone.
 
+Do not read `promotion_watchable` as positive evidence. It means a tag has enough coverage for review. If phantom expected value is negative, say that plainly.
+
 ### 2. If tags are ready, rerun phantom separability
 
 ```bash
@@ -129,6 +136,9 @@ Read:
 - `candidate_specific_replay_recommended`
 - `record_counts`
 - `date_counts`
+- `date_windows`
+- `selection_split`
+- `baseline_shift`
 - `candidate_group_count`
 - `blockers`
 
@@ -152,11 +162,44 @@ Proceed only when the report has:
 - `promotion_candidate_ready=true`
 - selection rows at least 100
 - selection distinct dates at least 20
+- `selection_split`
+- `baseline_shift`
+- broad feature candidates versus ticker-specific candidates
+- combined union with and without ticker-only groups
+- concentration warnings
 - positive selection EV/observation
 - win rate above selection baseline
 - no single ticker/date/setup dominating the result
 
 If the candidate replay is positive but below date coverage, keep it research-only and wait.
+
+If prospective tagged evidence is newer than phantom-selectivity candidate replay evidence, do not assume waiting alone will fix the date gate. Run the evidence lineage audit and verify that new tagged plans are entering replay eligibility.
+
+### Evidence lineage audit
+
+Use this when a weekly report shows fresh prospective tags but stale or thin candidate replay evidence:
+
+```bash
+docker compose exec -T api sh -lc 'python scripts/audit_evidence_lineage.py \
+  --artifact /app/.prod-run/workers/artifacts/evidence-lineage-latest.json'
+```
+
+Read:
+
+- `freshness_alignment.verdict`
+- latest prospective tag date
+- latest replay-labeled tag date
+- latest phantom-selectivity eligible date
+- lag in calendar days
+- artifact-version pass/fail counts
+- replay tier, resolution source, and outcome mixes
+
+Decisions:
+
+- `aligned`: new tagged evidence is represented in replay eligibility.
+- `tagged_ahead_of_replay`: prospective tags are fresher than candidate replay evidence. Investigate replay labeling or eligibility generation.
+- `replay_stale_or_filtered`: replay rows exist but are being filtered out by tier, resolution source, outcome class, or artifact version.
+- `no_tagged_evidence` / `no_phantom_selectivity_evidence`: wait or repair the missing evidence source.
 
 ### 4. Audit upstream signal drivers
 

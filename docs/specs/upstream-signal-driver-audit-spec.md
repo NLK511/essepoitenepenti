@@ -149,7 +149,8 @@ The monitor must:
 - report tag cohorts by stable tag key, feature, value, setup family, ticker mix, action mix, date spread, evidence source mix, and outcome mix;
 - report phantom win/loss expected value only for tagged rows that already have intraday-compatible outcome evidence and usable trade geometry;
 - report closed trade outcome mix when win/loss/flat labels are available;
-- mark whether each tag is promotion-watchable, still accumulating evidence, or empty;
+- mark whether each tag has enough coverage for review, is still accumulating evidence, or is empty;
+- keep tag maturity separate from tag performance. A tag with enough rows/dates but negative phantom expected value must be reported as coverage-ready but not positive evidence;
 - never change plan generation, replay state, tuning config, jobs, orders, scheduler state, or broker behavior.
 
 Default prospective monitor gates:
@@ -168,3 +169,5 @@ Monitor verdicts:
 - `no_prospective_tagged_evidence` — no stored plans contain prospective driver tags yet.
 
 The monitor is the standing checkpoint while this tuning layer is on hold. It tells us when the newly tagged evidence is worth reviewing again without running another broad threshold search.
+
+User-facing reports must not treat `promotion_watchable` as bullish by itself. It means the tag has enough coverage to inspect. Performance language must come from phantom/closed outcome metrics, not coverage gates.

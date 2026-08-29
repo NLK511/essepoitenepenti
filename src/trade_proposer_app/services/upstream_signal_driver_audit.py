@@ -456,6 +456,13 @@ def _prospective_tag_payload(
     if top_ticker_share > gates.max_single_ticker_share_percent:
         blockers.append("top_ticker_share_above_reusable_maximum")
     tag_verdict = "promotion_watchable" if not blockers else "accumulating"
+    phantom_metrics = _prospective_phantom_metrics(phantom_rows)
+    performance_warnings: list[str] = []
+    if (
+        int(phantom_metrics["count"]) > 0
+        and float(phantom_metrics["expected_value_per_observation"]) <= 0.0
+    ):
+        performance_warnings.append("phantom_expected_value_not_positive")
 
     return {
         "key": key,
@@ -463,10 +470,20 @@ def _prospective_tag_payload(
         "value": metadata.get("value", "unknown"),
         "reason": metadata.get("reason", ""),
         "tag_verdict": tag_verdict,
+        "maturity_verdict": (
+            "coverage_ready_for_review" if tag_verdict == "promotion_watchable" else "accumulating"
+        ),
+        "performance_verdict": (
+            "positive_phantom_evidence"
+            if int(phantom_metrics["count"]) > 0
+            and float(phantom_metrics["expected_value_per_observation"]) > 0.0
+            else "not_positive_phantom_evidence"
+        ),
+        "performance_warnings": performance_warnings,
         "blockers": sorted(set(blockers)),
         "metrics": metrics,
         "replay_labeled_metrics": replay_labeled_metrics,
-        "phantom_outcome_metrics": _prospective_phantom_metrics(phantom_rows),
+        "phantom_outcome_metrics": phantom_metrics,
         "outcome_mix": _prospective_outcome_mix(rows),
         "label_source_mix": _prospective_label_source_mix(replay_labeled_rows),
         "mix": {
@@ -487,7 +504,9 @@ def _prospective_population_metrics(
     return {
         "count": len(rows),
         "distinct_date_count": len({item.evidence_date for item in rows}),
-        "ticker_count": len({_clean(item.ticker) for item in rows if _clean(item.ticker) != "unknown"}),
+        "ticker_count": len(
+            {_clean(item.ticker) for item in rows if _clean(item.ticker) != "unknown"}
+        ),
     }
 
 
@@ -786,15 +805,31 @@ def _feature_values(row: UpstreamSignalDriverObservation, feature_name: str) -> 
     if feature_name == "volatility_bucket":
         if base.volatility_score is None:
             return {"unknown"}
-        return {_numeric_bucket(_normalize_percent(base.volatility_score), step=10.0, lower=0.0, upper=100.0)}
+        return {
+            _numeric_bucket(
+                _normalize_percent(base.volatility_score),
+                step=10.0,
+                lower=0.0,
+                upper=100.0,
+            )
+        }
     if feature_name == "expected_transmission_window":
-        return {_clean(_nested_get(signal, "transmission_summary", "expected_transmission_window") or signal.get("expected_transmission_window"))}
+        return {
+            _clean(
+                _nested_get(signal, "transmission_summary", "expected_transmission_window")
+                or signal.get("expected_transmission_window")
+            )
+        }
     if feature_name == "catalyst_intensity_bucket":
         value = _first_number(
             signal.get("catalyst_intensity_percent"),
             _nested_get(signal, "transmission_summary", "catalyst_intensity_percent"),
         )
-        return {"unknown"} if value is None else {_numeric_bucket(value, step=10.0, lower=0.0, upper=100.0)}
+        return (
+            {"unknown"}
+            if value is None
+            else {_numeric_bucket(value, step=10.0, lower=0.0, upper=100.0)}
+        )
     if feature_name == "decision_tier":
         return {_clean(signal.get("decision_tier"))}
     if feature_name == "shortlisted":

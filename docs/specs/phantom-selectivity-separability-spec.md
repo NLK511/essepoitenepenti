@@ -13,9 +13,11 @@ Produce a read-only audit artifact that decides whether phantom selectivity evid
 - The audit must be read-only. It must not mutate tuning config, replay rows, broker settings, jobs, or orders.
 - The audit must use replay evidence profile `phantom_selectivity` by default: intraday `phantom_win` and `phantom_loss` rows from accepted replay tiers.
 - The audit must split evidence chronologically into discovery and selection partitions before ranking groups.
+- The artifact must make the split math explicit. It must report total eligible dates, the configured selection fraction, the minimum selection dates, the resulting selection date count, and the estimated total eligible dates needed to satisfy the candidate replay promotion date gate at the current split.
 - A group is useful only if it first looks usable in discovery, then confirms in selection. It must have enough discovery and selection samples, enough distinct selection dates, positive discovery and selection expected value, and a selection win rate that beats the global selection baseline.
 - Expected value must use stored candidate trade geometry, not fake +1/-1 labels.
 - The artifact must report the global baseline, per-feature separability summaries, top groups, blockers, and a direct verdict.
+- The artifact must report discovery-vs-selection baseline drift. A material win-rate shift or an expected-value sign change is a caution because it means the holdout period may be a different market/replay regime from discovery.
 - The audit must not recommend another large threshold search. If separability exists, the next step is candidate-specific replay for the concrete group/rule. If separability does not exist, the next step is to stop tuning this layer until upstream features or signal generation change.
 
 ## Feature groups
@@ -63,8 +65,12 @@ The replay artifact must include:
 
 - one result per candidate group;
 - one combined union result across candidate groups;
+- one combined union result excluding ticker-only candidate groups when any non-ticker candidate exists;
 - discovery and selection metrics;
 - selected-row counts and distinct-date counts;
+- ticker/date/setup concentration metrics for each candidate and union;
+- a classification that separates reusable feature candidates from ticker-specific candidates;
+- warnings when a combined union contains ticker-specific groups or is dominated by one ticker, date, or setup family;
 - expected value from stored reward/risk geometry;
 - a promotion-readiness verdict.
 
@@ -76,5 +82,6 @@ Promotion readiness requires:
 - selection distinct dates: at least 20
 - selection expected value per observation: greater than 0
 - selection win rate above the selection baseline from the separability artifact
+- no concentration blocker that makes the candidate only a ticker/date/setup artifact
 
 If these gates fail, the result is a research candidate only. The next step is either more candidate replay dates/evidence or upstream signal improvement, not another broad threshold search.

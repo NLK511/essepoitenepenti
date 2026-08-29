@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from math import ceil
@@ -57,6 +57,9 @@ class PhantomSelectivityCandidateReplayGates:
     min_selection_dates: int = 20
     min_selection_ev_per_observation: float = 0.0
     min_selection_win_rate_lift_pct: float = 0.0
+    max_single_ticker_share_percent: float = 50.0
+    max_single_date_share_percent: float = 30.0
+    max_single_setup_family_share_percent: float = 80.0
 
     def payload(self) -> dict[str, object]:
         return {
@@ -64,6 +67,9 @@ class PhantomSelectivityCandidateReplayGates:
             "min_selection_dates": self.min_selection_dates,
             "min_selection_ev_per_observation": self.min_selection_ev_per_observation,
             "min_selection_win_rate_lift_pct": self.min_selection_win_rate_lift_pct,
+            "max_single_ticker_share_percent": self.max_single_ticker_share_percent,
+            "max_single_date_share_percent": self.max_single_date_share_percent,
+            "max_single_setup_family_share_percent": self.max_single_setup_family_share_percent,
         }
 
 
@@ -194,6 +200,21 @@ def build_phantom_selectivity_separability_report(
             "discovery": len(discovery_dates),
             "selection": len(selection_dates),
         },
+        "date_windows": {
+            "all": _date_range_payload(set(all_dates)),
+            "discovery": _date_range_payload(discovery_dates),
+            "selection": _date_range_payload(selection_dates),
+        },
+        "selection_split": _selection_split_payload(
+            total_date_count=len(all_dates),
+            selection_date_count=len(selection_dates),
+            min_selection_dates=gates.min_selection_dates,
+            selection_date_fraction=gates.selection_date_fraction,
+        ),
+        "baseline_shift": _baseline_shift_payload(
+            discovery_baseline,
+            selection_baseline,
+        ),
         "date_ranges": {
             "discovery": _date_range_payload(discovery_dates),
             "selection": _date_range_payload(selection_dates),
@@ -238,6 +259,7 @@ def build_phantom_selectivity_candidate_replay_report(
     selection_baseline = _metric_payload(selection_rows)
     group_results: list[dict[str, object]] = []
     selected_union_indexes: set[int] = set()
+    selected_non_ticker_union_indexes: set[int] = set()
     for index, group in enumerate(candidate_groups, start=1):
         feature = str(group.get("feature") or "")
         value = str(group.get("value") or "")
@@ -248,23 +270,50 @@ def build_phantom_selectivity_candidate_replay_report(
             if _feature_value(item, feature) == value:
                 selected.append(item)
                 selected_union_indexes.add(row_index)
+                if feature != "ticker":
+                    selected_non_ticker_union_indexes.add(row_index)
         result = _candidate_replay_payload(
             selected,
             discovery_dates=discovery_dates,
             selection_dates=selection_dates,
             selection_baseline=selection_baseline,
             gates=gates,
+            feature=feature,
         )
         result.update({"rank": index, "feature": feature, "value": value})
         group_results.append(result)
 
-    union_rows = [item for row_index, item in enumerate(rows) if row_index in selected_union_indexes]
+    union_rows = [
+        item for row_index, item in enumerate(rows) if row_index in selected_union_indexes
+    ]
+    non_ticker_union_rows = [
+        item
+        for row_index, item in enumerate(rows)
+        if row_index in selected_non_ticker_union_indexes
+    ]
     union_result = _candidate_replay_payload(
         union_rows,
         discovery_dates=discovery_dates,
         selection_dates=selection_dates,
         selection_baseline=selection_baseline,
         gates=gates,
+        feature="combined_union",
+    )
+    if any(item.get("candidate_kind") == "ticker_specific" for item in group_results):
+        union_warnings = set(union_result.get("warnings") or [])
+        union_warnings.add("union_contains_ticker_specific_groups")
+        union_result["warnings"] = sorted(union_warnings)
+        union_blockers = set(union_result.get("promotion_blockers") or [])
+        union_blockers.add("union_contains_ticker_specific_groups")
+        union_result["promotion_blockers"] = sorted(union_blockers)
+        union_result["promotion_ready"] = False
+    non_ticker_union_result = _candidate_replay_payload(
+        non_ticker_union_rows,
+        discovery_dates=discovery_dates,
+        selection_dates=selection_dates,
+        selection_baseline=selection_baseline,
+        gates=gates,
+        feature="combined_non_ticker_union",
     )
     promotion_ready = bool(union_result["promotion_ready"]) or any(
         bool(item["promotion_ready"]) for item in group_results
@@ -287,13 +336,38 @@ def build_phantom_selectivity_candidate_replay_report(
             "discovery": len(discovery_dates),
             "selection": len(selection_dates),
         },
+        "date_windows": {
+            "all": _date_range_payload(set(all_dates)),
+            "discovery": _date_range_payload(discovery_dates),
+            "selection": _date_range_payload(selection_dates),
+        },
+        "selection_split": _selection_split_payload(
+            total_date_count=len(all_dates),
+            selection_date_count=len(selection_dates),
+            min_selection_dates=min_selection_dates,
+            selection_date_fraction=selection_date_fraction,
+            promotion_min_selection_dates=gates.min_selection_dates,
+        ),
+        "baseline_shift": _baseline_shift_payload(
+            discovery_baseline,
+            selection_baseline,
+        ),
         "baselines": {
             "discovery": discovery_baseline,
             "selection": selection_baseline,
         },
         "candidate_group_count": len(group_results),
+        "candidate_group_counts": {
+            "ticker_specific": sum(
+                1 for item in group_results if item["candidate_kind"] == "ticker_specific"
+            ),
+            "reusable_feature": sum(
+                1 for item in group_results if item["candidate_kind"] == "reusable_feature"
+            ),
+        },
         "candidate_groups": group_results,
         "combined_union": union_result,
+        "combined_union_excluding_ticker_groups": non_ticker_union_result,
         "recommendation": _candidate_replay_recommendation(verdict),
     }
 
@@ -305,6 +379,7 @@ def _candidate_replay_payload(
     selection_dates: set[date],
     selection_baseline: dict[str, object],
     gates: PhantomSelectivityCandidateReplayGates,
+    feature: str | None = None,
 ) -> dict[str, object]:
     discovery_rows = [item for item in rows if item.evidence_date in discovery_dates]
     selection_rows = [item for item in rows if item.evidence_date in selection_dates]
@@ -326,10 +401,18 @@ def _candidate_replay_payload(
         blockers.append("selection_ev_per_observation_not_positive")
     if selection_lift < gates.min_selection_win_rate_lift_pct:
         blockers.append("selection_win_rate_lift_below_minimum")
+    concentration = _concentration_payload(selection_rows)
+    warnings = _concentration_warnings(concentration, gates=gates)
+    candidate_kind = _candidate_kind(feature)
+    if candidate_kind == "ticker_specific":
+        blockers.append("ticker_specific_candidate_only")
     return {
+        "candidate_kind": candidate_kind,
         "discovery": discovery,
         "selection": selection,
         "selection_win_rate_lift_pct": round(selection_lift, 4),
+        "concentration": concentration,
+        "warnings": warnings,
         "promotion_ready": not blockers,
         "promotion_blockers": sorted(set(blockers)),
     }
@@ -367,7 +450,12 @@ def _feature_value(row: PhantomSelectivityObservation, feature_name: str) -> str
     if feature_name == "volatility_bucket":
         if row.volatility_score is None:
             return "unknown"
-        return _numeric_bucket(_normalize_percent(row.volatility_score), step=10.0, lower=0.0, upper=100.0)
+        return _numeric_bucket(
+            _normalize_percent(row.volatility_score),
+            step=10.0,
+            lower=0.0,
+            upper=100.0,
+        )
     if feature_name == "reward_risk_bucket":
         ratio = row.reward_pct / row.risk_pct if row.risk_pct > 0 else 0.0
         return _ratio_bucket(ratio)
@@ -425,6 +513,121 @@ def _metric_payload(rows: list[PhantomSelectivityObservation]) -> dict[str, obje
         "distinct_date_count": len({item.evidence_date for item in rows}),
         "ticker_count": len({item.ticker for item in rows if item.ticker}),
     }
+
+
+def _selection_split_payload(
+    *,
+    total_date_count: int,
+    selection_date_count: int,
+    min_selection_dates: int,
+    selection_date_fraction: float,
+    promotion_min_selection_dates: int | None = None,
+) -> dict[str, object]:
+    bounded_fraction = max(0.05, min(0.8, float(selection_date_fraction)))
+    payload: dict[str, object] = {
+        "total_eligible_dates": total_date_count,
+        "selection_date_fraction": bounded_fraction,
+        "minimum_selection_dates": min_selection_dates,
+        "selection_dates": selection_date_count,
+    }
+    if promotion_min_selection_dates is not None:
+        estimated_total = int(ceil(float(promotion_min_selection_dates) / bounded_fraction))
+        payload.update(
+            {
+                "promotion_minimum_selection_dates": promotion_min_selection_dates,
+                "estimated_total_eligible_dates_for_promotion_gate": estimated_total,
+                "additional_total_eligible_dates_needed": max(
+                    0,
+                    estimated_total - total_date_count,
+                ),
+            }
+        )
+    return payload
+
+
+def _baseline_shift_payload(
+    discovery: dict[str, object],
+    selection: dict[str, object],
+) -> dict[str, object]:
+    discovery_wr = float(discovery.get("win_rate_percent") or 0.0)
+    selection_wr = float(selection.get("win_rate_percent") or 0.0)
+    discovery_ev = float(discovery.get("expected_value_per_observation") or 0.0)
+    selection_ev = float(selection.get("expected_value_per_observation") or 0.0)
+    warnings: list[str] = []
+    win_rate_delta = round(selection_wr - discovery_wr, 4)
+    ev_delta = round(selection_ev - discovery_ev, 6)
+    if abs(win_rate_delta) > 5.0:
+        warnings.append("baseline_win_rate_shift_above_5pct")
+    if (discovery_ev < 0 < selection_ev) or (selection_ev < 0 < discovery_ev):
+        warnings.append("baseline_ev_sign_crossed_zero")
+    return {
+        "discovery_win_rate_percent": discovery_wr,
+        "selection_win_rate_percent": selection_wr,
+        "win_rate_delta_pct": win_rate_delta,
+        "discovery_ev_per_observation": discovery_ev,
+        "selection_ev_per_observation": selection_ev,
+        "ev_per_observation_delta": ev_delta,
+        "warnings": sorted(warnings),
+    }
+
+
+def _candidate_kind(feature: str | None) -> str:
+    if feature == "ticker":
+        return "ticker_specific"
+    return "reusable_feature"
+
+
+def _concentration_payload(rows: list[PhantomSelectivityObservation]) -> dict[str, object]:
+    return {
+        "ticker": _top_concentration([item.ticker for item in rows], total=len(rows)),
+        "date": _top_concentration(
+            [item.evidence_date.isoformat() for item in rows],
+            total=len(rows),
+        ),
+        "setup_family": _top_concentration([item.setup_family for item in rows], total=len(rows)),
+    }
+
+
+def _top_concentration(values: list[object], *, total: int) -> dict[str, object]:
+    if not values:
+        return {"top_value": None, "top_count": 0, "top_share_percent": 0.0}
+    counter = Counter(str(item or "unknown").strip().lower() or "unknown" for item in values)
+    value, count = counter.most_common(1)[0]
+    return {
+        "top_value": value,
+        "top_count": count,
+        "top_share_percent": round((count / max(1, total)) * 100.0, 4),
+    }
+
+
+def _concentration_warnings(
+    concentration: dict[str, object],
+    *,
+    gates: PhantomSelectivityCandidateReplayGates,
+) -> list[str]:
+    warnings: list[str] = []
+    ticker = concentration.get("ticker")
+    date_payload = concentration.get("date")
+    setup = concentration.get("setup_family")
+    if (
+        isinstance(ticker, dict)
+        and float(ticker.get("top_share_percent") or 0.0)
+        > gates.max_single_ticker_share_percent
+    ):
+        warnings.append("single_ticker_share_above_limit")
+    if (
+        isinstance(date_payload, dict)
+        and float(date_payload.get("top_share_percent") or 0.0)
+        > gates.max_single_date_share_percent
+    ):
+        warnings.append("single_date_share_above_limit")
+    if (
+        isinstance(setup, dict)
+        and float(setup.get("top_share_percent") or 0.0)
+        > gates.max_single_setup_family_share_percent
+    ):
+        warnings.append("single_setup_family_share_above_limit")
+    return sorted(warnings)
 
 
 def _passes_candidate_gates(
