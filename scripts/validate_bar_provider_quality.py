@@ -67,10 +67,26 @@ def main() -> int:
         print(json.dumps(artifact, indent=2, sort_keys=True))
         return 0
 
-    credentials = resolve_etoro_credentials(
-        env=os.environ,
-        broker_account_id=args.broker_account_id,
-    )
+    try:
+        credentials = resolve_etoro_credentials(
+            env=os.environ,
+            broker_account_id=args.broker_account_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        artifact = build_bootstrap_failure_artifact(
+            tickers=tickers,
+            timeframe=args.timeframe,
+            start_at=start_at,
+            end_at=end_at,
+            primary=args.primary,
+            candidate=args.candidate,
+            broker_account_id=args.broker_account_id,
+            stage="credential_resolution",
+            error=exc,
+        )
+        write_artifact(args.artifact, artifact)
+        print(json.dumps(artifact, indent=2, sort_keys=True))
+        return 1
     primary = YahooHistoricalBarProvider()
     candidate = EtoroHistoricalBarProvider(
         client=EtoroClient(
@@ -183,6 +199,44 @@ def compare_providers(
             [float(item["median_abs_close_diff_bps"]) for item in comparable if item.get("median_abs_close_diff_bps") is not None]
         ) if any(item.get("median_abs_close_diff_bps") is not None for item in comparable) else None,
         "tickers": ticker_reports,
+    }
+
+
+def build_bootstrap_failure_artifact(
+    *,
+    tickers: list[str],
+    timeframe: str,
+    start_at: datetime,
+    end_at: datetime,
+    primary: str,
+    candidate: str,
+    broker_account_id: str,
+    stage: str,
+    error: Exception,
+) -> dict[str, object]:
+    return {
+        "status": "failed",
+        "failure_stage": stage,
+        "error": str(error),
+        "tickers": tickers,
+        "ticker_count": len(tickers),
+        "timeframe": timeframe,
+        "start_at": start_at.isoformat(),
+        "end_at": end_at.isoformat(),
+        "primary": primary,
+        "candidate": candidate,
+        "credential_sources": [
+            "ETORO_API_KEY/ETORO_USER_KEY",
+            f"broker_account:{broker_account_id}",
+        ],
+        "comparison_started": False,
+        "read_only_scope": {
+            "wrote_canonical_bars": False,
+            "changed_provider_priority": False,
+            "changed_broker_settings": False,
+            "changed_orders": False,
+            "changed_scheduler_state": False,
+        },
     }
 
 

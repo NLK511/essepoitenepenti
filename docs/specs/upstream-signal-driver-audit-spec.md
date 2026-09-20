@@ -111,6 +111,44 @@ Default driver gates:
 
 The drilldown is still read-only. A passing drilldown does not promote a tuning policy. It only identifies the upstream signal-generation code paths worth inspecting or changing.
 
+## Driver quality scorecard
+
+When drilldown returns reusable driver leads, the next optional analysis artifact must score the
+quality of those drivers before anyone treats them as implementation leads.
+
+The scorecard must:
+
+- use the same phantom-selectivity replay population and separability candidate groups;
+- inspect concrete drivers from the drilldown artifact by default;
+- report driver inventory, date/ticker spread, discovery/selection stability, weekly stability,
+  nearby bucket shape, lineage quality, and analysis-only ablations;
+- test whether positive EV survives removing the top ticker and top three tickers;
+- test whether rows have usable raw signal lineage for the relevant feature family;
+- classify each driver as `reusable_candidate`, `diagnostic_only`, `watch`, or `reject`;
+- write dated artifacts before any stable latest artifact is refreshed.
+
+Default scorecard gates:
+
+- driver rows: at least 30;
+- driver distinct dates: at least 5;
+- driver tickers: at least 5;
+- selection rows: at least 100;
+- selection dates: at least 20;
+- maximum single ticker share for reusable status: 50 percent;
+- driver expected value per observation: greater than 0;
+- usable lineage share: at least 80 percent.
+
+Scorecard verdicts:
+
+- `reusable_driver_quality_candidate` — at least one driver passes volume, spread,
+  concentration, lineage, selection, and ablation checks.
+- `analysis_only_driver_leads` — at least one driver remains useful as a diagnostic or watch
+  item, but it is not clean enough for behavior-changing tuning.
+- `no_reusable_driver_quality_lead` — no driver is positive and clean enough to use.
+
+The scorecard is read-only. It must not change plan generation, replay state, tuning config, jobs,
+orders, scheduler state, or broker behavior.
+
 ## Prospective driver tags
 
 When the drilldown finds reusable driver leads, new plans must persist non-behavioral tags for the exact upstream signal-quality drivers that matched at generation time.

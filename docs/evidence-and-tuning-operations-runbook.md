@@ -175,6 +175,37 @@ If the candidate replay is positive but below date coverage, keep it research-on
 
 If prospective tagged evidence is newer than phantom-selectivity candidate replay evidence, do not assume waiting alone will fix the date gate. Run the evidence lineage audit and verify that new tagged plans are entering replay eligibility.
 
+### 3b. Preflight a promotion-ready phantom candidate
+
+Use this only after candidate replay returns `promotion_candidate_ready=true`:
+
+```bash
+docker compose exec -T api sh -lc 'python scripts/preflight_phantom_selectivity_promotion.py \
+  --candidate-replay-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json \
+  --evidence-lineage-artifact /app/.prod-run/workers/artifacts/evidence-lineage-latest.json \
+  --driver-quality-artifact /app/.prod-run/workers/artifacts/upstream-driver-quality-latest/driver-quality-scorecard.json \
+  --artifact /app/.prod-run/workers/artifacts/phantom-selectivity-promotion-preflight-latest.json'
+```
+
+Read:
+
+- `verdict`
+- `blockers`
+- `warnings`
+- `proposed_shadow_policy`
+- `decision`
+- `required_next_gates`
+
+Decisions:
+
+- `shadow_policy_preflight_ready`: a candidate-specific shadow/paper policy may be proposed
+  for explicit operator approval. This still does not change live behavior.
+- `promotion_preflight_blocked`: stop and fix the named blockers.
+
+Do not treat a ready phantom preflight as closed-trade promotion evidence. Live behavior,
+tuning config, broker settings, orders, and scheduler state remain stopped until a separate
+operator-approved persistence step and stronger promotion evidence exist.
+
 ### Evidence lineage audit
 
 Use this when a weekly report shows fresh prospective tags but stale or thin candidate replay evidence:
@@ -251,6 +282,38 @@ Decisions:
 - `ticker_concentrated_driver_leads`: do not change broad policy.
 - `thin_driver_evidence`: wait or improve feature persistence.
 
+### 5b. Score upstream driver quality
+
+Use this after drilldown returns `reusable_driver_leads`, especially before proposing any
+generation-code inspection or instrumentation changes:
+
+```bash
+docker compose exec -T api sh -lc 'python scripts/audit_upstream_driver_quality.py \
+  --separability-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-separability-latest.json \
+  --upstream-audit-artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-audit-latest.json \
+  --drilldown-artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-drilldown-latest.json \
+  --candidate-replay-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json \
+  --replay-tier tier_a \
+  --artifact-dir /app/.prod-run/workers/artifacts/upstream-driver-quality/YYYY-MM-DD'
+```
+
+Read:
+
+- `verdict`;
+- each driver `scorecard_status`;
+- selection rows and dates;
+- ticker concentration and ticker-ablation survival;
+- nearby bucket shape;
+- lineage quality;
+- driver follow-up.
+
+Decisions:
+
+- `reusable_driver_quality_candidate`: inspect the named generation code paths, but do not
+  promote behavior until replay gates pass.
+- `analysis_only_driver_leads`: treat drivers as diagnostics or instrumentation leads only.
+- `no_reusable_driver_quality_lead`: wait or repair instrumentation.
+
 ### 6. Only then consider behavior changes
 
 Behavior changes are allowed only after evidence passes the gates above.
@@ -319,6 +382,7 @@ Use stable `*-latest.json` names for current reruns:
 - `/app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json`
 - `/app/.prod-run/workers/artifacts/upstream-signal-driver-audit-latest.json`
 - `/app/.prod-run/workers/artifacts/upstream-signal-driver-drilldown-latest.json`
+- `/app/.prod-run/workers/artifacts/upstream-driver-quality-latest/driver-quality-scorecard.json`
 
 Use dated artifact names only for immutable milestones that must be referenced later.
 

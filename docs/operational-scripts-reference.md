@@ -81,6 +81,23 @@ Replays separability candidate groups as if the candidate policy had emitted the
     --artifact /app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json'
   ```
 
+### `scripts/preflight_phantom_selectivity_promotion.py`
+Builds a read-only promotion preflight for a phantom-selectivity candidate that already
+passed candidate replay gates.
+
+- **Use case:** Define the exact candidate-specific shadow/paper policy and stop direct
+  live behavior or tuning changes from phantom evidence alone.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/preflight_phantom_selectivity_promotion.py \
+    --candidate-replay-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json \
+    --evidence-lineage-artifact /app/.prod-run/workers/artifacts/evidence-lineage-latest.json \
+    --driver-quality-artifact /app/.prod-run/workers/artifacts/upstream-driver-quality-latest/driver-quality-scorecard.json \
+    --artifact /app/.prod-run/workers/artifacts/phantom-selectivity-promotion-preflight-latest.json'
+  ```
+- **Read first:** `docs/evidence-and-tuning-operations-runbook.md` and
+  `docs/specs/phantom-selectivity-separability-spec.md`.
+
 ### `scripts/audit_upstream_signal_drivers.py`
 Audits reusable upstream signal features behind phantom-selectivity candidate groups.
 
@@ -105,6 +122,24 @@ Drills into concrete upstream feature/value drivers with examples and concentrat
     --replay-tier tier_a \
     --artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-drilldown-latest.json'
   ```
+
+### `scripts/audit_upstream_driver_quality.py`
+Scores drilled-down upstream drivers for reusable quality before any generation-code inspection.
+
+- **Use case:** Produce a read-only driver scorecard with inventory, discovery/selection stability,
+  nearby bucket shape, lineage quality, ticker ablations, and concrete follow-ups.
+- **Example:**
+  ```bash
+  docker compose exec -T api sh -lc 'python scripts/audit_upstream_driver_quality.py \
+    --separability-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-separability-latest.json \
+    --upstream-audit-artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-audit-latest.json \
+    --drilldown-artifact /app/.prod-run/workers/artifacts/upstream-signal-driver-drilldown-latest.json \
+    --candidate-replay-artifact /app/.prod-run/workers/artifacts/phantom-selectivity-candidate-replay-latest.json \
+    --replay-tier tier_a \
+    --artifact-dir /app/.prod-run/workers/artifacts/upstream-driver-quality/YYYY-MM-DD'
+  ```
+- **Read first:** `docs/evidence-and-tuning-operations-runbook.md` and
+  `docs/specs/upstream-signal-driver-audit-spec.md`.
 
 ### `scripts/large_plan_generation_parameter_search.py`
 Runs bounded plan-generation tuning searches.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -83,3 +84,46 @@ def test_resolve_etoro_credentials_reports_missing_sources() -> None:
         assert "broker account etoro-demo-main" in str(exc)
     else:
         raise AssertionError("expected RuntimeError")
+
+
+def test_main_writes_failure_artifact_when_credential_bootstrap_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    artifact_path = tmp_path / "etoro-vs-yahoo-1m.json"
+
+    monkeypatch.setattr(
+        validation,
+        "parse_args",
+        lambda: validation.argparse.Namespace(
+            tickers="AAPL,MSFT",
+            timeframe="1m",
+            days=5,
+            artifact=artifact_path,
+            primary="yahoo",
+            candidate="etoro",
+            broker_account_id="etoro-demo-main",
+            dry_run=False,
+        ),
+    )
+
+    def fail_credentials(**_kwargs):
+        raise RuntimeError("connection to localhost:5432 refused")
+
+    monkeypatch.setattr(validation, "resolve_etoro_credentials", fail_credentials)
+
+    exit_code = validation.main()
+
+    assert exit_code == 1
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["failure_stage"] == "credential_resolution"
+    assert "localhost:5432 refused" in payload["error"]
+    assert payload["comparison_started"] is False
+    assert payload["read_only_scope"] == {
+        "changed_broker_settings": False,
+        "changed_orders": False,
+        "changed_provider_priority": False,
+        "changed_scheduler_state": False,
+        "wrote_canonical_bars": False,
+    }

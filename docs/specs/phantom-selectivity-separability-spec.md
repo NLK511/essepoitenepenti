@@ -85,3 +85,29 @@ Promotion readiness requires:
 - no concentration blocker that makes the candidate only a ticker/date/setup artifact
 
 If these gates fail, the result is a research candidate only. The next step is either more candidate replay dates/evidence or upstream signal improvement, not another broad threshold search.
+
+## Promotion preflight
+
+When candidate replay returns `promotion_candidate_ready`, the next artifact must be a
+read-only promotion preflight before any persistence or behavior change.
+
+The preflight must:
+
+- use the candidate replay artifact as the source of the exact candidate rule;
+- include evidence lineage and driver-quality artifacts when available;
+- define the proposed candidate-specific shadow or paper policy;
+- separate shadow/paper readiness from live behavior readiness;
+- keep phantom/selectivity evidence distinct from closed-trade promotion evidence;
+- report whether prospective tags are still ahead of phantom replay eligibility;
+- block direct tuning-config, broker, order, scheduler, or live generation-threshold changes.
+
+Preflight verdicts:
+
+- `shadow_policy_preflight_ready` — the candidate replay gate passed and a concrete
+  candidate-specific shadow/paper policy can be proposed for operator approval.
+- `promotion_preflight_blocked` — the candidate replay gate or policy definition is not
+  clean enough even for a shadow/paper proposal.
+
+Even when preflight is ready, live behavior remains stopped until the operator explicitly
+approves a separate persistence step and the candidate has closed-trade or paper evidence
+strong enough for the relevant promotion gate.
